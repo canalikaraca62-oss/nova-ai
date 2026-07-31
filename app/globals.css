@@ -24,3 +24,11 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+body {
+  background: radial-gradient(circle at top, #1a1a2e 0%, #000000 70%);
+}
+
+::selection {
+  background: white;
+  color: black;
+}
