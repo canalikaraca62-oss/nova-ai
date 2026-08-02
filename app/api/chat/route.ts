@@ -18,25 +18,36 @@ export async function POST(req: Request) {
 
     if (!response.ok) {
       const error = await response.text();
-      console.error(error);
+
+      console.error("OPENAI ERROR:", error);
 
       return NextResponse.json(
-        { reply: "OpenAI hatası oluştu." },
-        { status: 500 }
+        {
+          reply: error,
+        },
+        {
+          status: 500,
+        }
       );
     }
 
     const data = await response.json();
 
     return NextResponse.json({
-      reply: data.output?.[0]?.content?.[0]?.text ?? "Cevap alınamadı.",
+      reply:
+        data.output?.[0]?.content?.[0]?.text ??
+        "Cevap alınamadı.",
     });
   } catch (error) {
-    console.error(error);
+    console.error("SERVER ERROR:", error);
 
     return NextResponse.json(
-      { reply: "Sunucu hatası oluştu." },
-      { status: 500 }
+      {
+        reply: "Sunucu hatası oluştu.",
+      },
+      {
+        status: 500,
+      }
     );
   }
 }

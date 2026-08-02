@@ -59,24 +59,40 @@ export default function ChatPage() {
   }
 
   return (
-    <div>
-      <h1>NOVA Chat</h1>
+    <div className="min-h-screen bg-black text-white flex flex-col items-center p-8">
+      <h1 className="text-4xl font-bold mb-8">NOVA Chat</h1>
 
-      {messages.map((msg, index) => (
-        <div key={index}>
-          <b>{msg.sender}:</b> {msg.text}
-        </div>
-      ))}
+      <div className="w-full max-w-3xl bg-zinc-900 rounded-xl p-6 mb-6">
+        {messages.map((msg, index) => (
+          <div key={index} className="mb-4">
+            <span className="font-bold">
+              {msg.sender === "nova" ? "🤖 NOVA" : "👤 Sen"}:
+            </span>{" "}
+            {msg.text}
+          </div>
+        ))}
+      </div>
 
-      <input
-        value={input}
-        onChange={(e) => setInput(e.target.value)}
-        placeholder="Mesaj yaz..."
-      />
+      <div className="flex gap-3 w-full max-w-3xl">
+        <input
+          className="flex-1 p-3 rounded-lg bg-white text-black outline-none"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder="Mesajını yaz..."
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              sendMessage();
+            }
+          }}
+        />
 
-      <button onClick={sendMessage}>
-        Gönder
-      </button>
+        <button
+          onClick={sendMessage}
+          className="bg-blue-600 hover:bg-blue-700 px-6 py-3 rounded-lg"
+        >
+          Gönder
+        </button>
+      </div>
     </div>
   );
 }
