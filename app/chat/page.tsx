@@ -1,23 +1,43 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
+
 import Sidebar from "../components/Menu";
 import ChatWindow from "../components/ChatWindow";
 import ChatInput from "../components/ChatInput";
 
-export default function ChatPage() {
-  type ChatMessage = {
+type ChatMessage = {
   sender: "nova" | "user";
   text: string;
 };
 
-const [messages, setMessages] = useState<ChatMessage[]>([
-  {
-    sender: "nova",
-    text: "👋 Merhaba Can Ali! Ben NOVA. Sana nasıl yardımcı olabilirim?",
-  },
-]);
+export default function ChatPage() {
+  const router = useRouter();
+
+  const [messages, setMessages] = useState<ChatMessage[]>([
+    {
+      sender: "nova",
+      text: "👋 Merhaba Can Ali! Ben NOVA. Sana nasıl yardımcı olabilirim?",
+    },
+  ]);
+
   const [input, setInput] = useState("");
+
+  useEffect(() => {
+    async function checkUser() {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        router.push("/login");
+      }
+    }
+
+    checkUser();
+  }, [router]);
 
   async function sendMessage() {
     if (!input.trim()) return;
@@ -27,7 +47,7 @@ const [messages, setMessages] = useState<ChatMessage[]>([
     setMessages((prev) => [
       ...prev,
       {
-        sender: "user" as const,
+        sender: "user",
         text: userMessage,
       },
     ]);
@@ -50,7 +70,7 @@ const [messages, setMessages] = useState<ChatMessage[]>([
       setMessages((prev) => [
         ...prev,
         {
-          sender: "nova" as const,
+          sender: "nova",
           text: data.reply,
         },
       ]);
@@ -58,7 +78,7 @@ const [messages, setMessages] = useState<ChatMessage[]>([
       setMessages((prev) => [
         ...prev,
         {
-          sender: "nova" as const,
+          sender: "nova",
           text: "❌ Bir hata oluştu.",
         },
       ]);
