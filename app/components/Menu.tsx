@@ -11,7 +11,6 @@ type Chat = {
 
 export default function Sidebar() {
   const router = useRouter();
-
   const [chats, setChats] = useState<Chat[]>([]);
 
   useEffect(() => {
@@ -32,7 +31,7 @@ export default function Sidebar() {
       .order("created_at", { ascending: false });
 
     if (error) {
-      console.error("LOAD ERROR:", error);
+      console.error(error);
       return;
     }
 
@@ -44,12 +43,7 @@ export default function Sidebar() {
       data: { user },
     } = await supabase.auth.getUser();
 
-    console.log("USER:", user);
-
-    if (!user) {
-      console.log("Kullanıcı bulunamadı.");
-      return;
-    }
+    if (!user) return;
 
     const { data, error } = await supabase
       .from("chats")
@@ -57,14 +51,15 @@ export default function Sidebar() {
         title: "Yeni Sohbet",
         user_id: user.id,
       })
-      .select();
+      .select()
+      .single();
 
-    console.log("DATA:", data);
-    console.log("ERROR:", error);
-
-    if (!error) {
-      loadChats();
+    if (error) {
+      console.error(error);
+      return;
     }
+
+    router.push(`/chat/${data.id}`);
   }
 
   async function logout() {
@@ -93,7 +88,7 @@ export default function Sidebar() {
         </button>
       </div>
 
-      {/* Sohbet Geçmişi */}
+      {/* Sohbetler */}
       <div className="flex-1 overflow-y-auto px-4">
         <p className="text-xs text-zinc-500 uppercase mb-3 tracking-wider">
           Son Sohbetler
@@ -108,7 +103,8 @@ export default function Sidebar() {
             chats.map((chat) => (
               <button
                 key={chat.id}
-                className="w-full text-left bg-zinc-800 hover:bg-zinc-700 transition p-3 rounded-xl text-white"
+                onClick={() => router.push(`/chat/${chat.id}`)}
+                className="w-full text-left bg-zinc-800 hover:bg-zinc-700 transition p-3 rounded-xl text-white rounded-lg"
               >
                 💬 {chat.title}
               </button>
@@ -119,21 +115,24 @@ export default function Sidebar() {
 
       {/* Alt Menü */}
       <div className="border-t border-zinc-800 p-4 space-y-2">
-        <button className="w-full text-left text-zinc-300 hover:text-white transition">
+
+        <button className="w-full text-left text-zinc-300 hover:text-white">
           ⚙️ Ayarlar
         </button>
 
-        <button className="w-full text-left text-zinc-300 hover:text-white transition">
+        <button className="w-full text-left text-zinc-300 hover:text-white">
           👤 Profil
         </button>
 
         <button
           onClick={logout}
-          className="w-full text-left text-red-400 hover:text-red-300 transition"
+          className="w-full text-left text-red-400 hover:text-red-300"
         >
           🚪 Çıkış Yap
         </button>
+
       </div>
+
     </aside>
   );
 }

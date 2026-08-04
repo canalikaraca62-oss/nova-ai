@@ -1,3 +1,10 @@
+"use client";
+
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
+
 type MessageProps = {
   sender: "user" | "nova";
   text: string;
@@ -8,22 +15,71 @@ export default function Message({ sender, text }: MessageProps) {
 
   return (
     <div
-      className={`flex mb-4 ${
+      className={`flex mb-6 ${
         isUser ? "justify-end" : "justify-start"
       }`}
     >
       <div
-        className={`max-w-[75%] px-4 py-3 rounded-2xl ${
+        className={`max-w-[85%] rounded-2xl px-5 py-4 shadow-lg ${
           isUser
             ? "bg-blue-600 text-white"
-            : "bg-zinc-800 text-white"
+            : "bg-zinc-900 border border-zinc-800 text-white"
         }`}
       >
-        <p className="text-sm opacity-70 mb-1">
+        <div className="text-xs opacity-70 mb-3 font-semibold">
           {isUser ? "👤 Sen" : "🤖 NOVA"}
-        </p>
+        </div>
 
-        <p>{text}</p>
+        <div className="prose prose-invert max-w-none">
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            components={{
+              code({ className, children, ...props }) {
+                const match = /language-(\w+)/.exec(className || "");
+
+                if (match) {
+                  return (
+                    <div className="rounded-xl overflow-hidden my-4">
+                      <div className="flex items-center justify-between bg-zinc-800 px-4 py-2 text-sm">
+                        <span>{match[1]}</span>
+
+                        <button
+                          onClick={() =>
+                            navigator.clipboard.writeText(
+                              String(children)
+                            )
+                          }
+                          className="hover:text-blue-400"
+                        >
+                          📋 Copy
+                        </button>
+                      </div>
+
+                      <SyntaxHighlighter
+                        style={oneDark}
+                        language={match[1]}
+                        PreTag="div"
+                      >
+                        {String(children).replace(/\n$/, "")}
+                      </SyntaxHighlighter>
+                    </div>
+                  );
+                }
+
+                return (
+                  <code
+                    className="bg-zinc-800 px-1 py-0.5 rounded"
+                    {...props}
+                  >
+                    {children}
+                  </code>
+                );
+              },
+            }}
+          >
+            {text}
+          </ReactMarkdown>
+        </div>
       </div>
     </div>
   );
