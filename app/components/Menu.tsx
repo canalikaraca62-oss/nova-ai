@@ -11,6 +11,7 @@ type Chat = {
 
 export default function Sidebar() {
   const router = useRouter();
+
   const [chats, setChats] = useState<Chat[]>([]);
 
   useEffect(() => {
@@ -62,6 +63,35 @@ export default function Sidebar() {
     router.push(`/chat/${data.id}`);
   }
 
+  async function deleteChat(chatId: string) {
+    const ok = confirm("Bu sohbet silinsin mi?");
+
+    if (!ok) return;
+
+    // Önce mesajları sil
+    await supabase
+      .from("messages")
+      .delete()
+      .eq("chat_id", chatId);
+
+    // Sonra sohbeti sil
+    const { error } = await supabase
+      .from("chats")
+      .delete()
+      .eq("id", chatId);
+
+    if (error) {
+      console.error(error);
+      return;
+    }
+
+    // Listeyi yenile
+    await loadChats();
+
+    // Eğer silinen sohbet açıksa ana sayfaya dön
+    router.push("/chat");
+  }
+
   async function logout() {
     await supabase.auth.signOut();
     router.push("/login");
@@ -70,7 +100,6 @@ export default function Sidebar() {
   return (
     <aside className="w-72 h-screen bg-zinc-900 border-r border-zinc-800 flex flex-col">
 
-      {/* Logo */}
       <div className="p-6 border-b border-zinc-800">
         <h1 className="text-2xl font-bold text-white">🚀 NOVA</h1>
         <p className="text-zinc-400 text-sm">
@@ -78,7 +107,6 @@ export default function Sidebar() {
         </p>
       </div>
 
-      {/* Yeni Sohbet */}
       <div className="p-4">
         <button
           onClick={newChat}
@@ -88,7 +116,6 @@ export default function Sidebar() {
         </button>
       </div>
 
-      {/* Sohbetler */}
       <div className="flex-1 overflow-y-auto px-4">
         <p className="text-xs text-zinc-500 uppercase mb-3 tracking-wider">
           Son Sohbetler
@@ -101,19 +128,30 @@ export default function Sidebar() {
             </p>
           ) : (
             chats.map((chat) => (
-              <button
+              <div
                 key={chat.id}
-                onClick={() => router.push(`/chat/${chat.id}`)}
-                className="w-full text-left bg-zinc-800 hover:bg-zinc-700 transition p-3 rounded-xl text-white rounded-lg"
+                className="bg-zinc-800 hover:bg-zinc-700 rounded-xl transition flex items-center justify-between"
               >
-                💬 {chat.title}
-              </button>
+                <button
+                  onClick={() => router.push(`/chat/${chat.id}`)}
+                  className="flex-1 text-left p-3 text-white"
+                >
+                  💬 {chat.title}
+                </button>
+
+                <button
+                  onClick={() => deleteChat(chat.id)}
+                  className="px-3 text-red-400 hover:text-red-300"
+                  title="Sohbeti Sil"
+                >
+                  🗑️
+                </button>
+              </div>
             ))
           )}
         </div>
       </div>
 
-      {/* Alt Menü */}
       <div className="border-t border-zinc-800 p-4 space-y-2">
 
         <button className="w-full text-left text-zinc-300 hover:text-white">

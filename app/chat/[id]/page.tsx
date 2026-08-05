@@ -21,6 +21,7 @@ export default function ChatDetailPage() {
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     if (chatId) {
@@ -84,6 +85,7 @@ export default function ChatDetailPage() {
     }
 
     // AI'ya bütün konuşmayı gönder
+    setIsLoading(true);
     const response = await fetch("/api/chat", {
       method: "POST",
       headers: {
@@ -98,6 +100,7 @@ export default function ChatDetailPage() {
     });
 
     const data = await response.json();
+    setIsLoading(false);
 
     const assistantMessage = {
       sender: "nova" as const,
@@ -129,7 +132,10 @@ export default function ChatDetailPage() {
           NOVA Chat
         </h1>
 
-        <ChatWindow messages={messages} />
+        <ChatWindow
+  messages={messages}
+  isLoading={isLoading}
+/>
 
         <ChatInput
           input={input}
