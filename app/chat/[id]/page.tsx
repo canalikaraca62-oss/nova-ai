@@ -5,6 +5,9 @@ import { useParams } from "next/navigation";
 
 import { supabase } from "@/lib/supabase";
 
+import { generateChatTitle } from "@/services/ai";
+import { uploadFile } from "@/services/storage";
+
 import Sidebar from "@/app/components/Menu";
 import ChatWindow from "@/app/components/ChatWindow";
 import ChatInput from "@/app/components/ChatInput";
@@ -21,7 +24,14 @@ export default function ChatDetailPage() {
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
+
   const [isLoading, setIsLoading] = useState(false);
+
+  const [selectedFile, setSelectedFile] =
+    useState<File | null>(null);
+
+  const [isUploading, setIsUploading] =
+  useState(false);
 
   useEffect(() => {
     if (chatId) {
@@ -34,7 +44,9 @@ export default function ChatDetailPage() {
       .from("messages")
       .select("*")
       .eq("chat_id", chatId)
-      .order("created_at", { ascending: true });
+      .order("created_at", {
+        ascending: true,
+      });
 
     if (error) {
       console.error(error);
@@ -43,18 +55,21 @@ export default function ChatDetailPage() {
 
     setMessages(
       (data || []).map((msg) => ({
-        sender: msg.role === "assistant" ? "nova" : "user",
+        sender:
+          msg.role === "assistant"
+            ? "nova"
+            : "user",
+
         text: msg.content,
       }))
     );
   }
 
   async function sendMessage() {
-    if (!input.trim()) return;
+    if (!input.trim() && !selectedFile) return;
 
     const userMessage = input;
 
-    // Kullanıcı mesajını ekrana hemen ekle
     const updatedMessages = [
       ...messages,
       {
@@ -64,6 +79,7 @@ export default function ChatDetailPage() {
     ];
 
     setMessages(updatedMessages);
+
     setInput("");
 
     const {
@@ -72,58 +88,137 @@ export default function ChatDetailPage() {
 
     if (!user) return;
 
-    // Kullanıcı mesajını kaydet
-    const { error: userError } = await supabase.from("messages").insert({
-      chat_id: chatId,
-      role: "user",
-      content: userMessage,
-    });
+    //----------------------------------
+    // DOSYA YÜKLE
+    //----------------------------------
+
+    let uploadedFile: string | null = null;
+
+    if (selectedFile) {
+      try {
+        setIsUploading(true);
+
+        uploadedFile = await uploadFile(
+          selectedFile
+        );
+
+        console.log(
+          "DOSYA YÜKLENDİ:",
+          uploadedFile
+        );
+      } catch (err) {
+        console.error(err);
+
+        alert("Dosya yüklenemedi.");
+
+        setIsUploading(false);
+
+        return;
+      }
+
+      setIsUploading(false);
+    }
+
+    //----------------------------------
+    // USER MESAJINI KAYDET
+    //----------------------------------
+
+    const { error: userError } =
+      await supabase.from("messages").insert({
+        chat_id: chatId,
+        role: "user",
+        content: userMessage,
+      });
 
     if (userError) {
       console.error(userError);
       return;
     }
 
-    // AI'ya bütün konuşmayı gönder
+    //----------------------------------
+    // AI İSTEĞİ
+    //----------------------------------
+
     setIsLoading(true);
-    const response = await fetch("/api/chat", {
+        const response = await fetch("/api/chat", {
       method: "POST",
+
       headers: {
         "Content-Type": "application/json",
       },
+
       body: JSON.stringify({
         messages: updatedMessages.map((m) => ({
-          role: m.sender === "nova" ? "assistant" : "user",
+          role:
+            m.sender === "nova"
+              ? "assistant"
+              : "user",
+
           content: m.text,
         })),
+
+        file: uploadedFile,
       }),
     });
 
     const data = await response.json();
+
     setIsLoading(false);
 
     const assistantMessage = {
       sender: "nova" as const,
+
       text: data.reply,
     };
 
-    // AI cevabını ekrana ekle
-    setMessages((prev) => [...prev, assistantMessage]);
+    setMessages((prev) => [
+      ...prev,
+      assistantMessage,
+    ]);
 
-    // AI cevabını veritabanına kaydet
-    const { error: aiError } = await supabase.from("messages").insert({
-      chat_id: chatId,
-      role: "assistant",
-      content: data.reply,
-    });
+    //----------------------------------
+    // AI MESAJINI KAYDET
+    //----------------------------------
+
+    const { error: aiError } =
+      await supabase.from("messages").insert({
+        chat_id: chatId,
+        role: "assistant",
+        content: data.reply,
+      });
 
     if (aiError) {
       console.error(aiError);
       return;
     }
-  }
 
-  return (
+    //----------------------------------
+    // İLK MESAJDA BAŞLIK OLUŞTUR
+    //----------------------------------
+
+    if (updatedMessages.length === 1) {
+      try {
+        const title =
+          await generateChatTitle(userMessage);
+
+        await supabase
+          .from("chats")
+          .update({
+            title,
+          })
+          .eq("id", chatId);
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    //----------------------------------
+    // DOSYAYI TEMİZLE
+    //----------------------------------
+
+    setSelectedFile(null);
+  }
+    return (
     <div className="flex h-screen bg-black text-white">
       <Sidebar />
 
@@ -133,14 +228,17 @@ export default function ChatDetailPage() {
         </h1>
 
         <ChatWindow
-  messages={messages}
-  isLoading={isLoading}
-/>
+          messages={messages}
+          isLoading={isLoading}
+        />
 
         <ChatInput
           input={input}
           setInput={setInput}
           sendMessage={sendMessage}
+          selectedFile={selectedFile}
+          setSelectedFile={setSelectedFile}
+          isUploading={isUploading}
         />
       </main>
     </div>

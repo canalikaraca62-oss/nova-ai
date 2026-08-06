@@ -2,7 +2,16 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Pencil, Trash2 } from "lucide-react";
+
 import { supabase } from "@/lib/supabase";
+
+import {
+  getChats,
+  createChat,
+  deleteChat,
+  renameChat,
+} from "@/services/chats";
 
 type Chat = {
   id: string;
@@ -13,10 +22,31 @@ export default function Sidebar() {
   const router = useRouter();
 
   const [chats, setChats] = useState<Chat[]>([]);
+  const [editingChatId, setEditingChatId] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState("");
 
   useEffect(() => {
-    loadChats();
-  }, []);
+  loadChats();
+
+  const channel = supabase
+    .channel("chat-updates")
+    .on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "chats",
+      },
+      () => {
+        loadChats();
+      }
+    )
+    .subscribe();
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
+}, []);
 
   async function loadChats() {
     const {
@@ -25,18 +55,12 @@ export default function Sidebar() {
 
     if (!user) return;
 
-    const { data, error } = await supabase
-      .from("chats")
-      .select("*")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false });
-
-    if (error) {
+    try {
+      const data = await getChats(user.id);
+      setChats(data || []);
+    } catch (error) {
       console.error(error);
-      return;
     }
-
-    setChats(data || []);
   }
 
   async function newChat() {
@@ -46,50 +70,48 @@ export default function Sidebar() {
 
     if (!user) return;
 
-    const { data, error } = await supabase
-      .from("chats")
-      .insert({
-        title: "Yeni Sohbet",
-        user_id: user.id,
-      })
-      .select()
-      .single();
+    try {
+      const chat = await createChat(user.id);
 
-    if (error) {
+      router.push(`/chat/${chat.id}`);
+    } catch (error) {
       console.error(error);
-      return;
     }
-
-    router.push(`/chat/${data.id}`);
   }
 
-  async function deleteChat(chatId: string) {
+  async function removeChat(chatId: string) {
     const ok = confirm("Bu sohbet silinsin mi?");
 
     if (!ok) return;
 
-    // Önce mesajları sil
-    await supabase
-      .from("messages")
-      .delete()
-      .eq("chat_id", chatId);
+    try {
+      await deleteChat(chatId);
 
-    // Sonra sohbeti sil
-    const { error } = await supabase
-      .from("chats")
-      .delete()
-      .eq("id", chatId);
+      await loadChats();
 
-    if (error) {
+      router.push("/chat");
+    } catch (error) {
       console.error(error);
-      return;
     }
+  }
 
-    // Listeyi yenile
-    await loadChats();
+  async function saveChatTitle(chatId: string) {
+    console.log("SAVE ÇALIŞTI");
+    console.log(chatId);
+    console.log(editingTitle);
 
-    // Eğer silinen sohbet açıksa ana sayfaya dön
-    router.push("/chat");
+    if (!editingTitle.trim()) return;
+
+    try {
+      await renameChat(chatId, editingTitle);
+
+      setEditingChatId(null);
+      setEditingTitle("");
+
+      await loadChats();
+    } catch (error) {
+      console.error(error);
+    }
   }
 
   async function logout() {
@@ -101,7 +123,10 @@ export default function Sidebar() {
     <aside className="w-72 h-screen bg-zinc-900 border-r border-zinc-800 flex flex-col">
 
       <div className="p-6 border-b border-zinc-800">
-        <h1 className="text-2xl font-bold text-white">🚀 NOVA</h1>
+        <h1 className="text-2xl font-bold text-white">
+          🚀 NOVA
+        </h1>
+
         <p className="text-zinc-400 text-sm">
           Artificial Intelligence
         </p>
@@ -117,6 +142,7 @@ export default function Sidebar() {
       </div>
 
       <div className="flex-1 overflow-y-auto px-4">
+
         <p className="text-xs text-zinc-500 uppercase mb-3 tracking-wider">
           Son Sohbetler
         </p>
@@ -127,24 +153,50 @@ export default function Sidebar() {
               Henüz sohbet yok.
             </p>
           ) : (
-            chats.map((chat) => (
+                        chats.map((chat) => (
               <div
                 key={chat.id}
                 className="bg-zinc-800 hover:bg-zinc-700 rounded-xl transition flex items-center justify-between"
               >
+                {editingChatId === chat.id ? (
+                  <input
+                    autoFocus
+                    value={editingTitle}
+                    onChange={(e) => setEditingTitle(e.target.value)}
+                    onBlur={() => saveChatTitle(chat.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        saveChatTitle(chat.id);
+                      }
+                    }}
+                    className="flex-1 bg-transparent outline-none text-white p-3"
+                  />
+                ) : (
+                  <button
+                    onClick={() => router.push(`/chat/${chat.id}`)}
+                    className="flex-1 text-left p-3 text-white"
+                  >
+                    💬 {chat.title}
+                  </button>
+                )}
+
                 <button
-                  onClick={() => router.push(`/chat/${chat.id}`)}
-                  className="flex-1 text-left p-3 text-white"
+                  onClick={() => {
+                    setEditingChatId(chat.id);
+                    setEditingTitle(chat.title);
+                  }}
+                  className="px-2 text-blue-400 hover:text-blue-300"
+                  title="Yeniden Adlandır"
                 >
-                  💬 {chat.title}
+                  <Pencil size={18} />
                 </button>
 
                 <button
-                  onClick={() => deleteChat(chat.id)}
+                  onClick={() => removeChat(chat.id)}
                   className="px-3 text-red-400 hover:text-red-300"
                   title="Sohbeti Sil"
                 >
-                  🗑️
+                  <Trash2 size={18} />
                 </button>
               </div>
             ))
@@ -153,7 +205,6 @@ export default function Sidebar() {
       </div>
 
       <div className="border-t border-zinc-800 p-4 space-y-2">
-
         <button className="w-full text-left text-zinc-300 hover:text-white">
           ⚙️ Ayarlar
         </button>
@@ -168,9 +219,7 @@ export default function Sidebar() {
         >
           🚪 Çıkış Yap
         </button>
-
       </div>
-
     </aside>
   );
 }
