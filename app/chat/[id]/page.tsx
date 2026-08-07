@@ -64,8 +64,28 @@ export default function ChatDetailPage() {
       }))
     );
   }
+async function testStream() {
+  const response = await fetch("/api/stream", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      messages: [
+        {
+          role: "user",
+          content: "Merhaba NOVA",
+        },
+      ],
+    }),
+  });
 
+  console.log(response);
+}
   async function sendMessage() {
+
+    await testStream();
+    
     if (!input.trim() && !selectedFile) return;
 
     const userMessage = input;
