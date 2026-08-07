@@ -5,7 +5,15 @@ import {
   generateChatTitle,
 } from "@/services/ai.server";
 
-import { readDocument } from "@/services/document-reader";
+import {
+  analyzeImage,
+} from "@/services/vision.server";
+
+import {
+  readPdf,
+  readDocx,
+  readText,
+} from "@/services/document-reader";
 
 const SUPABASE_URL =
   process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -27,15 +35,23 @@ function getExtension(
 function getPublicFileUrl(
   filePath: string
 ) {
-  const encodedPath =
-    filePath
-      .split("/")
-      .map(
-        encodeURIComponent
-      )
-      .join("/");
+  const encodedPath = filePath
+    .split("/")
+    .map(encodeURIComponent)
+    .join("/");
 
   return `${SUPABASE_URL}/storage/v1/object/public/files/${encodedPath}`;
+}
+
+function isImage(
+  extension: string
+) {
+  return [
+    "png",
+    "jpg",
+    "jpeg",
+    "webp",
+  ].includes(extension);
 }
 
 async function extractFileText(
@@ -45,8 +61,8 @@ async function extractFileText(
     getExtension(filePath);
 
   const supportedExtensions = [
-    "docx",
     "pdf",
+    "docx",
     "txt",
     "md",
     "json",
@@ -109,28 +125,33 @@ async function extractFileText(
     );
   }
 
-  return await readDocument(
-    extension,
-    fileResponse
-  );
+  switch (extension) {
+    case "pdf":
+      return readPdf(fileResponse);
+
+    case "docx":
+      return readDocx(
+        fileResponse
+      );
+
+    default:
+      return readText(
+        fileResponse
+      );
+  }
 }
-
-export async function POST(
-  req: Request
-) {
+export async function POST(req: Request) {
   try {
-    const body =
-      await req.json();
+    const body = await req.json();
 
-    //----------------------------------
-    // BAŞLIK ÜRET
-    //----------------------------------
+    //------------------------------------
+    // SOHBET BAŞLIĞI
+    //------------------------------------
 
     if (body.generateTitle) {
       const title =
         await generateChatTitle(
-          body.firstMessage ??
-            ""
+          body.firstMessage ?? ""
         );
 
       return NextResponse.json({
@@ -138,21 +159,48 @@ export async function POST(
       });
     }
 
-    //----------------------------------
+    //------------------------------------
     // MESAJLAR
-    //----------------------------------
+    //------------------------------------
 
-    const messages =
-      Array.isArray(
-        body.messages
-      )
-        ? [...body.messages]
-        : [];
-            //----------------------------------
-    // DOSYA VARSA OKU
-    //----------------------------------
+    const messages = Array.isArray(
+      body.messages
+    )
+      ? [...body.messages]
+      : [];
+
+    //------------------------------------
+    // DOSYA VARSA
+    //------------------------------------
 
     if (body.file) {
+      const extension =
+        getExtension(body.file);
+
+      //------------------------------------
+      // RESİM
+      //------------------------------------
+
+      if (isImage(extension)) {
+        const imageUrl =
+          getPublicFileUrl(
+            body.file
+          );
+
+        const visionReply =
+          await analyzeImage(
+            imageUrl
+          );
+
+        return NextResponse.json({
+          reply: visionReply,
+        });
+      }
+
+      //------------------------------------
+      // BELGE
+      //------------------------------------
+
       try {
         console.log(
           "DOSYA PATH:",
@@ -174,7 +222,7 @@ export async function POST(
           return NextResponse.json(
             {
               reply:
-                "Dosya yüklendi fakat okunabilir metin bulunamadı.",
+                "Dosya okunamadı.",
             },
             {
               status: 400,
@@ -185,32 +233,23 @@ export async function POST(
         messages.push({
           role: "system",
           content: `
-Kullanıcı bu mesajla birlikte bir dosya yükledi.
-
-Dosya yolu:
+Kullanıcı bu dosyayı yükledi:
 
 ${body.file}
 
-Dosyanın çıkarılmış içeriği aşağıdadır.
-
-==================
+İçerik:
 
 ${fileText}
 
-==================
-
 Kurallar:
 
-- Dosyanın içeriğini gerçekten okumuş gibi davran.
-- Kullanıcının sorularını bu dosyaya göre cevapla.
+- Dosyayı gerçekten okumuş gibi davran.
+- Soruları bu dosyaya göre cevapla.
 - "Dosyayı göremiyorum" deme.
 - "Dosyaya erişemiyorum" deme.
-- Eğer kullanıcı sadece dosyayı yüklediyse,
-dosyayı aldığını söyle ve özetleyebileceğini,
-analiz edebileceğini veya soruları cevaplayabileceğini belirt.
 `,
         });
-      } catch (err) {
+              } catch (err) {
         console.error(err);
 
         return NextResponse.json(
@@ -227,9 +266,9 @@ analiz edebileceğini veya soruları cevaplayabileceğini belirt.
       }
     }
 
-    //----------------------------------
+    //------------------------------------
     // AI
-    //----------------------------------
+    //------------------------------------
 
     const reply =
       await askNova(messages);
@@ -238,10 +277,7 @@ analiz edebileceğini veya soruları cevaplayabileceğini belirt.
       reply,
     });
       } catch (error) {
-    console.error(
-      "CHAT API HATASI:",
-      error
-    );
+    console.error(error);
 
     return NextResponse.json(
       {

@@ -26,7 +26,6 @@ export default function ChatInput({
 
       {selectedFile && (
         <div className="mb-2 flex items-center justify-between bg-zinc-900 rounded-lg px-3 py-2">
-
           <span className="text-sm text-green-400">
             📎 {selectedFile.name}
           </span>
@@ -37,32 +36,29 @@ export default function ChatInput({
           >
             ✕
           </button>
-
         </div>
       )}
 
       <div className="flex gap-3 items-center">
 
         <FileUpload
-  onFileSelect={(file) => {
-    console.log("DOSYA CHATINPUT:", file);
-    setSelectedFile(file);
-  }}
-/>
+          onFileSelect={(file) =>
+            setSelectedFile(file)
+          }
+        />
 
         <input
           value={input}
-          onChange={(e) => setInput(e.target.value)}
+          onChange={(e) =>
+            setInput(e.target.value)
+          }
           placeholder="NOVA'ya mesaj yaz..."
-
           disabled={isUploading}
-
           onKeyDown={(e) => {
             if (e.key === "Enter") {
               sendMessage();
             }
           }}
-
           className="flex-1 p-4 rounded-xl bg-zinc-800 text-white border border-zinc-700 outline-none focus:border-blue-500"
         />
 
@@ -71,7 +67,9 @@ export default function ChatInput({
           disabled={isUploading}
           className="bg-blue-600 hover:bg-blue-700 transition px-6 py-4 rounded-xl disabled:opacity-50"
         >
-          {isUploading ? "Yükleniyor..." : "Gönder"}
+          {isUploading
+            ? "Yükleniyor..."
+            : "Gönder"}
         </button>
 
       </div>
