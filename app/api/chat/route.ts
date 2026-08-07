@@ -130,14 +130,10 @@ async function extractFileText(
       return readPdf(fileResponse);
 
     case "docx":
-      return readDocx(
-        fileResponse
-      );
+      return readDocx(fileResponse);
 
     default:
-      return readText(
-        fileResponse
-      );
+      return readText(fileResponse);
   }
 }
 export async function POST(req: Request) {

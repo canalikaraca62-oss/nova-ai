@@ -11,7 +11,7 @@ import { uploadFile } from "@/services/storage";
 import Sidebar from "@/app/components/Menu";
 import ChatWindow from "@/app/components/ChatWindow";
 import ChatInput from "@/app/components/ChatInput";
-
+import { streamChat } from "@/app/hooks/chat-stream";
 type ChatMessage = {
   sender: "user" | "nova";
   text: string;
@@ -31,7 +31,7 @@ export default function ChatDetailPage() {
     useState<File | null>(null);
 
   const [isUploading, setIsUploading] =
-  useState(false);
+    useState(false);
 
   useEffect(() => {
     if (chatId) {
@@ -64,203 +64,187 @@ export default function ChatDetailPage() {
       }))
     );
   }
-async function testStream() {
-  const response = await fetch("/api/stream", {
+  async function sendMessage() {
+  if (!input.trim() && !selectedFile) return;
+
+  const userMessage = input;
+
+  const updatedMessages = [
+    ...messages,
+    {
+      sender: "user" as const,
+      text: userMessage,
+    },
+  ];
+
+  setMessages(updatedMessages);
+
+  setInput("");
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return;
+
+  //----------------------------------
+  // DOSYA YÜKLE
+  //----------------------------------
+
+  let uploadedFile: string | null = null;
+
+  if (selectedFile) {
+    try {
+      setIsUploading(true);
+
+      uploadedFile = await uploadFile(
+        selectedFile
+      );
+
+      console.log(
+        "DOSYA YÜKLENDİ:",
+        uploadedFile
+      );
+    } catch (err) {
+      console.error(err);
+
+      alert("Dosya yüklenemedi.");
+
+      setIsUploading(false);
+
+      return;
+    }
+
+    setIsUploading(false);
+  }
+
+  //----------------------------------
+  // USER MESAJINI KAYDET
+  //----------------------------------
+
+  const { error: userError } =
+    await supabase.from("messages").insert({
+      chat_id: chatId,
+      role: "user",
+      content: userMessage,
+    });
+
+  if (userError) {
+    console.error(userError);
+    return;
+  }
+
+  //----------------------------------
+  // DEVAMI PART 3'TE
+  //----------------------------------
+    //----------------------------------
+  // AI İSTEĞİ
+  //----------------------------------
+
+  setIsLoading(true);
+
+  const response = await fetch("/api/chat", {
     method: "POST",
+
     headers: {
       "Content-Type": "application/json",
     },
+
     body: JSON.stringify({
-      messages: [
-        {
-          role: "user",
-          content: "Merhaba NOVA",
-        },
-      ],
+      messages: updatedMessages.map((m) => ({
+        role:
+          m.sender === "nova"
+            ? "assistant"
+            : "user",
+
+        content: m.text,
+      })),
+
+      file: uploadedFile,
     }),
   });
 
-  console.log(response);
-}
-  async function sendMessage() {
+  const data = await response.json();
 
-    await testStream();
-    
-    if (!input.trim() && !selectedFile) return;
+  setIsLoading(false);
 
-    const userMessage = input;
+  const assistantMessage = {
+    sender: "nova" as const,
+    text: data.reply,
+  };
 
-    const updatedMessages = [
-      ...messages,
-      {
-        sender: "user" as const,
-        text: userMessage,
-      },
-    ];
+  setMessages((prev) => [
+    ...prev,
+    assistantMessage,
+  ]);
 
-    setMessages(updatedMessages);
+  //----------------------------------
+  // AI MESAJINI KAYDET
+  //----------------------------------
 
-    setInput("");
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) return;
-
-    //----------------------------------
-    // DOSYA YÜKLE
-    //----------------------------------
-
-    let uploadedFile: string | null = null;
-
-    if (selectedFile) {
-      try {
-        setIsUploading(true);
-
-        uploadedFile = await uploadFile(
-          selectedFile
-        );
-
-        console.log(
-          "DOSYA YÜKLENDİ:",
-          uploadedFile
-        );
-      } catch (err) {
-        console.error(err);
-
-        alert("Dosya yüklenemedi.");
-
-        setIsUploading(false);
-
-        return;
-      }
-
-      setIsUploading(false);
-    }
-
-    //----------------------------------
-    // USER MESAJINI KAYDET
-    //----------------------------------
-
-    const { error: userError } =
-      await supabase.from("messages").insert({
-        chat_id: chatId,
-        role: "user",
-        content: userMessage,
-      });
-
-    if (userError) {
-      console.error(userError);
-      return;
-    }
-
-    //----------------------------------
-    // AI İSTEĞİ
-    //----------------------------------
-
-    setIsLoading(true);
-        const response = await fetch("/api/chat", {
-      method: "POST",
-
-      headers: {
-        "Content-Type": "application/json",
-      },
-
-      body: JSON.stringify({
-        messages: updatedMessages.map((m) => ({
-          role:
-            m.sender === "nova"
-              ? "assistant"
-              : "user",
-
-          content: m.text,
-        })),
-
-        file: uploadedFile,
-      }),
+  const { error: aiError } =
+    await supabase.from("messages").insert({
+      chat_id: chatId,
+      role: "assistant",
+      content: data.reply,
     });
 
-    const data = await response.json();
-
-    setIsLoading(false);
-
-    const assistantMessage = {
-      sender: "nova" as const,
-
-      text: data.reply,
-    };
-
-    setMessages((prev) => [
-      ...prev,
-      assistantMessage,
-    ]);
-
-    //----------------------------------
-    // AI MESAJINI KAYDET
-    //----------------------------------
-
-    const { error: aiError } =
-      await supabase.from("messages").insert({
-        chat_id: chatId,
-        role: "assistant",
-        content: data.reply,
-      });
-
-    if (aiError) {
-      console.error(aiError);
-      return;
-    }
-
-    //----------------------------------
-    // İLK MESAJDA BAŞLIK OLUŞTUR
-    //----------------------------------
-
-    if (updatedMessages.length === 1) {
-      try {
-        const title =
-          await generateChatTitle(userMessage);
-
-        await supabase
-          .from("chats")
-          .update({
-            title,
-          })
-          .eq("id", chatId);
-      } catch (err) {
-        console.error(err);
-      }
-    }
-
-    //----------------------------------
-    // DOSYAYI TEMİZLE
-    //----------------------------------
-
-    setSelectedFile(null);
+  if (aiError) {
+    console.error(aiError);
+    return;
   }
-    return (
-    <div className="flex h-screen bg-black text-white">
-      <Sidebar />
 
-      <main className="flex-1 flex flex-col p-8">
-        <h1 className="text-4xl font-bold mb-8">
-          NOVA Chat
-        </h1>
+  //----------------------------------
+  // İLK MESAJDA BAŞLIK
+  //----------------------------------
 
-        <ChatWindow
-          messages={messages}
-          isLoading={isLoading}
-        />
+  if (updatedMessages.length === 1) {
+    try {
+      const title =
+        await generateChatTitle(
+          userMessage
+        );
 
-        <ChatInput
-          input={input}
-          setInput={setInput}
-          sendMessage={sendMessage}
-          selectedFile={selectedFile}
-          setSelectedFile={setSelectedFile}
-          isUploading={isUploading}
-        />
-      </main>
-    </div>
-  );
+      await supabase
+        .from("chats")
+        .update({
+          title,
+        })
+        .eq("id", chatId);
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  //----------------------------------
+  // TEMİZLE
+  //----------------------------------
+
+  setSelectedFile(null);
+}
+return (
+  <div className="flex h-screen bg-black text-white">
+    <Sidebar />
+
+    <main className="flex-1 flex flex-col p-8">
+      <h1 className="text-4xl font-bold mb-8">
+        NOVA Chat
+      </h1>
+
+      <ChatWindow
+        messages={messages}
+        isLoading={isLoading}
+      />
+
+      <ChatInput
+        input={input}
+        setInput={setInput}
+        sendMessage={sendMessage}
+        selectedFile={selectedFile}
+        setSelectedFile={setSelectedFile}
+        isUploading={isUploading}
+      />
+    </main>
+  </div>
+);
 }
