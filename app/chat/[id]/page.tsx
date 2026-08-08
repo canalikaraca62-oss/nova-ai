@@ -200,10 +200,26 @@ try {
   controller.signal
 );
 } catch (error) {
-  console.error(
-    "Streaming hatası:",
-    error
-  );
+  if (
+    error instanceof DOMException &&
+    error.name === "AbortError"
+  ) {
+    console.log("NOVA üretimi kullanıcı tarafından durduruldu.");
+  } else {
+    console.error(
+      "Streaming hatası:",
+      error
+    );
+
+    setMessages((prev) => [
+      ...prev,
+      {
+        sender: "nova",
+        text:
+          "Üzgünüm, cevap oluşturulurken bir hata oluştu. Lütfen tekrar deneyin.",
+      },
+    ]);
+  }
 }
 finally {
   setIsLoading(false);
