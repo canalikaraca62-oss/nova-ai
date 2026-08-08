@@ -5,10 +5,12 @@ export type StreamMessage = {
 
 export async function streamChat(
   messages: StreamMessage[],
-  onChunk: (chunk: string) => void
+  onChunk: (chunk: string) => void,
+  signal?: AbortSignal
 ) {
   const response = await fetch("/api/stream", {
     method: "POST",
+    signal,
 
     headers: {
       "Content-Type": "application/json",
@@ -28,53 +30,97 @@ export async function streamChat(
   }
 
   const reader = response.body.getReader();
-
   const decoder = new TextDecoder();
 
-  let finished = false;
+  let buffer = "";
 
-  while (!finished) {
-    const { value, done } =
-      await reader.read();
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
 
-    finished = done;
-
-  if (value) {
-  const text = decoder.decode(value, {
-    stream: true,
-  });
-
-  const lines = text.split("\n");
-
-  for (const line of lines) {
-    if (!line.startsWith("data: ")) {
-      continue;
-    }
-
-    const data = line.slice(6).trim();
-
-    if (data === "[DONE]") {
-      continue;
-    }
-
-    try {
-      const json = JSON.parse(data);
-
-      const content =
-        json.choices?.[0]?.delta?.content;
-
-      if (content) {
-        onChunk(content);
+      if (done) {
+        break;
       }
-    } catch (error) {
-      console.error(
-        "Stream JSON parse hatası:",
-        error
-      );
-    }
-  }
-}
-  }
 
-  reader.releaseLock();
+      if (!value) {
+        continue;
+      }
+
+      buffer += decoder.decode(value, {
+        stream: true,
+      });
+
+      const lines = buffer.split("\n");
+
+      buffer = lines.pop() ?? "";
+
+      for (const line of lines) {
+        const trimmedLine = line.trim();
+
+        if (!trimmedLine) {
+          continue;
+        }
+
+        if (!trimmedLine.startsWith("data: ")) {
+          continue;
+        }
+
+        const data = trimmedLine.slice(6).trim();
+
+        if (data === "[DONE]") {
+          continue;
+        }
+
+        try {
+          const json = JSON.parse(data);
+
+          const content =
+            json.choices?.[0]?.delta?.content;
+
+          if (content) {
+            onChunk(content);
+          }
+        } catch (error) {
+          console.error(
+            "Stream JSON parse hatası:",
+            error
+          );
+        }
+      }
+    }
+
+    // Stream sonunda buffer'da kalan son parçayı işle
+    if (buffer.trim()) {
+      const trimmedLine = buffer.trim();
+
+      if (trimmedLine.startsWith("data: ")) {
+        const data = trimmedLine
+          .slice(6)
+          .trim();
+
+        if (
+          data &&
+          data !== "[DONE]"
+        ) {
+          try {
+            const json = JSON.parse(data);
+
+            const content =
+              json.choices?.[0]?.delta?.content;
+
+            if (content) {
+              onChunk(content);
+            }
+          } catch (error) {
+            console.error(
+              "Son stream parçası parse edilemedi:",
+              error
+            );
+          }
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
 }

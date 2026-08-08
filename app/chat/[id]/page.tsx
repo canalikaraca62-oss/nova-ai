@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 
 import { supabase } from "@/lib/supabase";
@@ -32,6 +32,9 @@ export default function ChatDetailPage() {
 
   const [isUploading, setIsUploading] =
     useState(false);
+    const abortControllerRef =
+  useRef<AbortController | null>(null);
+    const [isStreaming, setIsStreaming] = useState(false);
 
   useEffect(() => {
     if (chatId) {
@@ -141,7 +144,12 @@ export default function ChatDetailPage() {
   // AI İSTEĞİ
   //----------------------------------
 
- setIsLoading(true);
+ const controller = new AbortController();
+
+abortControllerRef.current = controller;
+
+setIsStreaming(true);
+setIsLoading(true);
 
 const assistantMessage = {
   sender: "nova" as const,
@@ -157,45 +165,50 @@ setMessages((prev) => [
 
 try {
   await streamChat(
-    updatedMessages.map((m) => ({
-      role:
-        m.sender === "nova"
-          ? "assistant"
-          : "user",
-      content: m.text,
-    })),
+  updatedMessages.map((m) => ({
+    role:
+      m.sender === "nova"
+        ? "assistant"
+        : "user",
+    content: m.text,
+  })),
 
-    (chunk) => {
-      fullAssistantText += chunk;
+  (chunk) => {
+    fullAssistantText += chunk;
 
-      setMessages((prev) => {
-        const updated = [...prev];
+    setMessages((prev) => {
+      const updated = [...prev];
 
-        const lastIndex =
-          updated.length - 1;
+      const lastIndex =
+        updated.length - 1;
 
-        if (lastIndex < 0) {
-          return prev;
-        }
+      if (lastIndex < 0) {
+        return prev;
+      }
 
-        updated[lastIndex] = {
-          ...updated[lastIndex],
-          text:
-            updated[lastIndex].text +
-            chunk,
-        };
+      updated[lastIndex] = {
+        ...updated[lastIndex],
+        text:
+          updated[lastIndex].text +
+          chunk,
+      };
 
-        return updated;
-      });
-    }
-  );
+      return updated;
+    });
+  },
+
+  controller.signal
+);
 } catch (error) {
   console.error(
     "Streaming hatası:",
     error
   );
-} finally {
+}
+finally {
   setIsLoading(false);
+  setIsStreaming(false);
+  abortControllerRef.current = null;
 }
 
   //----------------------------------
@@ -257,13 +270,17 @@ return (
       />
 
       <ChatInput
-        input={input}
-        setInput={setInput}
-        sendMessage={sendMessage}
-        selectedFile={selectedFile}
-        setSelectedFile={setSelectedFile}
-        isUploading={isUploading}
-      />
+  input={input}
+  setInput={setInput}
+  sendMessage={sendMessage}
+  selectedFile={selectedFile}
+  setSelectedFile={setSelectedFile}
+  isUploading={isUploading}
+  isStreaming={isStreaming}
+  stopStreaming={() => {
+    abortControllerRef.current?.abort();
+  }}
+/>
     </main>
   </div>
 );
