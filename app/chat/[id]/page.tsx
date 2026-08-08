@@ -67,11 +67,14 @@ export default function ChatDetailPage() {
       }))
     );
   }
-  async function sendMessage() {
-    if (isStreaming || isUploading) {
-  return;
-}
-  if (!input.trim() && !selectedFile) return;
+ async function sendMessage() {
+  if (isStreaming || isUploading) {
+    return;
+  }
+
+  if (!input.trim() && !selectedFile) {
+    return;
+  }
 
   const userMessage = input;
 
@@ -84,14 +87,15 @@ export default function ChatDetailPage() {
   ];
 
   setMessages(updatedMessages);
-
   setInput("");
 
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) return;
+  if (!user) {
+    return;
+  }
 
   //----------------------------------
   // DOSYA YÜKLE
@@ -103,9 +107,7 @@ export default function ChatDetailPage() {
     try {
       setIsUploading(true);
 
-      uploadedFile = await uploadFile(
-        selectedFile
-      );
+      uploadedFile = await uploadFile(selectedFile);
 
       console.log(
         "DOSYA YÜKLENDİ:",
@@ -141,109 +143,226 @@ export default function ChatDetailPage() {
   }
 
   //----------------------------------
-  // DEVAMI PART 3'TE
-  //----------------------------------
-    //----------------------------------
-  // AI İSTEĞİ
+  // DOSYA VARSA
+  // /api/chat KULLAN
   //----------------------------------
 
- const controller = new AbortController();
+  if (uploadedFile) {
+    setIsLoading(true);
 
-abortControllerRef.current = controller;
+    try {
+      const response = await fetch("/api/chat", {
+        method: "POST",
 
-setIsStreaming(true);
-setIsLoading(true);
+        headers: {
+          "Content-Type": "application/json",
+        },
 
-const assistantMessage = {
-  sender: "nova" as const,
-  text: "",
-};
+        body: JSON.stringify({
+          messages: updatedMessages.map((m) => ({
+            role:
+              m.sender === "nova"
+                ? "assistant"
+                : "user",
 
-let fullAssistantText = "";
+            content: m.text,
+          })),
 
-setMessages((prev) => [
-  ...prev,
-  assistantMessage,
-]);
+          file: uploadedFile,
+        }),
+      });
 
-try {
-  await streamChat(
-  updatedMessages.map((m) => ({
-    role:
-      m.sender === "nova"
-        ? "assistant"
-        : "user",
-    content: m.text,
-  })),
+      const data = await response.json();
 
-  (chunk) => {
-    fullAssistantText += chunk;
-
-    setMessages((prev) => {
-      const updated = [...prev];
-
-      const lastIndex =
-        updated.length - 1;
-
-      if (lastIndex < 0) {
-        return prev;
+      if (!response.ok) {
+        throw new Error(
+          data.reply ||
+            "Dosya işlenemedi."
+        );
       }
 
-      updated[lastIndex] = {
-        ...updated[lastIndex],
-        text:
-          updated[lastIndex].text +
-          chunk,
+      const assistantMessage = {
+        sender: "nova" as const,
+        text: data.reply,
       };
 
-      return updated;
-    });
-  },
+      setMessages((prev) => [
+        ...prev,
+        assistantMessage,
+      ]);
 
-  controller.signal
-);
-} catch (error) {
-  if (
-    error instanceof DOMException &&
-    error.name === "AbortError"
-  ) {
-    console.log("NOVA üretimi kullanıcı tarafından durduruldu.");
-  } else {
-    console.error(
-      "Streaming hatası:",
-      error
-    );
+      //----------------------------------
+      // AI MESAJINI KAYDET
+      //----------------------------------
 
-    setMessages((prev) => [
-      ...prev,
-      {
-        sender: "nova",
-        text:
-          "Üzgünüm, cevap oluşturulurken bir hata oluştu. Lütfen tekrar deneyin.",
-      },
-    ]);
-  }
-}
-finally {
-  setIsLoading(false);
-  setIsStreaming(false);
-  abortControllerRef.current = null;
-}
+      const { error: aiError } =
+        await supabase
+          .from("messages")
+          .insert({
+            chat_id: chatId,
+            role: "assistant",
+            content: data.reply,
+          });
 
-  //----------------------------------
-  // AI MESAJINI KAYDET
-  //----------------------------------
+      if (aiError) {
+        console.error(aiError);
+      }
 
-   const { error: aiError } =
-  await supabase.from("messages").insert({
-    chat_id: chatId,
-    role: "assistant",
-    content: fullAssistantText,
-  });
+      //----------------------------------
+      // İLK MESAJDA BAŞLIK
+      //----------------------------------
 
-  if (aiError) {
-    console.error(aiError);
+      if (updatedMessages.length === 1) {
+        try {
+          const title =
+            await generateChatTitle(
+              userMessage ||
+                "Dosya analizi"
+            );
+
+          await supabase
+            .from("chats")
+            .update({
+              title,
+            })
+            .eq("id", chatId);
+        } catch (err) {
+          console.error(err);
+        }
+      }
+    } catch (error) {
+      console.error(
+        "Dosya işleme hatası:",
+        error
+      );
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          sender: "nova",
+          text:
+            "Dosya işlenirken bir hata oluştu. Lütfen tekrar deneyin.",
+        },
+      ]);
+    } finally {
+      setIsLoading(false);
+      setSelectedFile(null);
+    }
+
     return;
+  }
+
+  //----------------------------------
+  // NORMAL METİN MESAJI
+  // STREAMING
+  //----------------------------------
+
+  const controller =
+    new AbortController();
+
+  abortControllerRef.current =
+    controller;
+
+  setIsStreaming(true);
+  setIsLoading(true);
+
+  const assistantMessage = {
+    sender: "nova" as const,
+    text: "",
+  };
+
+  let fullAssistantText = "";
+
+  setMessages((prev) => [
+    ...prev,
+    assistantMessage,
+  ]);
+
+  try {
+    await streamChat(
+      updatedMessages.map((m) => ({
+        role:
+          m.sender === "nova"
+            ? "assistant"
+            : "user",
+
+        content: m.text,
+      })),
+
+      (chunk) => {
+        fullAssistantText += chunk;
+
+        setMessages((prev) => {
+          const updated = [...prev];
+
+          const lastIndex =
+            updated.length - 1;
+
+          if (lastIndex < 0) {
+            return prev;
+          }
+
+          updated[lastIndex] = {
+            ...updated[lastIndex],
+
+            text:
+              updated[lastIndex].text +
+              chunk,
+          };
+
+          return updated;
+        });
+      },
+
+      controller.signal
+    );
+  } catch (error) {
+    if (
+      error instanceof DOMException &&
+      error.name === "AbortError"
+    ) {
+      console.log(
+        "NOVA üretimi kullanıcı tarafından durduruldu."
+      );
+    } else {
+      console.error(
+        "Streaming hatası:",
+        error
+      );
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          sender: "nova",
+          text:
+            "Üzgünüm, cevap oluşturulurken bir hata oluştu. Lütfen tekrar deneyin.",
+        },
+      ]);
+    }
+  } finally {
+    setIsLoading(false);
+    setIsStreaming(false);
+    abortControllerRef.current =
+      null;
+  }
+
+  //----------------------------------
+  // STREAMING AI MESAJINI KAYDET
+  //----------------------------------
+
+  if (fullAssistantText) {
+    const { error: aiError } =
+      await supabase
+        .from("messages")
+        .insert({
+          chat_id: chatId,
+          role: "assistant",
+          content: fullAssistantText,
+        });
+
+    if (aiError) {
+      console.error(aiError);
+    }
   }
 
   //----------------------------------

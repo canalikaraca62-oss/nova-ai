@@ -68,6 +68,29 @@ export default function ChatInput({
 
           {selectedFile && (
             <div className="mt-2 text-sm text-zinc-400">
+              {selectedFile && (
+  <div className="mt-2 flex items-center justify-between rounded-lg bg-zinc-800 px-3 py-2 text-sm text-zinc-300">
+    <div className="truncate">
+      📎 {selectedFile.name}
+    </div>
+
+    {!isUploading && !isStreaming && (
+      <button
+        type="button"
+        onClick={() => setSelectedFile(null)}
+        className="ml-3 text-red-400 hover:text-red-300"
+      >
+        Kaldır
+      </button>
+    )}
+
+    {isUploading && (
+      <span className="ml-3 text-yellow-400">
+        Yükleniyor...
+      </span>
+    )}
+  </div>
+)}
               Seçilen dosya:{" "}
               <span className="text-white">
                 {selectedFile.name}
