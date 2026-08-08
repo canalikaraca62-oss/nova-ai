@@ -68,6 +68,9 @@ export default function ChatDetailPage() {
     );
   }
   async function sendMessage() {
+    if (isStreaming || isUploading) {
+  return;
+}
   if (!input.trim() && !selectedFile) return;
 
   const userMessage = input;
