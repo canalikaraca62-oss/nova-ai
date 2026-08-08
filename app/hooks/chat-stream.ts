@@ -39,14 +39,41 @@ export async function streamChat(
 
     finished = done;
 
-    if (value) {
-      const text =
-        decoder.decode(value, {
-          stream: true,
-        });
+  if (value) {
+  const text = decoder.decode(value, {
+    stream: true,
+  });
 
-      onChunk(text);
+  const lines = text.split("\n");
+
+  for (const line of lines) {
+    if (!line.startsWith("data: ")) {
+      continue;
     }
+
+    const data = line.slice(6).trim();
+
+    if (data === "[DONE]") {
+      continue;
+    }
+
+    try {
+      const json = JSON.parse(data);
+
+      const content =
+        json.choices?.[0]?.delta?.content;
+
+      if (content) {
+        onChunk(content);
+      }
+    } catch (error) {
+      console.error(
+        "Stream JSON parse hatası:",
+        error
+      );
+    }
+  }
+}
   }
 
   reader.releaseLock();

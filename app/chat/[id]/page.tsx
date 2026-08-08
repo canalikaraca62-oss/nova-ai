@@ -141,53 +141,73 @@ export default function ChatDetailPage() {
   // AI İSTEĞİ
   //----------------------------------
 
-  setIsLoading(true);
+ setIsLoading(true);
 
-  const response = await fetch("/api/chat", {
-    method: "POST",
+const assistantMessage = {
+  sender: "nova" as const,
+  text: "",
+};
 
-    headers: {
-      "Content-Type": "application/json",
-    },
+let fullAssistantText = "";
 
-    body: JSON.stringify({
-      messages: updatedMessages.map((m) => ({
-        role:
-          m.sender === "nova"
-            ? "assistant"
-            : "user",
+setMessages((prev) => [
+  ...prev,
+  assistantMessage,
+]);
 
-        content: m.text,
-      })),
+try {
+  await streamChat(
+    updatedMessages.map((m) => ({
+      role:
+        m.sender === "nova"
+          ? "assistant"
+          : "user",
+      content: m.text,
+    })),
 
-      file: uploadedFile,
-    }),
-  });
+    (chunk) => {
+      fullAssistantText += chunk;
 
-  const data = await response.json();
+      setMessages((prev) => {
+        const updated = [...prev];
 
+        const lastIndex =
+          updated.length - 1;
+
+        if (lastIndex < 0) {
+          return prev;
+        }
+
+        updated[lastIndex] = {
+          ...updated[lastIndex],
+          text:
+            updated[lastIndex].text +
+            chunk,
+        };
+
+        return updated;
+      });
+    }
+  );
+} catch (error) {
+  console.error(
+    "Streaming hatası:",
+    error
+  );
+} finally {
   setIsLoading(false);
-
-  const assistantMessage = {
-    sender: "nova" as const,
-    text: data.reply,
-  };
-
-  setMessages((prev) => [
-    ...prev,
-    assistantMessage,
-  ]);
+}
 
   //----------------------------------
   // AI MESAJINI KAYDET
   //----------------------------------
 
-  const { error: aiError } =
-    await supabase.from("messages").insert({
-      chat_id: chatId,
-      role: "assistant",
-      content: data.reply,
-    });
+   const { error: aiError } =
+  await supabase.from("messages").insert({
+    chat_id: chatId,
+    role: "assistant",
+    content: fullAssistantText,
+  });
 
   if (aiError) {
     console.error(aiError);
