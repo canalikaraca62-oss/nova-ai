@@ -27,7 +27,7 @@ export default function Message({ sender, text }: MessageProps) {
         }`}
       >
         <div className="text-xs opacity-70 mb-3 font-semibold">
-          {isUser ? "👤 Sen" : "🤖 NOVA"}
+          {isUser ? "👤 Sen" : "🤖 QELVORA"}
         </div>
 
         <div className="prose prose-invert max-w-none">

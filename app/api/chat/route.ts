@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 import {
   askNova,
@@ -13,6 +14,7 @@ import {
   readPdf,
   readDocx,
   readText,
+  readPptx,
 } from "@/services/document-reader";
 
 const SUPABASE_URL =
@@ -32,15 +34,21 @@ function getExtension(
   );
 }
 
-function getPublicFileUrl(
+async function getPrivateFileUrl(
   filePath: string
 ) {
-  const encodedPath = filePath
-    .split("/")
-    .map(encodeURIComponent)
-    .join("/");
+  const { data, error } =
+    await supabaseAdmin.storage
+      .from("files")
+      .createSignedUrl(filePath, 60 * 5);
 
-  return `${SUPABASE_URL}/storage/v1/object/public/files/${encodedPath}`;
+  if (error || !data?.signedUrl) {
+    throw new Error(
+      "Dosya için güvenli erişim bağlantısı oluşturulamadı."
+    );
+  }
+
+  return data.signedUrl;
 }
 
 function isImage(
@@ -60,9 +68,20 @@ async function extractFileText(
   const extension =
     getExtension(filePath);
 
+  console.log(
+    "PPTX DEBUG FILE PATH:",
+    filePath
+  );
+
+  console.log(
+    "PPTX DEBUG EXTENSION:",
+    extension
+  );
+
   const supportedExtensions = [
     "pdf",
     "docx",
+    "pptx",
     "txt",
     "md",
     "json",
@@ -81,7 +100,6 @@ async function extractFileText(
     "cs",
     "sql",
   ];
-
   if (
     !supportedExtensions.includes(
       extension
@@ -93,7 +111,7 @@ async function extractFileText(
   }
 
   const fileUrl =
-    getPublicFileUrl(filePath);
+  await getPrivateFileUrl(filePath);
 
   console.log(
     "DOSYA İNDİRİLİYOR:",
@@ -126,14 +144,17 @@ async function extractFileText(
   }
 
   switch (extension) {
-    case "pdf":
-      return readPdf(fileResponse);
+   case "pdf":
+  return readPdf(fileResponse);
 
-    case "docx":
-      return readDocx(fileResponse);
+case "docx":
+  return readDocx(fileResponse);
 
-    default:
-      return readText(fileResponse);
+case "pptx":
+  return readPptx(fileResponse);
+
+default:
+  return readText(fileResponse);
   }
 }
 export async function POST(req: Request) {
@@ -179,9 +200,9 @@ export async function POST(req: Request) {
 
       if (isImage(extension)) {
         const imageUrl =
-          getPublicFileUrl(
-            body.file
-          );
+  await getPrivateFileUrl(
+    body.file
+  );
 
         const visionReply =
           await analyzeImage(
@@ -226,16 +247,24 @@ export async function POST(req: Request) {
           );
         }
 
-        messages.push({
-          role: "system",
-          content: `
+       const MAX_AI_FILE_TEXT = 25_000;
+
+const limitedFileText =
+  fileText.length > MAX_AI_FILE_TEXT
+    ? fileText.slice(0, MAX_AI_FILE_TEXT) +
+      "\n\n[Dosyanın geri kalanı çok uzun olduğu için buraya eklenmedi.]"
+    : fileText;
+
+messages.push({
+  role: "system",
+  content: `
 Kullanıcı bu dosyayı yükledi:
 
 ${body.file}
 
-İçerik:
+Dosya içeriği:
 
-${fileText}
+${limitedFileText}
 
 Kurallar:
 
@@ -243,8 +272,9 @@ Kurallar:
 - Soruları bu dosyaya göre cevapla.
 - "Dosyayı göremiyorum" deme.
 - "Dosyaya erişemiyorum" deme.
+- Dosya çok uzunsa, mevcut içerikten mümkün olduğunca doğru cevap ver.
 `,
-        });
+});
               } catch (err) {
         console.error(err);
 
