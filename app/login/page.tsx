@@ -33,7 +33,7 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-black text-white">
       <div className="w-full max-w-md bg-zinc-900 p-8 rounded-xl">
         <h1 className="text-3xl font-bold mb-6 text-center">
-          NOVA Giriş
+          QELVORA Giriş
         </h1>
 
         <input

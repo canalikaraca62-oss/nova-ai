@@ -3,9 +3,16 @@
 import { useEffect, useRef } from "react";
 import Message from "./Message";
 
+type Attachment = {
+  name: string;
+  url: string;
+  type: string;
+};
+
 type MessageType = {
-  sender: "user" | "nova";
+  sender: "user" | "qelvora";
   text: string;
+  attachment?: Attachment | null;
 };
 
 type ChatWindowProps = {
@@ -32,13 +39,14 @@ export default function ChatWindow({
           key={index}
           sender={msg.sender}
           text={msg.text}
+          attachment={msg.attachment}
         />
       ))}
 
       {isLoading && (
         <div className="flex justify-start mt-4">
           <div className="bg-zinc-800 px-4 py-3 rounded-2xl animate-pulse text-white">
-            🤖 NOVA yazıyor...
+            🤖 QELVORA yazıyor...
           </div>
         </div>
       )}

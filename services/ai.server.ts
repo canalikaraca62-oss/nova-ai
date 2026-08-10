@@ -1,4 +1,4 @@
-export async function askNova(messages: any[]) {
+export async function askQelvora(messages: any[]) {
   const response = await fetch(
     "https://api.groq.com/openai/v1/chat/completions",
     {
@@ -16,7 +16,7 @@ export async function askNova(messages: any[]) {
           {
             role: "system",
             content: `
-Sen NOVA isimli gelişmiş bir yapay zekâ asistansın.
+Sen QELVORA isimli gelişmiş bir yapay zekâ asistansın.
 
 Kurallar:
 

@@ -13,7 +13,7 @@ import ChatWindow from "@/app/components/ChatWindow";
 import ChatInput from "@/app/components/ChatInput";
 import { streamChat } from "@/app/hooks/chat-stream";
 type ChatMessage = {
-  sender: "user" | "nova";
+  sender: "user" | "qelvora";
   text: string;
 };
 
@@ -60,7 +60,7 @@ export default function ChatDetailPage() {
       (data || []).map((msg) => ({
         sender:
           msg.role === "assistant"
-            ? "nova"
+            ? "qelvora"
             : "user",
 
         text: msg.content,
@@ -102,6 +102,7 @@ export default function ChatDetailPage() {
   //----------------------------------
 
   let uploadedFile: string | null = null;
+  let attachmentUrl: string | null = null;
 
   if (selectedFile) {
     try {
@@ -113,6 +114,16 @@ export default function ChatDetailPage() {
         "DOSYA YÜKLENDİ:",
         uploadedFile
       );
+      const { data: signedUrlData, error: signedUrlError } =
+  await supabase.storage
+    .from("files")
+    .createSignedUrl(uploadedFile, 60 * 60);
+
+if (signedUrlError) {
+  console.error("SIGNED URL HATASI:", signedUrlError);
+} else {
+  attachmentUrl = signedUrlData.signedUrl;
+}
     } catch (err) {
       console.error(err);
 
@@ -161,7 +172,7 @@ export default function ChatDetailPage() {
         body: JSON.stringify({
           messages: updatedMessages.map((m) => ({
             role:
-              m.sender === "nova"
+              m.sender === "qelvora"
                 ? "assistant"
                 : "user",
 
@@ -182,7 +193,7 @@ export default function ChatDetailPage() {
       }
 
       const assistantMessage = {
-        sender: "nova" as const,
+        sender: "qelvora" as const,
         text: data.reply,
       };
 
@@ -239,7 +250,7 @@ export default function ChatDetailPage() {
       setMessages((prev) => [
         ...prev,
         {
-          sender: "nova",
+          sender: "qelvora",
           text:
             "Dosya işlenirken bir hata oluştu. Lütfen tekrar deneyin.",
         },
@@ -267,7 +278,7 @@ export default function ChatDetailPage() {
   setIsLoading(true);
 
   const assistantMessage = {
-    sender: "nova" as const,
+    sender: "qelvora" as const,
     text: "",
   };
 
@@ -282,7 +293,7 @@ export default function ChatDetailPage() {
     await streamChat(
       updatedMessages.map((m) => ({
         role:
-          m.sender === "nova"
+          m.sender === "qelvora"
             ? "assistant"
             : "user",
 
@@ -322,7 +333,7 @@ export default function ChatDetailPage() {
       error.name === "AbortError"
     ) {
       console.log(
-        "NOVA üretimi kullanıcı tarafından durduruldu."
+        "QELVORA üretimi kullanıcı tarafından durduruldu."
       );
     } else {
       console.error(
@@ -333,7 +344,7 @@ export default function ChatDetailPage() {
       setMessages((prev) => [
         ...prev,
         {
-          sender: "nova",
+          sender: "qelvora",
           text:
             "Üzgünüm, cevap oluşturulurken bir hata oluştu. Lütfen tekrar deneyin.",
         },
@@ -399,7 +410,7 @@ return (
 
     <main className="flex-1 flex flex-col p-8">
       <h1 className="text-4xl font-bold mb-8">
-        NOVA Chat
+        QELVORA Chat
       </h1>
 
       <ChatWindow

@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 export default function Hero() {
   return (
     <section className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden px-6 text-center">
@@ -8,7 +10,7 @@ export default function Hero() {
       <div className="relative z-10">
 
         <div className="mb-6 inline-block rounded-full border border-white/20 bg-white/5 px-5 py-2 text-sm text-gray-300 backdrop-blur-md">
-          🚀 Powered by NOVA AI
+          🚀 Powered by QELVORA AI
         </div>
 
         <h1 className="text-6xl font-extrabold leading-tight md:text-8xl">
@@ -25,13 +27,19 @@ export default function Hero() {
 
         <div className="mt-12 flex flex-col gap-4 sm:flex-row sm:justify-center">
 
-          <button className="rounded-xl bg-white px-8 py-4 font-bold text-black transition hover:scale-105">
+          <Link
+            href="/register"
+            className="rounded-xl bg-white px-8 py-4 font-bold text-black transition hover:scale-105"
+          >
             Get Started
-          </button>
+          </Link>
 
-          <button className="rounded-xl border border-white/20 bg-white/5 px-8 py-4 font-bold backdrop-blur-md transition hover:bg-white/10">
+          <a
+            href="#features"
+            className="rounded-xl border border-white/20 bg-white/5 px-8 py-4 font-bold backdrop-blur-md transition hover:bg-white/10"
+          >
             Learn More
-          </button>
+          </a>
 
         </div>
 

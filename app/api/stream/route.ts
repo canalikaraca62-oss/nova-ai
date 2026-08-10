@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
           {
             role: "system",
             content: `
-Sen NOVA isimli gelişmiş bir yapay zekâ asistansın.
+Sen QELVORA isimli gelişmiş bir yapay zekâ asistansın.
 
 - Türkçe konuş.
 - Profesyonel ol.

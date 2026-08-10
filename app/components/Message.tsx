@@ -5,13 +5,26 @@ import remarkGfm from "remark-gfm";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 
-type MessageProps = {
-  sender: "user" | "nova";
-  text: string;
+type Attachment = {
+  name: string;
+  url: string;
+  type: string;
 };
 
-export default function Message({ sender, text }: MessageProps) {
+type MessageProps = {
+  sender: "user" | "qelvora";
+  text: string;
+  attachment?: Attachment | null;
+};
+
+export default function Message({
+  sender,
+  text,
+  attachment,
+}: MessageProps) {
   const isUser = sender === "user";
+
+  const isImage = attachment?.type.startsWith("image/");
 
   return (
     <div
@@ -30,56 +43,90 @@ export default function Message({ sender, text }: MessageProps) {
           {isUser ? "👤 Sen" : "🤖 QELVORA"}
         </div>
 
-        <div className="prose prose-invert max-w-none">
-          <ReactMarkdown
-            remarkPlugins={[remarkGfm]}
-            components={{
-              code({ className, children, ...props }) {
-                const match = /language-(\w+)/.exec(className || "");
+        {attachment && (
+          <div className="mb-4">
+            {isImage ? (
+              <img
+                src={attachment.url}
+                alt={attachment.name}
+                className="max-w-full max-h-80 rounded-xl object-contain"
+              />
+            ) : (
+              <a
+                href={attachment.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-3 rounded-xl bg-black/20 px-4 py-3 hover:bg-black/30 transition"
+              >
+                <span className="text-2xl">📎</span>
 
-                if (match) {
-                  return (
-                    <div className="rounded-xl overflow-hidden my-4">
-                      <div className="flex items-center justify-between bg-zinc-800 px-4 py-2 text-sm">
-                        <span>{match[1]}</span>
+                <div className="min-w-0">
+                  <div className="font-semibold truncate">
+                    {attachment.name}
+                  </div>
 
-                        <button
-                          onClick={() =>
-                            navigator.clipboard.writeText(
-                              String(children)
-                            )
-                          }
-                          className="hover:text-blue-400"
+                  <div className="text-xs opacity-70">
+                    Dosyayı aç
+                  </div>
+                </div>
+              </a>
+            )}
+          </div>
+        )}
+
+        {text && (
+          <div className="prose prose-invert max-w-none">
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={{
+                code({ className, children, ...props }) {
+                  const match =
+                    /language-(\w+)/.exec(className || "");
+
+                  if (match) {
+                    return (
+                      <div className="rounded-xl overflow-hidden my-4">
+                        <div className="flex items-center justify-between bg-zinc-800 px-4 py-2 text-sm">
+                          <span>{match[1]}</span>
+
+                          <button
+                            onClick={() =>
+                              navigator.clipboard.writeText(
+                                String(children)
+                              )
+                            }
+                            className="hover:text-blue-400"
+                          >
+                            📋 Copy
+                          </button>
+                        </div>
+
+                        <SyntaxHighlighter
+                          style={oneDark}
+                          language={match[1]}
+                          PreTag="div"
                         >
-                          📋 Copy
-                        </button>
+                          {String(children).replace(/\n$/, "")}
+                        </SyntaxHighlighter>
                       </div>
+                    );
+                  }
 
-                      <SyntaxHighlighter
-                        style={oneDark}
-                        language={match[1]}
-                        PreTag="div"
-                      >
-                        {String(children).replace(/\n$/, "")}
-                      </SyntaxHighlighter>
-                    </div>
+                  return (
+                    <code
+                      className="bg-zinc-800 px-1 py-0.5 rounded"
+                      {...props}
+                    >
+                      {children}
+                    </code>
                   );
-                }
-
-                return (
-                  <code
-                    className="bg-zinc-800 px-1 py-0.5 rounded"
-                    {...props}
-                  >
-                    {children}
-                  </code>
-                );
-              },
-            }}
-          >
-            {text}
-          </ReactMarkdown>
-        </div>
+                },
+              }}
+            >
+              {text}
+            </ReactMarkdown>
+          </div>
+        )}
       </div>
     </div>
   );

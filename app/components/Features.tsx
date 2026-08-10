@@ -14,7 +14,7 @@ export default function Features() {
         <h3 className="text-2xl font-bold mb-4">📄 Documents</h3>
 
         <p className="text-gray-400">
-          Upload PDFs and let NOVA analyze them instantly.
+          Upload PDFs and let QELVORA analyze them instantly.
         </p>
       </div>
 

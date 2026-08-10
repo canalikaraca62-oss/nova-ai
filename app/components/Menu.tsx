@@ -124,7 +124,7 @@ export default function Sidebar() {
 
       <div className="p-6 border-b border-zinc-800">
         <h1 className="text-2xl font-bold text-white">
-          🚀 NOVA
+          🚀 QELVORA
         </h1>
 
         <p className="text-zinc-400 text-sm">

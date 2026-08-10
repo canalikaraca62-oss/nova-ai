@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 import {
-  askNova,
+  askQelvora,
   generateChatTitle,
 } from "@/services/ai.server";
 
@@ -297,7 +297,7 @@ Kurallar:
     //------------------------------------
 
     const reply =
-      await askNova(messages);
+      await askQelvora(messages);
 
     return NextResponse.json({
       reply,

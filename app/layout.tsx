@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "NOVA AI",
+   title: "QELVORA",
   description: "Artificial Intelligence Assistant",
 };
 
