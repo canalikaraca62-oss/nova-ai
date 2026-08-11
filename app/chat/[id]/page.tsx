@@ -43,31 +43,76 @@ export default function ChatDetailPage() {
   }, [chatId]);
 
   async function loadMessages() {
-    const { data, error } = await supabase
-      .from("messages")
-      .select("*")
-      .eq("chat_id", chatId)
-      .order("created_at", {
-        ascending: true,
-      });
+    const {
+  data: { session },
+} = await supabase.auth.getSession();
 
-    if (error) {
-      console.error(error);
-      return;
-    }
+console.log(
+  "SESSION VAR MI:",
+  !!session
+);
 
-    setMessages(
-      (data || []).map((msg) => ({
+console.log(
+  "USER ID:",
+  session?.user?.id
+);
+  const { data, error } = await supabase
+    .from("messages")
+    .select("*")
+    .eq("chat_id", chatId)
+    .order("created_at", {
+      ascending: true,
+    });
+
+  if (error) {
+  console.error("MESAJLAR YÜKLENEMEDİ:", error);
+  console.error("HATA MESAJI:", error.message);
+  console.error("HATA DETAYI:", error.details);
+  console.error("HATA İPUCU:", error.hint);
+  console.error("HATA KODU:", error.code);
+  return;
+}
+
+  const loadedMessages = await Promise.all(
+    (data || []).map(async (msg) => {
+      let attachment = null;
+
+      if (msg.attachment_path) {
+        const { data: signedUrlData, error: signedUrlError } =
+          await supabase.storage
+            .from("files")
+            .createSignedUrl(msg.attachment_path, 60 * 60);
+
+        if (signedUrlError) {
+          console.error(
+            "Attachment URL hatası:",
+            signedUrlError
+          );
+        } else {
+          attachment = {
+            name: msg.attachment_name || "Dosya",
+            url: signedUrlData.signedUrl,
+            type: msg.attachment_type || "application/octet-stream",
+          };
+        }
+      }
+
+      return {
         sender:
           msg.role === "assistant"
-            ? "qelvora"
-            : "user",
+            ? ("qelvora" as const)
+            : ("user" as const),
 
-        text: msg.content,
-      }))
-    );
-  }
- async function sendMessage() {
+        text: msg.content || "",
+
+        attachment,
+      };
+    })
+  );
+
+  setMessages(loadedMessages);
+}
+async function sendMessage() {
   if (isStreaming || isUploading) {
     return;
   }
@@ -77,17 +122,6 @@ export default function ChatDetailPage() {
   }
 
   const userMessage = input;
-
-  const updatedMessages = [
-    ...messages,
-    {
-      sender: "user" as const,
-      text: userMessage,
-    },
-  ];
-
-  setMessages(updatedMessages);
-  setInput("");
 
   const {
     data: { user },
@@ -104,26 +138,32 @@ export default function ChatDetailPage() {
   let uploadedFile: string | null = null;
   let attachmentUrl: string | null = null;
 
+  const fileName = selectedFile?.name || null;
+  const fileType =
+    selectedFile?.type || "application/octet-stream";
+
   if (selectedFile) {
     try {
       setIsUploading(true);
 
       uploadedFile = await uploadFile(selectedFile);
 
-      console.log(
-        "DOSYA YÜKLENDİ:",
-        uploadedFile
-      );
-      const { data: signedUrlData, error: signedUrlError } =
-  await supabase.storage
-    .from("files")
-    .createSignedUrl(uploadedFile, 60 * 60);
+      console.log("DOSYA YÜKLENDİ:", uploadedFile);
 
-if (signedUrlError) {
-  console.error("SIGNED URL HATASI:", signedUrlError);
-} else {
-  attachmentUrl = signedUrlData.signedUrl;
-}
+      const {
+        data: signedUrlData,
+        error: signedUrlError,
+      } = await supabase.storage
+        .from("files")
+        .createSignedUrl(uploadedFile, 60 * 60);
+
+      if (signedUrlError) {
+        throw signedUrlError;
+      }
+
+      attachmentUrl = signedUrlData.signedUrl;
+
+      setIsUploading(false);
     } catch (err) {
       console.error(err);
 
@@ -133,21 +173,47 @@ if (signedUrlError) {
 
       return;
     }
-
-    setIsUploading(false);
   }
 
   //----------------------------------
-  // USER MESAJINI KAYDET
+  // USER MESAJI
+  //----------------------------------
+
+  const updatedMessages = [
+    ...messages,
+    {
+      sender: "user" as const,
+      text: userMessage,
+      attachment: attachmentUrl
+        ? {
+            name: fileName || "Dosya",
+            url: attachmentUrl,
+            type: fileType,
+          }
+        : null,
+    },
+  ];
+
+  setMessages(updatedMessages);
+  setInput("");
+
+  //----------------------------------
+  // USER MESAJINI DATABASE'E KAYDET
   //----------------------------------
 
   const { error: userError } =
-    await supabase.from("messages").insert({
-      chat_id: chatId,
-      role: "user",
-      content: userMessage,
-    });
-
+  await supabase.from("messages").insert({
+    chat_id: chatId,
+    role: "user",
+    content: userMessage,
+    attachment_path: uploadedFile,
+    attachment_name: selectedFile
+      ? selectedFile.name
+      : null,
+    attachment_type: selectedFile
+      ? selectedFile.type
+      : null,
+  });
   if (userError) {
     console.error(userError);
     return;
@@ -187,14 +253,14 @@ if (signedUrlError) {
 
       if (!response.ok) {
         throw new Error(
-          data.reply ||
-            "Dosya işlenemedi."
+          data.reply || "Dosya işlenemedi."
         );
       }
 
       const assistantMessage = {
         sender: "qelvora" as const,
         text: data.reply,
+        attachment: null,
       };
 
       setMessages((prev) => [
@@ -227,8 +293,7 @@ if (signedUrlError) {
         try {
           const title =
             await generateChatTitle(
-              userMessage ||
-                "Dosya analizi"
+              userMessage || "Dosya analizi"
             );
 
           await supabase
@@ -253,6 +318,7 @@ if (signedUrlError) {
           sender: "qelvora",
           text:
             "Dosya işlenirken bir hata oluştu. Lütfen tekrar deneyin.",
+          attachment: null,
         },
       ]);
     } finally {
@@ -267,7 +333,19 @@ if (signedUrlError) {
   // NORMAL METİN MESAJI
   // STREAMING
   //----------------------------------
+const { data: memories, error: memoryError } =
+  await supabase
+    .from("memories")
+    .select("content")
+    .eq("user_id", user.id)
+    .order("created_at", {
+      ascending: false,
+    })
+    .limit(20);
 
+if (memoryError) {
+  console.error("MEMORY YÜKLENEMEDİ:", memoryError);
+}
   const controller =
     new AbortController();
 
@@ -280,6 +358,7 @@ if (signedUrlError) {
   const assistantMessage = {
     sender: "qelvora" as const,
     text: "",
+    attachment: null,
   };
 
   let fullAssistantText = "";
@@ -291,42 +370,50 @@ if (signedUrlError) {
 
   try {
     await streamChat(
-      updatedMessages.map((m) => ({
-        role:
-          m.sender === "qelvora"
-            ? "assistant"
-            : "user",
+  [
+    ...(memories || []).map((memory) => ({
+      role: "system" as const,
+      content: `Kullanıcı hakkında kayıtlı bilgi: ${memory.content}`,
+    })),
 
-        content: m.text,
-      })),
+    ...updatedMessages.map((m) => ({
+      role:
+        m.sender === "qelvora"
+          ? ("assistant" as const)
+          : ("user" as const),
 
-      (chunk) => {
-        fullAssistantText += chunk;
+      content: m.text,
+    })),
+  ],
 
-        setMessages((prev) => {
-          const updated = [...prev];
+  (chunk) => {
+    fullAssistantText += chunk;
 
-          const lastIndex =
-            updated.length - 1;
+    setMessages((prev) => {
+      const updated = [...prev];
 
-          if (lastIndex < 0) {
-            return prev;
-          }
+      const lastIndex =
+        updated.length - 1;
 
-          updated[lastIndex] = {
-            ...updated[lastIndex],
+      if (lastIndex < 0) {
+        return prev;
+      }
 
-            text:
-              updated[lastIndex].text +
-              chunk,
-          };
+      updated[lastIndex] = {
+        ...updated[lastIndex],
 
-          return updated;
-        });
-      },
+        text:
+          updated[lastIndex].text +
+          chunk,
+      };
 
-      controller.signal
-    );
+      return updated;
+    });
+  },
+
+  controller.signal
+);
+  
   } catch (error) {
     if (
       error instanceof DOMException &&
@@ -347,6 +434,7 @@ if (signedUrlError) {
           sender: "qelvora",
           text:
             "Üzgünüm, cevap oluşturulurken bir hata oluştu. Lütfen tekrar deneyin.",
+          attachment: null,
         },
       ]);
     }
