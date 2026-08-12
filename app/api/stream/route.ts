@@ -127,12 +127,33 @@ const latestUserMessage = [...messages]
   );
 
 if (latestUserMessage?.content) {
-  const memoryMatch =
-    latestUserMessage.content.match(
-      /(?:benim adım|adım|ismim)\s+(?:[=:]?\s*)([A-Za-zÇĞİÖŞÜçğıöşü]+(?:\s+[A-Za-zÇĞİÖŞÜçğıöşü]+)?)/i
-    );
+ const memoryMatch =
+  latestUserMessage.content.match(
+    /^(?:benim adım|adım|ismim)\s*(?:=|:)?\s*([A-Za-zÇĞİÖŞÜçğıöşü]+(?:\s+[A-Za-zÇĞİÖŞÜçğıöşü]+)?)\s*[.!]*$/i
+  );
 
   if (memoryMatch?.[1]) {
+    const newName =
+  memoryMatch[1].trim();
+
+const invalidNames = [
+  "ne",
+  "nedir",
+  "kim",
+  "kimim",
+  "sen",
+  "ben",
+  "adım",
+  "ismim",
+];
+
+if (
+  invalidNames.includes(
+    newName.toLocaleLowerCase("tr-TR")
+  )
+) {
+  return;
+}
     const newName =
       memoryMatch[1].trim();
 
