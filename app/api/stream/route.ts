@@ -133,32 +133,30 @@ if (latestUserMessage?.content) {
   );
 
   if (memoryMatch?.[1]) {
-    const newName =
-  memoryMatch[1].trim();
+  const newName =
+    memoryMatch[1].trim();
 
-const invalidNames = [
-  "ne",
-  "nedir",
-  "kim",
-  "kimim",
-  "sen",
-  "ben",
-  "adım",
-  "ismim",
-];
+  const invalidNames = [
+    "ne",
+    "nedir",
+    "kim",
+    "kimim",
+    "sen",
+    "ben",
+    "adım",
+    "ismim",
+  ];
 
-if (
-  invalidNames.includes(
-    newName.toLocaleLowerCase("tr-TR")
-  )
-) {
-  return;
-}
-    const newName =
-      memoryMatch[1].trim();
+  if (
+    invalidNames.includes(
+      newName.toLocaleLowerCase("tr-TR")
+    )
+  ) {
+    return;
+  }
 
-    const memoryContent =
-      `Kullanıcının adı ${newName}.`;
+  const memoryContent =
+    `Kullanıcının adı ${newName}.`;
 
     const {
       data: existingNameMemory,
