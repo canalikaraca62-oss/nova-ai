@@ -12,24 +12,32 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
 
   async function handleRegister() {
-    setLoading(true);
+  setLoading(true);
 
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-    });
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+  });
 
-    setLoading(false);
+  setLoading(false);
 
-    if (error) {
-      alert(error.message);
-      return;
-    }
-
-    alert("Kayıt başarılı! Şimdi giriş yapabilirsin.");
-
-    router.push("/login");
+  if (error) {
+    alert(error.message);
+    return;
   }
+
+  if (!data.session) {
+    alert(
+      "Kayıt başarılı! E-posta adresine doğrulama kodu gönderdik. Lütfen e-postanı doğrula, ardından giriş yap."
+    );
+  } else {
+    alert(
+      "Kayıt başarılı! Artık giriş yapabilirsin."
+    );
+  }
+
+  router.push("/login");
+}
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-black text-white">
