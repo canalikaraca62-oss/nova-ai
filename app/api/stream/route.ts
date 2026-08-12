@@ -108,23 +108,14 @@ console.log("STREAM MEMORY:", memories, memoryError);
     // HAFIZAYI AI'YA EKLE
     //------------------------------------
 
-    if (memories && memories.length > 0) {
-      const memoryText = memories
-        .map((memory) => `- ${memory.content}`)
-        .join("\n");
+   let memoryText = "";
 
-      messages.unshift({
-        role: "system",
-        content: `
-Kullanıcı hakkında daha önce kaydedilmiş bilgiler:
+if (memories && memories.length > 0) {
+  memoryText = memories
+    .map((memory) => `- ${memory.content}`)
+    .join("\n");
+}
 
-${memoryText}
-
-Bu bilgileri yalnızca ilgili olduklarında kullan.
-Kullanıcıya bu bilgilerin bir hafıza sisteminden geldiğini söyleme.
-`,
-      });
-    }
   //------------------------------------
 // YENİ MEMORY TESPİTİ
 //------------------------------------
@@ -226,10 +217,10 @@ if (latestUserMessage?.content) {
 
           temperature: 0.7,
 
-          messages: [
-            {
-              role: "system",
-              content: `
+        messages: [
+  {
+    role: "system",
+    content: `
 Sen QELVORA isimli gelişmiş bir yapay zekâ asistansın.
 
 Kurallar:
@@ -239,11 +230,25 @@ Kurallar:
 - Gereksiz uzun cevap verme.
 - Yazılım konusunda uzmansın.
 - Konuşmanın tamamını dikkate al.
-`,
-            },
 
-            ...messages,
-          ],
+KULLANICI HAFIZASI:
+
+${memoryText || "Kullanıcı hakkında kayıtlı bir bilgi yok."}
+
+Hafızadaki bilgiler kullanıcı hakkında daha önce kaydedilmiş gerçek bilgilerdir.
+
+Önemli:
+- Kullanıcı hafızasında bir bilgi varsa onu kullan.
+- Kullanıcı "Benim adım ne?" gibi bir soru sorarsa ve hafızasında adı kayıtlıysa doğrudan kayıtlı adı söyle.
+- Kayıtlı bir bilgi varken kullanıcıya "bunu paylaşmadınız", "bilgi kayıtlı değil" veya benzeri bir cevap verme.
+- Hafızadaki bilgileri kullanıcıya "hafıza sisteminden öğrendim" şeklinde açıklama.
+`,
+  },
+
+  ...messages.filter(
+    (message) => message.role !== "system"
+  ),
+],
         }),
       }
     );
