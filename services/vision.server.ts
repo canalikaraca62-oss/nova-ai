@@ -11,7 +11,7 @@ export async function analyzeImage(imageUrl: string) {
 
       body: JSON.stringify({
         model:
-  "meta-llama/llama-4-scout-17b-16e-instruct",
+  "qwen/qwen3.6-27b",
 
         messages: [
           {
