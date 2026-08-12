@@ -94,6 +94,9 @@ export async function POST(req: NextRequest) {
         })
         .limit(20);
 
+        console.log("STREAM USER ID:", user.id);
+console.log("STREAM MEMORY:", memories, memoryError);
+
     if (memoryError) {
       console.error(
         "HAFIZA OKUMA HATASI:",
