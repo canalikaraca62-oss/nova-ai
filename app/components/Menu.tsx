@@ -26,27 +26,27 @@ export default function Sidebar() {
   const [editingTitle, setEditingTitle] = useState("");
 
   useEffect(() => {
-  loadChats();
+    loadChats();
 
-  const channel = supabase
-    .channel("chat-updates")
-    .on(
-      "postgres_changes",
-      {
-        event: "*",
-        schema: "public",
-        table: "chats",
-      },
-      () => {
-        loadChats();
-      }
-    )
-    .subscribe();
+    const channel = supabase
+      .channel("chat-updates")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "chats",
+        },
+        () => {
+          loadChats();
+        }
+      )
+      .subscribe();
 
-  return () => {
-    supabase.removeChannel(channel);
-  };
-}, []);
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
 
   async function loadChats() {
     const {
@@ -96,14 +96,10 @@ export default function Sidebar() {
   }
 
   async function saveChatTitle(chatId: string) {
-    console.log("SAVE ÇALIŞTI");
-    console.log(chatId);
-    console.log(editingTitle);
-
     if (!editingTitle.trim()) return;
 
     try {
-      await renameChat(chatId, editingTitle);
+      await renameChat(chatId, editingTitle.trim());
 
       setEditingChatId(null);
       setEditingTitle("");
@@ -121,7 +117,8 @@ export default function Sidebar() {
 
   return (
     <aside className="w-72 h-screen bg-zinc-900 border-r border-zinc-800 flex flex-col">
-
+      
+      {/* LOGO */}
       <div className="p-6 border-b border-zinc-800">
         <h1 className="text-2xl font-bold text-white">
           🚀 QELVORA
@@ -132,6 +129,7 @@ export default function Sidebar() {
         </p>
       </div>
 
+      {/* YENİ SOHBET */}
       <div className="p-4">
         <button
           onClick={newChat}
@@ -141,8 +139,8 @@ export default function Sidebar() {
         </button>
       </div>
 
+      {/* SOHBETLER */}
       <div className="flex-1 overflow-y-auto px-4">
-
         <p className="text-xs text-zinc-500 uppercase mb-3 tracking-wider">
           Son Sohbetler
         </p>
@@ -153,7 +151,7 @@ export default function Sidebar() {
               Henüz sohbet yok.
             </p>
           ) : (
-                        chats.map((chat) => (
+            chats.map((chat) => (
               <div
                 key={chat.id}
                 className="bg-zinc-800 hover:bg-zinc-700 rounded-xl transition flex items-center justify-between"
@@ -168,6 +166,11 @@ export default function Sidebar() {
                       if (e.key === "Enter") {
                         saveChatTitle(chat.id);
                       }
+
+                      if (e.key === "Escape") {
+                        setEditingChatId(null);
+                        setEditingTitle("");
+                      }
                     }}
                     className="flex-1 bg-transparent outline-none text-white p-3"
                   />
@@ -180,6 +183,7 @@ export default function Sidebar() {
                   </button>
                 )}
 
+                {/* YENİDEN ADLANDIR */}
                 <button
                   onClick={() => {
                     setEditingChatId(chat.id);
@@ -191,6 +195,7 @@ export default function Sidebar() {
                   <Pencil size={18} />
                 </button>
 
+                {/* SİL */}
                 <button
                   onClick={() => removeChat(chat.id)}
                   className="px-3 text-red-400 hover:text-red-300"
@@ -204,12 +209,24 @@ export default function Sidebar() {
         </div>
       </div>
 
+      {/* ALT MENÜ */}
       <div className="border-t border-zinc-800 p-4 space-y-2">
-        <button className="w-full text-left text-zinc-300 hover:text-white">
+        
+        <button
+          onClick={() => {
+            console.log("Ayarlar tıklandı");
+          }}
+          className="w-full text-left text-zinc-300 hover:text-white"
+        >
           ⚙️ Ayarlar
         </button>
 
-        <button className="w-full text-left text-zinc-300 hover:text-white">
+        <button
+          onClick={() => {
+            console.log("Profil tıklandı");
+          }}
+          className="w-full text-left text-zinc-300 hover:text-white"
+        >
           👤 Profil
         </button>
 
@@ -219,6 +236,7 @@ export default function Sidebar() {
         >
           🚪 Çıkış Yap
         </button>
+
       </div>
     </aside>
   );
