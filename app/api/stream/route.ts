@@ -115,8 +115,7 @@ if (memories && memories.length > 0) {
     .map((memory) => `- ${memory.content}`)
     .join("\n");
 }
-
-  //------------------------------------
+//------------------------------------
 // YENİ MEMORY TESPİTİ
 //------------------------------------
 
@@ -127,94 +126,92 @@ const latestUserMessage = [...messages]
   );
 
 if (latestUserMessage?.content) {
- const memoryMatch =
-  latestUserMessage.content.match(
-    /^(?:benim adım|adım|ismim)\s*(?:=|:)?\s*([A-Za-zÇĞİÖŞÜçğıöşü]+(?:\s+[A-Za-zÇĞİÖŞÜçğıöşü]+)?)\s*[.!]*$/i
-  );
+  const memoryMatch =
+    latestUserMessage.content.match(
+      /^(?:benim adım|adım|ismim)\s*(?:=|:)?\s*([A-Za-zÇĞİÖŞÜçğıöşü]+(?:\s+[A-Za-zÇĞİÖŞÜçğıöşü]+)?)\s*[.!]*$/i
+    );
 
   if (memoryMatch?.[1]) {
-  const newName =
-    memoryMatch[1].trim();
+    const newName =
+      memoryMatch[1].trim();
 
-  const invalidNames = [
-    "ne",
-    "nedir",
-    "kim",
-    "kimim",
-    "sen",
-    "ben",
-    "adım",
-    "ismim",
-  ];
+    const invalidNames = [
+      "ne",
+      "nedir",
+      "kim",
+      "kimim",
+      "sen",
+      "ben",
+      "adım",
+      "ismim",
+    ];
 
-  if (
-    invalidNames.includes(
-      newName.toLocaleLowerCase("tr-TR")
-    )
-  ) {
-    return;
-  }
+    const normalizedName =
+      newName.toLocaleLowerCase("tr-TR");
 
-  const memoryContent =
-    `Kullanıcının adı ${newName}.`;
+    if (!invalidNames.includes(normalizedName)) {
+      const memoryContent =
+        `Kullanıcının adı ${newName}.`;
 
-    const {
-      data: existingNameMemory,
-      error: findError,
-    } = await supabase
-      .from("memories")
-      .select("id")
-      .eq("user_id", user.id)
-      .ilike(
-        "content",
-        "Kullanıcının adı %"
-      )
-      .limit(1)
-      .maybeSingle();
-
-    if (findError) {
-      console.error(
-        "İSİM MEMORY ARAMA HATASI:",
-        findError
-      );
-    } else if (existingNameMemory) {
       const {
-        error: updateError,
+        data: existingNameMemory,
+        error: findError,
       } = await supabase
         .from("memories")
-        .update({
-          content: memoryContent,
-        })
-        .eq(
-          "id",
-          existingNameMemory.id
-        );
+        .select("id")
+        .eq("user_id", user.id)
+        .ilike(
+          "content",
+          "Kullanıcının adı %"
+        )
+        .limit(1)
+        .maybeSingle();
 
-      if (updateError) {
+      if (findError) {
         console.error(
-          "İSİM MEMORY GÜNCELLEME HATASI:",
-          updateError
+          "İSİM MEMORY ARAMA HATASI:",
+          findError
         );
-      }
-    } else {
-      const {
-        error: insertError,
-      } = await supabase
-        .from("memories")
-        .insert({
-          user_id: user.id,
-          content: memoryContent,
-        });
+      } else if (existingNameMemory) {
+        const {
+          error: updateError,
+        } = await supabase
+          .from("memories")
+          .update({
+            content: memoryContent,
+          })
+          .eq(
+            "id",
+            existingNameMemory.id
+          );
 
-      if (insertError) {
-        console.error(
-          "İSİM MEMORY KAYDETME HATASI:",
-          insertError
-        );
+        if (updateError) {
+          console.error(
+            "İSİM MEMORY GÜNCELLEME HATASI:",
+            updateError
+          );
+        }
+      } else {
+        const {
+          error: insertError,
+        } = await supabase
+          .from("memories")
+          .insert({
+            user_id: user.id,
+            content: memoryContent,
+          });
+
+        if (insertError) {
+          console.error(
+            "İSİM MEMORY KAYDETME HATASI:",
+            insertError
+          );
+        }
       }
     }
   }
 }
+
     //------------------------------------
     // GROQ STREAM
     //------------------------------------
