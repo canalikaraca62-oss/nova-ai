@@ -239,30 +239,6 @@ export default function Sidebar() {
   🚪 Çıkış Yap
 </button>
 
-        {/* AYARLAR */}
-        <button
-          onClick={() => router.push("/settings")}
-          className="w-full text-left text-zinc-300 hover:text-white transition"
-        >
-          ⚙️ Ayarlar
-        </button>
-
-        {/* PROFİL */}
-        <button
-          onClick={() => router.push("/profile")}
-          className="w-full text-left text-zinc-300 hover:text-white transition"
-        >
-          👤 Profil
-        </button>
-
-        {/* ÇIKIŞ */}
-        <button
-          onClick={logout}
-          className="w-full text-left text-red-400 hover:text-red-300 transition"
-        >
-          🚪 Çıkış Yap
-        </button>
-
       </div>
     </aside>
   );
