@@ -211,26 +211,27 @@ export default function Sidebar() {
 
       {/* ALT MENÜ */}
       <div className="border-t border-zinc-800 p-4 space-y-2">
-        
+
+        {/* AYARLAR */}
         <button
-          onClick={() => {
-            console.log("Ayarlar tıklandı");
-          }}
-          className="w-full text-left text-zinc-300 hover:text-white"
+          onClick={() => router.push("/settings")}
+          className="w-full text-left text-zinc-300 hover:text-white transition"
         >
           ⚙️ Ayarlar
         </button>
 
+        {/* PROFİL */}
         <button
-  onClick={() => router.push("/profile")}
-  className="w-full text-left text-zinc-300 hover:text-white"
->
-  👤 Profil
-</button>
+          onClick={() => router.push("/profile")}
+          className="w-full text-left text-zinc-300 hover:text-white transition"
+        >
+          👤 Profil
+        </button>
 
+        {/* ÇIKIŞ */}
         <button
           onClick={logout}
-          className="w-full text-left text-red-400 hover:text-red-300"
+          className="w-full text-left text-red-400 hover:text-red-300 transition"
         >
           🚪 Çıkış Yap
         </button>
