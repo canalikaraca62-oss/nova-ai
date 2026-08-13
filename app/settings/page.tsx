@@ -213,7 +213,26 @@ export default function SettingsPage() {
             </div>
 
           </section>
+{/* HAFIZA */}
 
+<section className="border-t border-zinc-800 pt-8">
+
+  <h2 className="text-xl font-semibold mb-2">
+    🧠 Hafıza
+  </h2>
+
+  <p className="text-sm text-zinc-400 mb-4">
+    QELVORA'nın senin hakkında kaydettiği bilgileri görüntüle ve yönet.
+  </p>
+
+  <button
+    onClick={() => router.push("/memory")}
+    className="w-full bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 transition py-3 rounded-xl font-semibold"
+  >
+    🧠 Hafızayı Yönet
+  </button>
+
+</section>
           {/* ÇIKIŞ */}
 
           <section className="border-t border-zinc-800 mt-8 pt-8">
