@@ -211,6 +211,33 @@ export default function Sidebar() {
 
       {/* ALT MENÜ */}
       <div className="border-t border-zinc-800 p-4 space-y-2">
+        <button
+  onClick={() => router.push("/settings")}
+  className="w-full text-left text-zinc-300 hover:text-white"
+>
+  ⚙️ Ayarlar
+</button>
+
+<button
+  onClick={() => router.push("/profile")}
+  className="w-full text-left text-zinc-300 hover:text-white"
+>
+  👤 Profil
+</button>
+
+<button
+  onClick={() => router.push("/memory")}
+  className="w-full text-left text-zinc-300 hover:text-white"
+>
+  🧠 Hafıza
+</button>
+
+<button
+  onClick={logout}
+  className="w-full text-left text-red-400 hover:text-red-300"
+>
+  🚪 Çıkış Yap
+</button>
 
         {/* AYARLAR */}
         <button
