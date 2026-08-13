@@ -17,6 +17,9 @@ export default function SettingsPage() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
+  const [memoryEnabled, setMemoryEnabled] = useState(true);
+  const [memorySaving, setMemorySaving] = useState(false);
+
   useEffect(() => {
     loadSettings();
   }, []);
@@ -34,11 +37,91 @@ export default function SettingsPage() {
       }
 
       setEmail(user.email || "");
+
+      const { data: settings, error: settingsError } =
+        await supabase
+          .from("user_settings")
+          .select("memory_enabled")
+          .eq("user_id", user.id)
+          .maybeSingle();
+
+      if (settingsError) {
+        console.error(
+          "Kullanıcı ayarları yükleme hatası:",
+          settingsError
+        );
+      }
+
+      if (settings) {
+        setMemoryEnabled(settings.memory_enabled);
+      } else {
+        const { error: insertError } = await supabase
+          .from("user_settings")
+          .insert({
+            user_id: user.id,
+            memory_enabled: true,
+          });
+
+        if (insertError) {
+          console.error(
+            "Varsayılan ayar oluşturma hatası:",
+            insertError
+          );
+        }
+
+        setMemoryEnabled(true);
+      }
     } catch (error) {
       console.error("Ayarlar yükleme hatası:", error);
       router.push("/login");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function toggleMemory() {
+    setMemorySaving(true);
+
+    const nextValue = !memoryEnabled;
+
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        router.push("/login");
+        return;
+      }
+
+      const { error } = await supabase
+        .from("user_settings")
+        .upsert(
+          {
+            user_id: user.id,
+            memory_enabled: nextValue,
+          },
+          {
+            onConflict: "user_id",
+          }
+        );
+
+      if (error) {
+        console.error(
+          "Hafıza ayarı güncelleme hatası:",
+          error
+        );
+        return;
+      }
+
+      setMemoryEnabled(nextValue);
+    } catch (error) {
+      console.error(
+        "Hafıza ayarı hatası:",
+        error
+      );
+    } finally {
+      setMemorySaving(false);
     }
   }
 
@@ -148,6 +231,60 @@ export default function SettingsPage() {
 
           </section>
 
+          {/* HAFIZA */}
+
+          <section className="border-t border-zinc-800 pt-8 mb-8">
+
+            <h2 className="text-xl font-semibold mb-2">
+              🧠 Kalıcı Hafıza
+            </h2>
+
+            <p className="text-sm text-zinc-400 mb-5">
+              QELVORA'nın senin hakkında önemli
+              bilgileri hatırlamasına izin ver.
+            </p>
+
+            <div className="bg-zinc-800 border border-zinc-700 rounded-xl p-5 flex items-center justify-between gap-4">
+
+              <div>
+                <p className="font-semibold">
+                  Hafızayı kullan
+                </p>
+
+                <p className="text-sm text-zinc-400 mt-1">
+                  {memoryEnabled
+                    ? "QELVORA önemli bilgileri hatırlayabilir."
+                    : "QELVORA yeni hafıza bilgileri kaydetmez ve mevcut hafızayı kullanmaz."}
+                </p>
+              </div>
+
+              <button
+                onClick={toggleMemory}
+                disabled={memorySaving}
+                className={`relative w-14 h-8 rounded-full transition ${
+                  memoryEnabled
+                    ? "bg-blue-600"
+                    : "bg-zinc-600"
+                } disabled:opacity-50`}
+                aria-label="Hafıza ayarını değiştir"
+              >
+                <span
+                  className={`absolute top-1 w-6 h-6 bg-white rounded-full transition ${
+                    memoryEnabled
+                      ? "left-7"
+                      : "left-1"
+                  }`}
+                />
+              </button>
+
+            </div>
+
+            <p className="text-xs text-zinc-500 mt-3">
+              Bu ayarı istediğin zaman değiştirebilirsin.
+            </p>
+
+          </section>
+
           {/* ŞİFRE */}
 
           <section className="border-t border-zinc-800 pt-8">
@@ -213,26 +350,7 @@ export default function SettingsPage() {
             </div>
 
           </section>
-{/* HAFIZA */}
 
-<section className="border-t border-zinc-800 pt-8">
-
-  <h2 className="text-xl font-semibold mb-2">
-    🧠 Hafıza
-  </h2>
-
-  <p className="text-sm text-zinc-400 mb-4">
-    QELVORA'nın senin hakkında kaydettiği bilgileri görüntüle ve yönet.
-  </p>
-
-  <button
-    onClick={() => router.push("/memory")}
-    className="w-full bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 transition py-3 rounded-xl font-semibold"
-  >
-    🧠 Hafızayı Yönet
-  </button>
-
-</section>
           {/* ÇIKIŞ */}
 
           <section className="border-t border-zinc-800 mt-8 pt-8">
