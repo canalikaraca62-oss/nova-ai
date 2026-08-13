@@ -116,102 +116,284 @@ if (memories && memories.length > 0) {
     .join("\n");
 }
 //------------------------------------
-// YENİ MEMORY TESPİTİ
+// GENEL MEMORY TESPİTİ
 //------------------------------------
 
 const latestUserMessage = [...messages]
   .reverse()
   .find(
-    (message) => message.role === "user"
+    (message) =>
+      message.role === "user" &&
+      typeof message.content === "string"
   );
 
 if (latestUserMessage?.content) {
-  const memoryMatch =
-    latestUserMessage.content.match(
+  const userText = latestUserMessage.content.trim();
+
+  //------------------------------------
+  // SORU VE GEÇİCİ CÜMLELERİ AYIKLA
+  //------------------------------------
+
+  const isQuestion =
+    userText.endsWith("?") ||
+    /^(ne|nedir|kim|kimim|nerede|neden|nasıl|nasıl|hangi|kaç|ne zaman|sence|biliyor musun|hatırlıyor musun)\b/i.test(
+      userText
+    );
+
+  if (!isQuestion) {
+    //------------------------------------
+    // İSİM TESPİTİ
+    //------------------------------------
+
+    const memoryMatch = userText.match(
       /^(?:benim adım|adım|ismim)\s*(?:=|:)?\s*([A-Za-zÇĞİÖŞÜçğıöşü]+(?:\s+[A-Za-zÇĞİÖŞÜçğıöşü]+)?)\s*[.!]*$/i
     );
 
-  if (memoryMatch?.[1]) {
-    const newName =
-      memoryMatch[1].trim();
+    if (memoryMatch?.[1]) {
+      const newName = memoryMatch[1].trim();
 
-    const invalidNames = [
-      "ne",
-      "nedir",
-      "kim",
-      "kimim",
-      "sen",
-      "ben",
-      "adım",
-      "ismim",
-    ];
+      const invalidNames = [
+        "ne",
+        "nedir",
+        "kim",
+        "kimim",
+        "sen",
+        "ben",
+        "adım",
+        "ismim",
+      ];
 
-    const normalizedName =
-      newName.toLocaleLowerCase("tr-TR");
+      const normalizedName =
+        newName.toLocaleLowerCase("tr-TR");
 
-    if (!invalidNames.includes(normalizedName)) {
-      const memoryContent =
-        `Kullanıcının adı ${newName}.`;
+      if (!invalidNames.includes(normalizedName)) {
+        const memoryContent =
+          `Kullanıcının adı ${newName}.`;
 
-      const {
-        data: existingNameMemory,
-        error: findError,
-      } = await supabase
-        .from("memories")
-        .select("id")
-        .eq("user_id", user.id)
-        .ilike(
-          "content",
-          "Kullanıcının adı %"
-        )
-        .limit(1)
-        .maybeSingle();
-
-      if (findError) {
-        console.error(
-          "İSİM MEMORY ARAMA HATASI:",
-          findError
-        );
-      } else if (existingNameMemory) {
         const {
-          error: updateError,
+          data: existingNameMemory,
+          error: findError,
         } = await supabase
           .from("memories")
-          .update({
-            content: memoryContent,
-          })
-          .eq(
-            "id",
-            existingNameMemory.id
-          );
+          .select("id")
+          .eq("user_id", user.id)
+          .ilike(
+            "content",
+            "Kullanıcının adı %"
+          )
+          .limit(1)
+          .maybeSingle();
 
-        if (updateError) {
+        if (findError) {
           console.error(
-            "İSİM MEMORY GÜNCELLEME HATASI:",
-            updateError
+            "İSİM MEMORY ARAMA HATASI:",
+            findError
           );
+        } else if (existingNameMemory) {
+          const { error: updateError } =
+            await supabase
+              .from("memories")
+              .update({
+                content: memoryContent,
+              })
+              .eq(
+                "id",
+                existingNameMemory.id
+              );
+
+          if (updateError) {
+            console.error(
+              "İSİM MEMORY GÜNCELLEME HATASI:",
+              updateError
+            );
+          }
+        } else {
+          const { error: insertError } =
+            await supabase
+              .from("memories")
+              .insert({
+                user_id: user.id,
+                content: memoryContent,
+              });
+
+          if (insertError) {
+            console.error(
+              "İSİM MEMORY KAYDETME HATASI:",
+              insertError
+            );
+          }
         }
-      } else {
+      }
+    } else {
+      //------------------------------------
+      // GENEL KALICI BİLGİ TESPİTİ
+      //------------------------------------
+
+      const memoryPatterns = [
+        {
+          pattern:
+            /\b(?:KKTC|Kuzey Kıbrıs|Kıbrıs|Türkiye|İstanbul|Ankara|İzmir|Lefkoşa|Girne|Mağusa|Gazimağusa)\b.*\b(?:yaşıyorum|oturuyorum|ikamet ediyorum)\b/i,
+          label: "Kullanıcının yaşadığı yer",
+        },
+
+        {
+          pattern:
+            /^(?:hedefim|hedefim şu|amacım|amacım şu)\s+(.+)/i,
+          label: "Kullanıcının hedefi",
+        },
+
+        {
+          pattern:
+            /^(?:hayalim|hayalim şu)\s+(.+)/i,
+          label: "Kullanıcının hayali",
+        },
+
+        {
+          pattern:
+            /^(?:ben|bende)\s+(.+?)\s+(?:öğreniyorum|çalışıyorum|okuyorum)\.?$/i,
+          label: "Kullanıcının öğrenim veya çalışma bilgisi",
+        },
+
+        {
+          pattern:
+            /^(?:ben|bende)\s+(.+?)\s+(?:öğrencisiyim|mezunuyum)\.?$/i,
+          label: "Kullanıcının eğitim bilgisi",
+        },
+
+        {
+          pattern:
+            /^en sevdiğim\s+(.+?)\s+(.+?)[.!]*$/i,
+          label: "Kullanıcının tercihi",
+        },
+
+        {
+          pattern:
+            /^favori\s+(.+?)\s+(.+?)[.!]*$/i,
+          label: "Kullanıcının tercihi",
+        },
+
+        {
+          pattern:
+            /^(.+?)\s+öğreniyorum[.!]*$/i,
+          label: "Kullanıcının öğrenmekte olduğu konu",
+        },
+
+        {
+          pattern:
+            /^(.+?)\s+üzerinde çalışıyorum[.!]*$/i,
+          label: "Kullanıcının üzerinde çalıştığı konu",
+        },
+      ];
+
+      const matchedMemory =
+        memoryPatterns.find((item) =>
+          item.pattern.test(userText)
+        );
+
+      if (matchedMemory) {
+        //------------------------------------
+        // MEMORY METNİNİ OLUŞTUR
+        //------------------------------------
+
+        let memoryContent = "";
+
+        if (
+          matchedMemory.label ===
+          "Kullanıcının yaşadığı yer"
+        ) {
+          memoryContent =
+            `Kullanıcı ${userText}`;
+        } else if (
+          matchedMemory.label ===
+          "Kullanıcının hedefi"
+        ) {
+          const target =
+            userText
+              .replace(
+                /^(?:hedefim|hedefim şu|amacım|amacım şu)\s+/i,
+                ""
+              )
+              .replace(/[.!]+$/, "")
+              .trim();
+
+          memoryContent =
+            `Kullanıcının hedefi: ${target}.`;
+        } else if (
+          matchedMemory.label ===
+          "Kullanıcının hayali"
+        ) {
+          const dream =
+            userText
+              .replace(
+                /^(?:hayalim|hayalim şu)\s+/i,
+                ""
+              )
+              .replace(/[.!]+$/, "")
+              .trim();
+
+          memoryContent =
+            `Kullanıcının hayali: ${dream}.`;
+        } else if (
+          matchedMemory.label ===
+          "Kullanıcının tercihi"
+        ) {
+          memoryContent =
+            `Kullanıcının tercihi: ${userText}`;
+        } else {
+          memoryContent =
+            `Kullanıcı hakkında bilgi: ${userText}`;
+        }
+
+        //------------------------------------
+        // AYNI MEMORY ZATEN VAR MI?
+        //------------------------------------
+
         const {
-          error: insertError,
+          data: existingMemory,
+          error: findMemoryError,
         } = await supabase
           .from("memories")
-          .insert({
-            user_id: user.id,
-            content: memoryContent,
-          });
+          .select("id")
+          .eq("user_id", user.id)
+          .eq("content", memoryContent)
+          .limit(1)
+          .maybeSingle();
 
-        if (insertError) {
+        if (findMemoryError) {
           console.error(
-            "İSİM MEMORY KAYDETME HATASI:",
-            insertError
+            "GENEL MEMORY ARAMA HATASI:",
+            findMemoryError
           );
+        } else if (!existingMemory) {
+          //------------------------------------
+          // YENİ MEMORY KAYDET
+          //------------------------------------
+
+          const {
+            error: insertMemoryError,
+          } = await supabase
+            .from("memories")
+            .insert({
+              user_id: user.id,
+              content: memoryContent,
+            });
+
+          if (insertMemoryError) {
+            console.error(
+              "GENEL MEMORY KAYDETME HATASI:",
+              insertMemoryError
+            );
+          } else {
+            console.log(
+              "YENİ MEMORY KAYDEDİLDİ:",
+              memoryContent
+            );
+          }
         }
       }
     }
   }
 }
-
     //------------------------------------
     // GROQ STREAM
     //------------------------------------
