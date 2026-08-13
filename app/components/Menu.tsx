@@ -222,13 +222,11 @@ export default function Sidebar() {
         </button>
 
         <button
-          onClick={() => {
-            console.log("Profil tıklandı");
-          }}
-          className="w-full text-left text-zinc-300 hover:text-white"
-        >
-          👤 Profil
-        </button>
+  onClick={() => router.push("/profile")}
+  className="w-full text-left text-zinc-300 hover:text-white"
+>
+  👤 Profil
+</button>
 
         <button
           onClick={logout}
