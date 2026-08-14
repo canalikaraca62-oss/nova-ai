@@ -328,29 +328,14 @@ async function sendMessage() {
 
     return;
   }
-
   //----------------------------------
   // NORMAL METİN MESAJI
   // STREAMING
   //----------------------------------
-const { data: memories, error: memoryError } =
-  await supabase
-    .from("memories")
-    .select("content")
-    .eq("user_id", user.id)
-    .order("created_at", {
-      ascending: false,
-    })
-    .limit(20);
 
-if (memoryError) {
-  console.error("MEMORY YÜKLENEMEDİ:", memoryError);
-}
-  const controller =
-    new AbortController();
+  const controller = new AbortController();
 
-  abortControllerRef.current =
-    controller;
+  abortControllerRef.current = controller;
 
   setIsStreaming(true);
   setIsLoading(true);
@@ -370,50 +355,41 @@ if (memoryError) {
 
   try {
     await streamChat(
-  [
-    ...(memories || []).map((memory) => ({
-      role: "system" as const,
-      content: `Kullanıcı hakkında kayıtlı bilgi: ${memory.content}`,
-    })),
+      updatedMessages.map((m) => ({
+        role:
+          m.sender === "qelvora"
+            ? ("assistant" as const)
+            : ("user" as const),
 
-    ...updatedMessages.map((m) => ({
-      role:
-        m.sender === "qelvora"
-          ? ("assistant" as const)
-          : ("user" as const),
+        content: m.text,
+      })),
 
-      content: m.text,
-    })),
-  ],
+      (chunk) => {
+        fullAssistantText += chunk;
 
-  (chunk) => {
-    fullAssistantText += chunk;
+        setMessages((prev) => {
+          const updated = [...prev];
 
-    setMessages((prev) => {
-      const updated = [...prev];
+          const lastIndex = updated.length - 1;
 
-      const lastIndex =
-        updated.length - 1;
+          if (lastIndex < 0) {
+            return prev;
+          }
 
-      if (lastIndex < 0) {
-        return prev;
-      }
+          updated[lastIndex] = {
+            ...updated[lastIndex],
 
-      updated[lastIndex] = {
-        ...updated[lastIndex],
+            text:
+              updated[lastIndex].text +
+              chunk,
+          };
 
-        text:
-          updated[lastIndex].text +
-          chunk,
-      };
+          return updated;
+        });
+      },
 
-      return updated;
-    });
-  },
-
-  controller.signal
-);
-  
+      controller.signal
+    );
   } catch (error) {
     if (
       error instanceof DOMException &&
@@ -441,8 +417,7 @@ if (memoryError) {
   } finally {
     setIsLoading(false);
     setIsStreaming(false);
-    abortControllerRef.current =
-      null;
+    abortControllerRef.current = null;
   }
 
   //----------------------------------
