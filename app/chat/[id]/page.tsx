@@ -35,6 +35,8 @@ export default function ChatDetailPage() {
     const abortControllerRef =
   useRef<AbortController | null>(null);
     const [isStreaming, setIsStreaming] = useState(false);
+    const [sidebarOpen, setSidebarOpen] =
+  useState(false);
 
   useEffect(() => {
     if (chatId) {
@@ -468,32 +470,66 @@ async function sendMessage() {
   setSelectedFile(null);
 }
 return (
-  <div className="flex h-screen bg-black text-white">
-    <Sidebar />
+  <div className="flex h-screen w-full overflow-hidden bg-black text-white">
+    <Sidebar
+      open={sidebarOpen}
+      onClose={() => setSidebarOpen(false)}
+    />
 
-    <main className="flex-1 min-w-0 flex flex-col p-3 sm:p-5 lg:p-8">
-      <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-4 sm:mb-6 lg:mb-8">
-  QELVORA Chat
-</h1>
+    <main className="flex min-w-0 flex-1 flex-col">
+      {/* MOBILE HEADER */}
+      <header className="flex h-14 shrink-0 items-center border-b border-zinc-800 px-4 md:hidden">
+        <button
+          type="button"
+          onClick={() => setSidebarOpen(true)}
+          className="mr-3 rounded-lg p-2 text-zinc-300 transition hover:bg-zinc-800 hover:text-white"
+          aria-label="Menüyü aç"
+        >
+          <span className="text-xl">☰</span>
+        </button>
 
-      <ChatWindow
-        messages={messages}
-        isLoading={isLoading}
-      />
+        <div>
+          <p className="text-sm font-semibold">
+            QELVORA
+          </p>
 
-      <ChatInput
-  input={input}
-  setInput={setInput}
-  sendMessage={sendMessage}
-  selectedFile={selectedFile}
-  setSelectedFile={setSelectedFile}
-  isUploading={isUploading}
-  isStreaming={isStreaming}
-  stopStreaming={() => {
-    abortControllerRef.current?.abort();
-  }}
-/>
+          <p className="text-[10px] text-zinc-500">
+            AI Workspace
+          </p>
+        </div>
+      </header>
+
+      {/* DESKTOP TITLE */}
+      <div className="hidden shrink-0 px-8 pb-4 pt-6 md:block lg:px-8">
+        <h1 className="text-3xl font-bold lg:text-4xl">
+          QELVORA Chat
+        </h1>
+      </div>
+
+      {/* CHAT */}
+      <div className="min-h-0 flex-1">
+        <ChatWindow
+          messages={messages}
+          isLoading={isLoading}
+        />
+      </div>
+
+      {/* INPUT */}
+      <div className="shrink-0 px-3 pb-3 pt-2 sm:px-5 sm:pb-5 lg:px-8">
+        <ChatInput
+          input={input}
+          setInput={setInput}
+          sendMessage={sendMessage}
+          selectedFile={selectedFile}
+          setSelectedFile={setSelectedFile}
+          isUploading={isUploading}
+          isStreaming={isStreaming}
+          stopStreaming={() => {
+            abortControllerRef.current?.abort();
+          }}
+        />
+      </div>
     </main>
   </div>
-);
+  );
 }
