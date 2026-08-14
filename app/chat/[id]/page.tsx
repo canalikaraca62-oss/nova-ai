@@ -471,10 +471,10 @@ return (
   <div className="flex h-screen bg-black text-white">
     <Sidebar />
 
-    <main className="flex-1 flex flex-col p-8">
-      <h1 className="text-4xl font-bold mb-8">
-        QELVORA Chat
-      </h1>
+    <main className="flex-1 min-w-0 flex flex-col p-3 sm:p-5 lg:p-8">
+      <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-4 sm:mb-6 lg:mb-8">
+  QELVORA Chat
+</h1>
 
       <ChatWindow
         messages={messages}

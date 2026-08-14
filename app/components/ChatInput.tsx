@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent } from "react";
+import { ChangeEvent, KeyboardEvent } from "react";
 
 type ChatInputProps = {
   input: string;
@@ -36,7 +36,7 @@ export default function ChatInput({
   }
 
   function handleKeyDown(
-    event: React.KeyboardEvent<HTMLTextAreaElement>
+    event: KeyboardEvent<HTMLTextAreaElement>
   ) {
     if (
       event.key === "Enter" &&
@@ -44,110 +44,121 @@ export default function ChatInput({
     ) {
       event.preventDefault();
 
-      if (!isStreaming) {
+      if (!isStreaming && !isUploading) {
         sendMessage();
       }
     }
   }
 
   return (
-    <div className="w-full max-w-4xl mx-auto">
-      <div className="flex items-end gap-3">
-        <div className="flex-1">
-          <textarea
-            value={input}
-            onChange={(event) =>
-              setInput(event.target.value)
-            }
-            onKeyDown={handleKeyDown}
-            placeholder="QELVORA'ya bir şey sor..."
-            disabled={isStreaming}
-            rows={3}
-            className="w-full resize-none rounded-xl bg-zinc-800 border border-zinc-700 px-4 py-3 text-white outline-none focus:border-zinc-500 disabled:opacity-50"
-          />
+    <div className="w-full max-w-4xl mx-auto px-0 sm:px-2 pb-2 sm:pb-0">
 
-          {selectedFile && (
-            <div className="mt-2 text-sm text-zinc-400">
-              {selectedFile && (
-  <div className="mt-2 flex items-center justify-between rounded-lg bg-zinc-800 px-3 py-2 text-sm text-zinc-300">
-    <div className="truncate">
-      📎 {selectedFile.name}
-    </div>
+      {/* INPUT CONTAINER */}
+      <div className="rounded-2xl border border-zinc-700 bg-zinc-900/95 p-2 sm:p-3 shadow-xl">
 
-    {!isUploading && !isStreaming && (
-      <button
-        type="button"
-        onClick={() => setSelectedFile(null)}
-        className="ml-3 text-red-400 hover:text-red-300"
-      >
-        Kaldır
-      </button>
-    )}
+        {/* TEXTAREA */}
+        <textarea
+          value={input}
+          onChange={(event) =>
+            setInput(event.target.value)
+          }
+          onKeyDown={handleKeyDown}
+          placeholder="QELVORA'ya bir şey sor..."
+          disabled={isStreaming}
+          rows={2}
+          className="block w-full min-w-0 resize-none rounded-xl bg-transparent px-3 py-2.5 sm:px-4 sm:py-3 text-sm sm:text-base text-white placeholder:text-zinc-500 outline-none disabled:opacity-50"
+        />
 
-    {isUploading && (
-      <span className="ml-3 text-yellow-400">
-        Yükleniyor...
-      </span>
-    )}
-  </div>
-)}
-              Seçilen dosya:{" "}
-              <span className="text-white">
-                {selectedFile.name}
+        {/* FILE */}
+        {selectedFile && (
+          <div className="mx-1 mb-2 flex min-w-0 items-center justify-between gap-2 rounded-xl border border-zinc-700 bg-zinc-800/80 px-3 py-2 text-xs sm:text-sm">
+
+            <div className="min-w-0 truncate text-zinc-300">
+              📎 {selectedFile.name}
+            </div>
+
+            {isUploading ? (
+              <span className="shrink-0 text-yellow-400">
+                Yükleniyor...
               </span>
-
+            ) : !isStreaming ? (
               <button
                 type="button"
                 onClick={() =>
                   setSelectedFile(null)
                 }
-                className="ml-2 text-red-400 hover:text-red-300"
+                className="shrink-0 text-red-400 hover:text-red-300"
               >
                 Kaldır
               </button>
-            </div>
-          )}
+            ) : null}
+
+          </div>
+        )}
+
+        {/* ACTIONS */}
+        <div className="flex items-center justify-between gap-2">
+
+          {/* FILE BUTTON */}
+          <label
+            className={`flex h-10 shrink-0 cursor-pointer items-center justify-center rounded-xl border border-zinc-700 bg-zinc-800 px-3 text-sm text-zinc-300 transition hover:bg-zinc-700 sm:px-4 ${
+              isStreaming
+                ? "pointer-events-none opacity-50"
+                : ""
+            }`}
+          >
+            <span className="sm:hidden">
+              📎
+            </span>
+
+            <span className="hidden sm:inline">
+              📎 Dosya
+            </span>
+
+            <input
+              type="file"
+              className="hidden"
+              onChange={handleFileChange}
+              disabled={isStreaming}
+            />
+          </label>
+
+          {/* SEND / STOP */}
+          <button
+            type="button"
+            onClick={
+              isStreaming
+                ? stopStreaming
+                : sendMessage
+            }
+            disabled={
+              isUploading && !isStreaming
+            }
+            className={`flex h-10 min-w-0 items-center justify-center rounded-xl px-4 text-sm font-semibold transition active:scale-[0.98] sm:px-5 ${
+              isStreaming
+                ? "bg-red-600 hover:bg-red-700"
+                : "bg-blue-600 hover:bg-blue-700"
+            } disabled:opacity-50`}
+          >
+            <span className="sm:hidden">
+              {isStreaming
+                ? "■"
+                : isUploading
+                ? "..."
+                : "↑"}
+            </span>
+
+            <span className="hidden sm:inline">
+              {isStreaming
+                ? "Durdur"
+                : isUploading
+                ? "Yükleniyor..."
+                : "Gönder"}
+            </span>
+          </button>
+
         </div>
 
-        <label
-          className={`cursor-pointer px-4 py-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 transition ${
-            isStreaming
-              ? "pointer-events-none opacity-50"
-              : ""
-          }`}
-        >
-          Dosya
-
-          <input
-            type="file"
-            className="hidden"
-            onChange={handleFileChange}
-            disabled={isStreaming}
-          />
-        </label>
-
-        <button
-          type="button"
-          onClick={
-            isStreaming
-              ? stopStreaming
-              : sendMessage
-          }
-          disabled={
-            isUploading && !isStreaming
-          }
-          className={`px-6 py-3 rounded-xl font-medium transition ${
-            isStreaming
-              ? "bg-red-600 hover:bg-red-700"
-              : "bg-blue-600 hover:bg-blue-700"
-          } disabled:opacity-50`}
-        >
-          {isStreaming
-            ? "Durdur"
-            : isUploading
-            ? "Yükleniyor..."
-            : "Gönder"}
-        </button>
       </div>
     </div>
   );

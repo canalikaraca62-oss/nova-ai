@@ -13,39 +13,36 @@ export default function LoginPage() {
   const [resetLoading, setResetLoading] = useState(false);
 
   async function handleLogin() {
-  setLoading(true);
+    setLoading(true);
 
-  const { data, error } = await supabase.auth.signInWithPassword({
-    email,
-    password,
-  });
+    const { data, error } =
+      await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-  if (error) {
+    if (error) {
+      setLoading(false);
+      alert(error.message);
+      return;
+    }
+
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
     setLoading(false);
-    alert(error.message);
-    return;
+
+    if (!session) {
+      alert(
+        "Giriş başarılı görünüyor ama oturum oluşturulamadı."
+      );
+      return;
+    }
+
+    router.replace("/chat");
+    router.refresh();
   }
-
-  console.log("LOGIN USER:", data.user);
-  console.log("LOGIN SESSION:", data.session);
-
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-
-  console.log("SESSION LOGIN SONRASI:", session);
-  console.log("USER LOGIN SONRASI:", session?.user?.id);
-
-  setLoading(false);
-
-  if (!session) {
-    alert("Giriş başarılı görünüyor ama Supabase session oluşturmadı.");
-    return;
-  }
-
-  router.replace("/chat");
-  router.refresh();
-}
 
   async function handleForgotPassword() {
     if (!email) {
@@ -55,12 +52,13 @@ export default function LoginPage() {
 
     setResetLoading(true);
 
-    const { error } = await supabase.auth.resetPasswordForEmail(
-      email,
-      {
-        redirectTo: `${window.location.origin}/reset-password`,
-      }
-    );
+    const { error } =
+      await supabase.auth.resetPasswordForEmail(
+        email,
+        {
+          redirectTo: `${window.location.origin}/reset-password`,
+        }
+      );
 
     setResetLoading(false);
 
@@ -75,58 +73,127 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-black text-white px-4">
-      <div className="w-full max-w-md bg-zinc-900 p-8 rounded-xl">
-        <h1 className="text-3xl font-bold mb-6 text-center">
-          QELVORA Giriş
-        </h1>
+    <main className="min-h-screen bg-black text-white flex items-center justify-center px-4 py-8 sm:px-6">
 
-        <input
-          type="email"
-          placeholder="E-posta"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className="w-full p-3 mb-4 rounded-lg bg-zinc-800 border border-zinc-700 outline-none focus:border-blue-500"
-        />
+      {/* Glow */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden">
+        <div className="absolute -top-32 -left-32 h-64 w-64 sm:h-96 sm:w-96 rounded-full bg-blue-600/10 blur-3xl" />
+        <div className="absolute -bottom-32 -right-32 h-64 w-64 sm:h-96 sm:w-96 rounded-full bg-purple-600/10 blur-3xl" />
+      </div>
 
-        <input
-          type="password"
-          placeholder="Şifre"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className="w-full p-3 mb-2 rounded-lg bg-zinc-800 border border-zinc-700 outline-none focus:border-blue-500"
-        />
+      <div className="relative w-full max-w-md">
 
-        <button
-          type="button"
-          onClick={handleForgotPassword}
-          disabled={resetLoading}
-          className="block ml-auto mb-6 text-sm text-blue-400 hover:text-blue-300 transition"
-        >
-          {resetLoading
-            ? "Gönderiliyor..."
-            : "Şifrenizi mi unuttunuz?"}
-        </button>
+        {/* Logo */}
+        <div className="text-center mb-6 sm:mb-8">
+          <a
+            href="/"
+            className="text-2xl sm:text-3xl font-bold tracking-[0.2em]"
+          >
+            QELVORA
+          </a>
 
-        <button
-          onClick={handleLogin}
-          disabled={loading}
-          className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 py-3 rounded-lg font-semibold transition"
-        >
-          {loading ? "Giriş yapılıyor..." : "Giriş Yap"}
-        </button>
+          <p className="text-zinc-500 text-sm mt-2">
+            AI workspace
+          </p>
+        </div>
 
-        <p className="text-center text-zinc-400 mt-6">
-          Hesabın yok mu?
+        {/* Card */}
+        <div className="w-full rounded-2xl sm:rounded-3xl border border-white/10 bg-zinc-900/80 backdrop-blur-xl p-5 sm:p-8 shadow-2xl">
+
+          <div className="mb-6 sm:mb-8">
+            <h1 className="text-2xl sm:text-3xl font-bold">
+              Hoş geldin
+            </h1>
+
+            <p className="text-zinc-400 text-sm mt-2">
+              QELVORA hesabına giriş yap.
+            </p>
+          </div>
+
+          <div className="space-y-4">
+
+            <div>
+              <label className="block text-sm text-zinc-400 mb-2">
+                E-posta
+              </label>
+
+              <input
+                type="email"
+                placeholder="ornek@email.com"
+                value={email}
+                onChange={(e) =>
+                  setEmail(e.target.value)
+                }
+                className="w-full min-w-0 h-12 px-4 rounded-xl bg-zinc-800/80 border border-zinc-700 text-white placeholder:text-zinc-500 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 transition"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm text-zinc-400 mb-2">
+                Şifre
+              </label>
+
+              <input
+                type="password"
+                placeholder="Şifren"
+                value={password}
+                onChange={(e) =>
+                  setPassword(e.target.value)
+                }
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    handleLogin();
+                  }
+                }}
+                className="w-full min-w-0 h-12 px-4 rounded-xl bg-zinc-800/80 border border-zinc-700 text-white placeholder:text-zinc-500 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 transition"
+              />
+            </div>
+
+            <button
+              type="button"
+              onClick={handleForgotPassword}
+              disabled={resetLoading}
+              className="block ml-auto text-sm text-zinc-400 hover:text-blue-400 transition"
+            >
+              {resetLoading
+                ? "Gönderiliyor..."
+                : "Şifreni mi unuttun?"}
+            </button>
+
+            <button
+              type="button"
+              onClick={handleLogin}
+              disabled={loading}
+              className="w-full h-12 rounded-xl bg-white text-black font-semibold hover:bg-zinc-200 active:scale-[0.99] disabled:opacity-50 transition"
+            >
+              {loading
+                ? "Giriş yapılıyor..."
+                : "Giriş Yap"}
+            </button>
+          </div>
+
+          <div className="relative my-7">
+            <div className="border-t border-zinc-800" />
+          </div>
+
+          <p className="text-center text-sm text-zinc-500">
+            Henüz hesabın yok mu?
+          </p>
+
+          <a
+            href="/register"
+            className="block text-center mt-2 text-blue-400 hover:text-blue-300 font-medium transition"
+          >
+            Ücretsiz hesap oluştur
+          </a>
+
+        </div>
+
+        <p className="text-center text-xs text-zinc-600 mt-5">
+          QELVORA ile daha akıllı çalış.
         </p>
 
-        <a
-          href="/register"
-          className="block text-center text-blue-400 mt-2 hover:text-blue-300"
-        >
-          Kayıt Ol
-        </a>
       </div>
-    </div>
+    </main>
   );
 }
