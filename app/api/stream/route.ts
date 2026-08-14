@@ -1,15 +1,19 @@
-import { NextRequest } from "next/server";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-const supabaseUrl =
-  process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const groqApiKey = process.env.GROQ_API_KEY!;
 
-const supabaseAnonKey =
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+type ChatMessage = {
+  role: "system" | "user" | "assistant";
+  content: string;
+};
 
-const groqApiKey =
-  process.env.GROQ_API_KEY!;
+type MemoryDecision = {
+  save: boolean;
+  memory: string;
+};
 
 export async function POST(req: NextRequest) {
   try {
@@ -17,8 +21,7 @@ export async function POST(req: NextRequest) {
     // AUTH TOKEN
     //------------------------------------
 
-    const authHeader =
-      req.headers.get("authorization");
+    const authHeader = req.headers.get("authorization");
 
     if (!authHeader?.startsWith("Bearer ")) {
       return NextResponse.json(
@@ -31,28 +34,27 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const token =
-      authHeader.replace("Bearer ", "");
+    const token = authHeader.replace("Bearer ", "");
 
     //------------------------------------
     // SUPABASE USER
     //------------------------------------
 
     const supabase = createClient(
-  supabaseUrl,
-  supabaseAnonKey,
-  {
-    global: {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    },
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-    },
-  }
-);
+      supabaseUrl,
+      supabaseAnonKey,
+      {
+        global: {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false,
+        },
+      }
+    );
 
     const {
       data: { user },
@@ -76,324 +78,378 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
 
-    const messages = Array.isArray(body.messages)
-      ? [...body.messages]
+    const messages: ChatMessage[] = Array.isArray(body.messages)
+      ? body.messages
       : [];
+
+    //------------------------------------
+    // HAFIZA AYARI
+    //------------------------------------
+
+    let memoryEnabled = true;
+
+    const {
+      data: userSettings,
+      error: settingsError,
+    } = await supabase
+      .from("user_settings")
+      .select("memory_enabled")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (settingsError) {
+      console.error(
+        "HAFIZA AYARI OKUMA HATASI:",
+        settingsError
+      );
+    } else if (userSettings) {
+      memoryEnabled =
+        userSettings.memory_enabled !== false;
+    }
+
+    console.log(
+      "MEMORY ENABLED:",
+      memoryEnabled
+    );
+
+    //------------------------------------
+    // SON KULLANICI MESAJI
+    //------------------------------------
+
+    const latestUserMessage = [...messages]
+      .reverse()
+      .find(
+        (message) =>
+          message.role === "user" &&
+          typeof message.content === "string"
+      );
 
     //------------------------------------
     // HAFIZA
     //------------------------------------
 
-    const { data: memories, error: memoryError } =
-      await supabase
+    let memories: { content: string }[] = [];
+    let memoryText = "";
+
+    if (memoryEnabled) {
+      const {
+        data,
+        error: memoryError,
+      } = await supabase
         .from("memories")
         .select("content")
         .eq("user_id", user.id)
         .order("created_at", {
           ascending: false,
         })
-        .limit(20);
+        .limit(50);
 
-        console.log("STREAM USER ID:", user.id);
-console.log("STREAM MEMORY:", memories, memoryError);
+      if (memoryError) {
+        console.error(
+          "HAFIZA OKUMA HATASI:",
+          memoryError
+        );
+      } else {
+        memories = data || [];
+      }
 
-    if (memoryError) {
-      console.error(
-        "HAFIZA OKUMA HATASI:",
-        memoryError
-      );
+      memoryText = memories
+        .map((memory) => `- ${memory.content}`)
+        .join("\n");
     }
 
+    console.log(
+      "STREAM USER ID:",
+      user.id
+    );
+
+    console.log(
+      "STREAM MEMORY:",
+      memories
+    );
+
     //------------------------------------
-    // HAFIZAYI AI'YA EKLE
+    // AI MEMORY ANALİZİ
     //------------------------------------
 
-   let memoryText = "";
+    if (
+      memoryEnabled &&
+      latestUserMessage?.content
+    ) {
+      const userText =
+        latestUserMessage.content.trim();
 
-if (memories && memories.length > 0) {
-  memoryText = memories
-    .map((memory) => `- ${memory.content}`)
-    .join("\n");
+      try {
+        const memoryResponse = await fetch(
+          "https://api.groq.com/openai/v1/chat/completions",
+          {
+            method: "POST",
+
+            headers: {
+              Authorization: `Bearer ${groqApiKey}`,
+              "Content-Type": "application/json",
+            },
+
+            body: JSON.stringify({
+              model:
+                "llama-3.3-70b-versatile",
+
+              temperature: 0,
+
+              messages: [
+                {
+                  role: "system",
+
+                  content: `
+Sen QELVORA'nın hafıza analiz sistemisin.
+
+Görevin, kullanıcının mesajında gelecekteki konuşmalarda işe yarayabilecek ÖNEMLİ ve KALICI bir kullanıcı bilgisi olup olmadığını belirlemektir.
+
+Şunları genellikle KAYDET:
+
+- Kullanıcının adı
+- Yaşadığı şehir, ülke veya bölge
+- Eğitim durumu
+- Okuduğu bölüm
+- Okulu
+- Mesleği
+- İşi
+- Öğrencilik durumu
+- Öğrenmek istediği şeyler
+- Uzun vadeli hedefleri
+- Hayalleri
+- Kariyer hedefleri
+- Spor hedefleri
+- Projeleri
+- Uzun vadeli planları
+- Hobileri
+- İlgi alanları
+- Sevdiği şeyler
+- Sevmediği şeyler
+- Tercihleri
+- Favorileri
+- Kullanıcının özellikle "bunu hatırla", "bunu kaydet", "aklında tut" gibi ifadelerle kalıcı olarak hatırlanmasını istediği bilgiler
+- Gelecekte kullanıcıya daha kişisel ve faydalı cevap vermeyi sağlayacak diğer kalıcı bilgiler
+
+Örneğin:
+
+"KKTC'de yaşıyorum."
+→ KAYDET
+
+"Ana hedefim tenis şampiyonu olmak."
+→ KAYDET
+
+"Bilgisayar mühendisliği okuyorum."
+→ KAYDET
+
+"İngilizce öğreniyorum."
+→ KAYDET
+
+"Hayalim profesyonel tenisçi olmak."
+→ KAYDET
+
+"En sevdiğim spor tenis."
+→ KAYDET
+
+Şunları KAYDETME:
+
+- Basit selamlaşmalar
+- Günlük ve geçici durumlar
+- Anlık duygular
+- Basit sorular
+- Genel bilgiler
+- Haberler
+- Hava durumu
+- O an yapılan geçici işler
+- Şifreler
+- API anahtarları
+- Tokenlar
+- Güvenlik kodları
+- Kredi kartı bilgileri
+- Banka bilgileri
+- Gizli kimlik doğrulama bilgileri
+
+ÖNEMLİ:
+
+Kullanıcı bir bilgiyi doğrudan söylemese bile cümleden açıkça anlaşılan kalıcı bir bilgi varsa kaydet.
+
+Ancak tahmin yürütme.
+
+Örneğin:
+"Tenis oynamayı seviyorum."
+→ Kullanıcının tenis sevdiğini kaydet.
+
+"Yarın tenis oynayacağım."
+→ Bunu kalıcı hafızaya kaydetme.
+
+Sonuç olarak SADECE JSON döndür.
+
+Format:
+
+{
+  "save": true,
+  "memory": "Kullanıcının ... "
 }
-//------------------------------------
-// GENEL MEMORY TESPİTİ
-//------------------------------------
 
-const latestUserMessage = [...messages]
-  .reverse()
-  .find(
-    (message) =>
-      message.role === "user" &&
-      typeof message.content === "string"
-  );
+veya:
 
-if (latestUserMessage?.content) {
-  const userText = latestUserMessage.content.trim();
+{
+  "save": false,
+  "memory": ""
+}
 
-  //------------------------------------
-  // SORU VE GEÇİCİ CÜMLELERİ AYIKLA
-  //------------------------------------
+Memory metni kısa, açık ve üçüncü şahıs şeklinde olmalıdır.
 
-  const isQuestion =
-    userText.endsWith("?") ||
-    /^(ne|nedir|kim|kimim|nerede|neden|nasıl|nasıl|hangi|kaç|ne zaman|sence|biliyor musun|hatırlıyor musun)\b/i.test(
-      userText
-    );
+Kullanıcının cümlesini gereksiz yere uzun şekilde kopyalama.
+`,
+                },
 
-  if (!isQuestion) {
-    //------------------------------------
-    // İSİM TESPİTİ
-    //------------------------------------
-
-    const memoryMatch = userText.match(
-      /^(?:benim adım|adım|ismim)\s*(?:=|:)?\s*([A-Za-zÇĞİÖŞÜçğıöşü]+(?:\s+[A-Za-zÇĞİÖŞÜçğıöşü]+)?)\s*[.!]*$/i
-    );
-
-    if (memoryMatch?.[1]) {
-      const newName = memoryMatch[1].trim();
-
-      const invalidNames = [
-        "ne",
-        "nedir",
-        "kim",
-        "kimim",
-        "sen",
-        "ben",
-        "adım",
-        "ismim",
-      ];
-
-      const normalizedName =
-        newName.toLocaleLowerCase("tr-TR");
-
-      if (!invalidNames.includes(normalizedName)) {
-        const memoryContent =
-          `Kullanıcının adı ${newName}.`;
-
-        const {
-          data: existingNameMemory,
-          error: findError,
-        } = await supabase
-          .from("memories")
-          .select("id")
-          .eq("user_id", user.id)
-          .ilike(
-            "content",
-            "Kullanıcının adı %"
-          )
-          .limit(1)
-          .maybeSingle();
-
-        if (findError) {
-          console.error(
-            "İSİM MEMORY ARAMA HATASI:",
-            findError
-          );
-        } else if (existingNameMemory) {
-          const { error: updateError } =
-            await supabase
-              .from("memories")
-              .update({
-                content: memoryContent,
-              })
-              .eq(
-                "id",
-                existingNameMemory.id
-              );
-
-          if (updateError) {
-            console.error(
-              "İSİM MEMORY GÜNCELLEME HATASI:",
-              updateError
-            );
+                {
+                  role: "user",
+                  content: userText,
+                },
+              ],
+            }),
           }
-        } else {
-          const { error: insertError } =
-            await supabase
-              .from("memories")
-              .insert({
-                user_id: user.id,
-                content: memoryContent,
-              });
-
-          if (insertError) {
-            console.error(
-              "İSİM MEMORY KAYDETME HATASI:",
-              insertError
-            );
-          }
-        }
-      }
-    } else {
-      //------------------------------------
-      // GENEL KALICI BİLGİ TESPİTİ
-      //------------------------------------
-
-      const memoryPatterns = [
-        {
-          pattern:
-            /\b(?:KKTC|Kuzey Kıbrıs|Kıbrıs|Türkiye|İstanbul|Ankara|İzmir|Lefkoşa|Girne|Mağusa|Gazimağusa)\b.*\b(?:yaşıyorum|oturuyorum|ikamet ediyorum)\b/i,
-          label: "Kullanıcının yaşadığı yer",
-        },
-
-        {
-          pattern:
-            /^(?:hedefim|hedefim şu|amacım|amacım şu)\s+(.+)/i,
-          label: "Kullanıcının hedefi",
-        },
-
-        {
-          pattern:
-            /^(?:hayalim|hayalim şu)\s+(.+)/i,
-          label: "Kullanıcının hayali",
-        },
-
-        {
-          pattern:
-            /^(?:ben|bende)\s+(.+?)\s+(?:öğreniyorum|çalışıyorum|okuyorum)\.?$/i,
-          label: "Kullanıcının öğrenim veya çalışma bilgisi",
-        },
-
-        {
-          pattern:
-            /^(?:ben|bende)\s+(.+?)\s+(?:öğrencisiyim|mezunuyum)\.?$/i,
-          label: "Kullanıcının eğitim bilgisi",
-        },
-
-        {
-          pattern:
-            /^en sevdiğim\s+(.+?)\s+(.+?)[.!]*$/i,
-          label: "Kullanıcının tercihi",
-        },
-
-        {
-          pattern:
-            /^favori\s+(.+?)\s+(.+?)[.!]*$/i,
-          label: "Kullanıcının tercihi",
-        },
-
-        {
-          pattern:
-            /^(.+?)\s+öğreniyorum[.!]*$/i,
-          label: "Kullanıcının öğrenmekte olduğu konu",
-        },
-
-        {
-          pattern:
-            /^(.+?)\s+üzerinde çalışıyorum[.!]*$/i,
-          label: "Kullanıcının üzerinde çalıştığı konu",
-        },
-      ];
-
-      const matchedMemory =
-        memoryPatterns.find((item) =>
-          item.pattern.test(userText)
         );
 
-      if (matchedMemory) {
-        //------------------------------------
-        // MEMORY METNİNİ OLUŞTUR
-        //------------------------------------
+        if (memoryResponse.ok) {
+          const memoryData =
+            await memoryResponse.json();
 
-        let memoryContent = "";
+          const rawContent =
+            memoryData?.choices?.[0]?.message
+              ?.content;
 
-        if (
-          matchedMemory.label ===
-          "Kullanıcının yaşadığı yer"
-        ) {
-          memoryContent =
-            `Kullanıcı ${userText}`;
-        } else if (
-          matchedMemory.label ===
-          "Kullanıcının hedefi"
-        ) {
-          const target =
-            userText
-              .replace(
-                /^(?:hedefim|hedefim şu|amacım|amacım şu)\s+/i,
-                ""
-              )
-              .replace(/[.!]+$/, "")
-              .trim();
+          if (rawContent) {
+            let cleanedContent =
+              String(rawContent).trim();
 
-          memoryContent =
-            `Kullanıcının hedefi: ${target}.`;
-        } else if (
-          matchedMemory.label ===
-          "Kullanıcının hayali"
-        ) {
-          const dream =
-            userText
-              .replace(
-                /^(?:hayalim|hayalim şu)\s+/i,
-                ""
-              )
-              .replace(/[.!]+$/, "")
-              .trim();
+            // Markdown JSON çitlerini temizle
+            cleanedContent =
+              cleanedContent
+                .replace(/^```json\s*/i, "")
+                .replace(/^```\s*/i, "")
+                .replace(/\s*```$/i, "")
+                .trim();
 
-          memoryContent =
-            `Kullanıcının hayali: ${dream}.`;
-        } else if (
-          matchedMemory.label ===
-          "Kullanıcının tercihi"
-        ) {
-          memoryContent =
-            `Kullanıcının tercihi: ${userText}`;
-        } else {
-          memoryContent =
-            `Kullanıcı hakkında bilgi: ${userText}`;
-        }
+            try {
+              const decision =
+                JSON.parse(
+                  cleanedContent
+                ) as MemoryDecision;
 
-        //------------------------------------
-        // AYNI MEMORY ZATEN VAR MI?
-        //------------------------------------
+              if (
+                decision.save === true &&
+                typeof decision.memory ===
+                  "string" &&
+                decision.memory.trim()
+              ) {
+                const memoryContent =
+                  decision.memory.trim();
 
-        const {
-          data: existingMemory,
-          error: findMemoryError,
-        } = await supabase
-          .from("memories")
-          .select("id")
-          .eq("user_id", user.id)
-          .eq("content", memoryContent)
-          .limit(1)
-          .maybeSingle();
+                console.log(
+                  "AI MEMORY KARARI:",
+                  memoryContent
+                );
 
-        if (findMemoryError) {
-          console.error(
-            "GENEL MEMORY ARAMA HATASI:",
-            findMemoryError
-          );
-        } else if (!existingMemory) {
-          //------------------------------------
-          // YENİ MEMORY KAYDET
-          //------------------------------------
+                //------------------------------------
+                // AYNI MEMORY VAR MI?
+                //------------------------------------
 
-          const {
-            error: insertMemoryError,
-          } = await supabase
-            .from("memories")
-            .insert({
-              user_id: user.id,
-              content: memoryContent,
-            });
+                const {
+                  data: existingMemory,
+                  error: findMemoryError,
+                } = await supabase
+                  .from("memories")
+                  .select("id")
+                  .eq(
+                    "user_id",
+                    user.id
+                  )
+                  .eq(
+                    "content",
+                    memoryContent
+                  )
+                  .limit(1)
+                  .maybeSingle();
 
-          if (insertMemoryError) {
-            console.error(
-              "GENEL MEMORY KAYDETME HATASI:",
-              insertMemoryError
-            );
-          } else {
-            console.log(
-              "YENİ MEMORY KAYDEDİLDİ:",
-              memoryContent
-            );
+                if (findMemoryError) {
+                  console.error(
+                    "MEMORY ARAMA HATASI:",
+                    findMemoryError
+                  );
+                }
+
+                //------------------------------------
+                // MEMORY KAYDET
+                //------------------------------------
+
+                if (!existingMemory) {
+                  const {
+                    error:
+                      insertMemoryError,
+                  } = await supabase
+                    .from("memories")
+                    .insert({
+                      user_id: user.id,
+                      content:
+                        memoryContent,
+                    });
+
+                  if (
+                    insertMemoryError
+                  ) {
+                    console.error(
+                      "MEMORY KAYDETME HATASI:",
+                      insertMemoryError
+                    );
+                  } else {
+                    console.log(
+                      "YENİ MEMORY KAYDEDİLDİ:",
+                      memoryContent
+                    );
+                  }
+                } else {
+                  console.log(
+                    "MEMORY ZATEN VAR:",
+                    memoryContent
+                  );
+                }
+              } else {
+                console.log(
+                  "AI: KAYDEDİLECEK MEMORY YOK."
+                );
+              }
+            } catch (parseError) {
+              console.error(
+                "MEMORY JSON PARSE HATASI:",
+                parseError
+              );
+
+              console.error(
+                "AI MEMORY CEVABI:",
+                cleanedContent
+              );
+            }
           }
+        } else {
+          const errorText =
+            await memoryResponse.text();
+
+          console.error(
+            "MEMORY AI HATASI:",
+            errorText
+          );
         }
+      } catch (memoryAiError) {
+        console.error(
+          "MEMORY ANALİZ HATASI:",
+          memoryAiError
+        );
       }
     }
-  }
-}
+
     //------------------------------------
     // GROQ STREAM
     //------------------------------------
@@ -409,16 +465,18 @@ if (latestUserMessage?.content) {
         },
 
         body: JSON.stringify({
-          model: "llama-3.3-70b-versatile",
+          model:
+            "llama-3.3-70b-versatile",
 
           stream: true,
 
           temperature: 0.7,
 
-        messages: [
-  {
-    role: "system",
-    content: `
+          messages: [
+            {
+              role: "system",
+
+              content: `
 Sen QELVORA isimli gelişmiş bir yapay zekâ asistansın.
 
 Kurallar:
@@ -431,28 +489,41 @@ Kurallar:
 
 KULLANICI HAFIZASI:
 
-${memoryText || "Kullanıcı hakkında kayıtlı bir bilgi yok."}
+${
+  memoryEnabled
+    ? memoryText ||
+      "Kullanıcı hakkında kayıtlı bir bilgi yok."
+    : "Hafıza kapalı. Kullanıcı hafızasını kullanma."
+}
 
-Hafızadaki bilgiler kullanıcı hakkında daha önce kaydedilmiş gerçek bilgilerdir.
+Hafıza açıksa yukarıdaki bilgiler kullanıcı hakkında daha önce kaydedilmiş gerçek bilgilerdir.
 
 Önemli:
-- Kullanıcı hafızasında bir bilgi varsa onu kullan.
+
+- Hafıza açıksa kayıtlı bilgileri kullan.
 - Kullanıcı "Benim adım ne?" gibi bir soru sorarsa ve hafızasında adı kayıtlıysa doğrudan kayıtlı adı söyle.
 - Kayıtlı bir bilgi varken kullanıcıya "bunu paylaşmadınız", "bilgi kayıtlı değil" veya benzeri bir cevap verme.
 - Hafızadaki bilgileri kullanıcıya "hafıza sisteminden öğrendim" şeklinde açıklama.
+- Hafıza kapalıysa hafıza ile ilgili kayıtları kullanma.
 `,
-  },
+            },
 
-  ...messages.filter(
-    (message) => message.role !== "system"
-  ),
-],
+            ...messages.filter(
+              (message) =>
+                message.role !== "system"
+            ),
+          ],
         }),
       }
     );
 
+    //------------------------------------
+    // GROQ HATASI
+    //------------------------------------
+
     if (!response.ok) {
-      const errorText = await response.text();
+      const errorText =
+        await response.text();
 
       console.error(
         "GROQ STREAM HATASI:",
@@ -461,7 +532,8 @@ Hafızadaki bilgiler kullanıcı hakkında daha önce kaydedilmiş gerçek bilgi
 
       return NextResponse.json(
         {
-          error: "AI servisi cevap veremedi.",
+          error:
+            "AI servisi cevap veremedi.",
         },
         {
           status: 500,
@@ -469,13 +541,25 @@ Hafızadaki bilgiler kullanıcı hakkında daha önce kaydedilmiş gerçek bilgi
       );
     }
 
-    return new Response(response.body, {
-      headers: {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
-        Connection: "keep-alive",
-      },
-    });
+    //------------------------------------
+    // STREAM
+    //------------------------------------
+
+    return new Response(
+      response.body,
+      {
+        headers: {
+          "Content-Type":
+            "text/event-stream",
+
+          "Cache-Control":
+            "no-cache",
+
+          Connection:
+            "keep-alive",
+        },
+      }
+    );
   } catch (error) {
     console.error(
       "STREAM SERVER HATASI:",
@@ -484,7 +568,8 @@ Hafızadaki bilgiler kullanıcı hakkında daha önce kaydedilmiş gerçek bilgi
 
     return NextResponse.json(
       {
-        error: "Sunucu hatası oluştu.",
+        error:
+          "Sunucu hatası oluştu.",
       },
       {
         status: 500,
