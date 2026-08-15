@@ -1,3 +1,5 @@
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
+
 type ChatMessage = {
   role: "system" | "user" | "assistant";
   content: string;
@@ -9,6 +11,8 @@ const GROQ_API_URL =
 const DEFAULT_MODEL =
   process.env.GROQ_MODEL ||
   "llama-3.3-70b-versatile";
+
+const MAX_MEMORIES = 20;
 
 async function callGroq(
   messages: ChatMessage[],
@@ -58,7 +62,8 @@ async function callGroq(
 
     console.error(
       "Groq API hatası:",
-      response.status
+      response.status,
+      errorText
     );
 
     throw new Error(
@@ -83,15 +88,100 @@ async function callGroq(
   return content.trim();
 }
 
-export async function askQelvora(
-  messages: ChatMessage[]
+/**
+ * Kullanıcının QELVORA hafızalarını getirir.
+ */
+async function getUserMemories(
+  userId?: string
 ) {
-  return callGroq(
-    [
-      {
-        role: "system",
+  if (!userId) {
+    return [];
+  }
 
-        content: `
+  try {
+    const { data, error } =
+      await supabaseAdmin
+        .from("memories")
+        .select(
+          "id, content, created_at"
+        )
+        .eq("user_id", userId)
+        .order("created_at", {
+          ascending: false,
+        })
+        .limit(MAX_MEMORIES);
+
+    if (error) {
+      console.error(
+        "Memory okuma hatası:",
+        error
+      );
+
+      return [];
+    }
+
+    return data || [];
+  } catch (error) {
+    console.error(
+      "Memory sistem hatası:",
+      error
+    );
+
+    return [];
+  }
+}
+
+/**
+ * Kullanıcı hafızalarını AI için
+ * güvenli ve sade bir context haline getirir.
+ */
+function buildMemoryContext(
+  memories: Array<{
+    content: string;
+  }>
+) {
+  if (!memories.length) {
+    return "";
+  }
+
+  const memoryText = memories
+    .map(
+      (memory, index) =>
+        `${index + 1}. ${memory.content}`
+    )
+    .join("\n");
+
+  return `
+KULLANICI HAFIZASI
+
+Aşağıdaki bilgiler kullanıcının daha önce
+QELVORA ile paylaştığı ve gelecekte yardımcı
+olabilecek bilgileridir.
+
+${memoryText}
+
+Hafıza kullanım kuralları:
+
+- Bu bilgileri yalnızca gerçekten ilgili olduğunda kullan.
+- Kullanıcı söylemediği bir bilgiyi hafızadan çıkarıp uydurma.
+- Hafızadaki bilgiler ile mevcut mesaj çelişirse mevcut kullanıcı mesajını esas al.
+- Hafızayı kullanıcıya gereksiz yere listeleme.
+- Kullanıcı "bunu hatırlıyor musun?" gibi bir şey sorarsa hafızadaki ilgili bilgiyi kullan.
+- Hassas veya gereksiz çıkarımlar yapma.
+`.trim();
+}
+
+export async function askQelvora(
+  messages: ChatMessage[],
+  userId?: string
+) {
+  const memories =
+    await getUserMemories(userId);
+
+  const memoryContext =
+    buildMemoryContext(memories);
+
+  const systemPrompt = `
 Sen QELVORA isimli gelişmiş bir yapay zekâ asistanısın.
 
 Kimliğin:
@@ -100,19 +190,35 @@ Kimliğin:
 - Açık
 - Güvenilir
 - Kullanıcı odaklı
+- Yardımcı
+- Teknoloji konusunda güçlü
 
 Davranış kuralları:
+
 - Kullanıcının dilinde cevap ver.
 - Türkçe sorulara Türkçe cevap ver.
 - Gereksiz tekrar yapma.
 - Gereksiz uzunlukta cevap verme.
+- Kullanıcı özellikle detay isterse kapsamlı cevap ver.
 - Karmaşık konuları anlaşılır şekilde açıkla.
 - Yazılım konusunda uzman davran.
 - Kod verirken temiz ve üretime uygun kod yaz.
 - Kullanıcının önceki mesajlarındaki bağlamı dikkate al.
 - Emin olmadığın bilgileri kesin gerçek gibi sunma.
 - Kullanıcı bir dosya sağladıysa mevcut dosya içeriğini dikkate al.
-        `.trim(),
+- Kullanıcının kişisel tercihlerini ve devam eden projelerini ilgili olduğunda hatırla.
+- Aynı şeyi kullanıcıya tekrar tekrar sordurma.
+- Kullanıcı daha önce verdiği bilgiyi tekrar vermek zorunda kalmamalı.
+${memoryContext
+  ? `\n\n${memoryContext}`
+  : ""}
+`.trim();
+
+  return callGroq(
+    [
+      {
+        role: "system",
+        content: systemPrompt,
       },
 
       ...messages,
@@ -143,6 +249,7 @@ export async function generateChatTitle(
 Sen QELVORA için profesyonel sohbet başlıkları üreten bir asistansın.
 
 Kurallar:
+
 - En fazla 5 kelime.
 - Türkçe yaz.
 - Sadece başlığı döndür.
@@ -151,7 +258,7 @@ Kurallar:
 - Emoji kullanma.
 - Gereksiz kelimeler kullanma.
 - Kullanıcının asıl konusunu mümkün olduğunca doğru özetle.
-        `.trim(),
+`.trim(),
         },
 
         {

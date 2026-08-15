@@ -24,13 +24,14 @@ export default function ChatWindow({
   messages,
   isLoading,
 }: ChatWindowProps) {
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const shouldAutoScrollRef = useRef(true);
+  const scrollFrameRef = useRef<number | null>(null);
 
   function handleScroll() {
-    const container = scrollRef.current;
+    const container = containerRef.current;
 
     if (!container) return;
 
@@ -39,6 +40,8 @@ export default function ChatWindow({
       container.scrollTop -
       container.clientHeight;
 
+    // Kullanıcı aşağıya yakınsa otomatik takip et.
+    // Yukarı çıktıysa artık zorla aşağı indirme.
     shouldAutoScrollRef.current =
       distanceFromBottom < 120;
   }
@@ -48,179 +51,99 @@ export default function ChatWindow({
       return;
     }
 
-    bottomRef.current?.scrollIntoView({
-      behavior: "smooth",
-      block: "end",
-    });
-  }, [messages, isLoading]);
+    // Her streaming chunk'ında ayrı ayrı scroll çalıştırma.
+    // Browser'ın frame'ine bağla.
+    if (scrollFrameRef.current !== null) {
+      cancelAnimationFrame(scrollFrameRef.current);
+    }
+
+    scrollFrameRef.current =
+      requestAnimationFrame(() => {
+        const container = containerRef.current;
+
+        if (!container) return;
+
+        container.scrollTop =
+          container.scrollHeight;
+
+        scrollFrameRef.current = null;
+      });
+
+    return () => {
+      if (scrollFrameRef.current !== null) {
+        cancelAnimationFrame(
+          scrollFrameRef.current
+        );
+      }
+    };
+  }, [messages.length, isLoading]);
+
+  // Yeni mesaj geldiğinde aşağıya git.
+  // Streaming sırasında her chunk'ta smooth scroll yapma.
+  useEffect(() => {
+    if (!shouldAutoScrollRef.current) {
+      return;
+    }
+
+    const container = containerRef.current;
+
+    if (!container) return;
+
+    container.scrollTop =
+      container.scrollHeight;
+  }, [messages.length]);
 
   return (
     <div
-      ref={scrollRef}
+      ref={containerRef}
       onScroll={handleScroll}
       className="
-        relative
-        flex-1
         min-h-0
+        flex-1
         w-full
-        max-w-5xl
+        max-w-4xl
         mx-auto
-        mb-4
+        rounded-xl
+        bg-zinc-900
+        p-3
+        sm:p-5
+        lg:p-6
+        mb-3
         sm:mb-6
         overflow-y-auto
         overflow-x-hidden
-        rounded-2xl
-        border
-        border-white/10
-        bg-zinc-950/80
-        shadow-[0_20px_80px_rgba(0,0,0,0.35)]
-        backdrop-blur-xl
-        scrollbar-thin
-        scrollbar-track-transparent
-        scrollbar-thumb-zinc-700
+        overscroll-contain
+        touch-pan-y
+        [scrollbar-width:thin]
       "
     >
-      {/* Üst glow */}
-      <div className="pointer-events-none sticky top-0 z-10 h-0">
-        <div className="absolute left-1/2 top-0 h-32 w-2/3 -translate-x-1/2 rounded-full bg-blue-500/[0.04] blur-3xl" />
-      </div>
+      {messages.map((msg, index) => (
+        <Message
+          key={index}
+          sender={msg.sender}
+          text={msg.text}
+          attachment={msg.attachment}
+        />
+      ))}
 
-      {/* CONTENT */}
+      {isLoading && (
+        <div className="flex justify-start mt-4">
+          <div className="rounded-2xl bg-zinc-800 px-4 py-3 text-white">
+            <span className="inline-flex items-center gap-1">
+              <span>QELVORA yazıyor</span>
+
+              <span className="animate-pulse">
+                ...
+              </span>
+            </span>
+          </div>
+        </div>
+      )}
+
       <div
-        className="
-          min-h-full
-          px-3
-          py-5
-          sm:px-6
-          sm:py-7
-          lg:px-8
-          lg:py-8
-        "
-      >
-        {/* EMPTY STATE */}
-        {messages.length === 0 && !isLoading && (
-          <div className="flex min-h-full items-center justify-center">
-            <div className="w-full max-w-2xl px-4 text-center">
-              <div
-                className="
-                  mx-auto
-                  mb-6
-                  flex
-                  h-16
-                  w-16
-                  items-center
-                  justify-center
-                  rounded-2xl
-                  border
-                  border-white/10
-                  bg-white/[0.04]
-                  text-2xl
-                  shadow-[0_0_40px_rgba(59,130,246,0.08)]
-                "
-              >
-                ✦
-              </div>
-
-              <p className="text-xs font-medium uppercase tracking-[0.25em] text-zinc-600">
-                QELVORA INTELLIGENCE
-              </p>
-
-              <h2
-                className="
-                  mt-3
-                  text-2xl
-                  font-semibold
-                  tracking-tight
-                  text-zinc-200
-                  sm:text-3xl
-                "
-              >
-                What are you building today?
-              </h2>
-
-              <p className="mx-auto mt-4 max-w-xl text-sm leading-6 text-zinc-500 sm:text-base">
-                Ask questions, analyze documents, write code,
-                explore ideas and work with QELVORA.
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* MESSAGES */}
-        {messages.length > 0 && (
-          <div className="mx-auto w-full max-w-4xl space-y-5 sm:space-y-7">
-            {messages.map((msg, index) => (
-              <Message
-                key={`${msg.sender}-${index}`}
-                sender={msg.sender}
-                text={msg.text}
-                attachment={msg.attachment}
-              />
-            ))}
-
-            {/* STREAMING INDICATOR */}
-            {isLoading && (
-              <div className="flex justify-start">
-                <div
-                  className="
-                    inline-flex
-                    items-center
-                    gap-3
-                    rounded-2xl
-                    border
-                    border-white/10
-                    bg-white/[0.04]
-                    px-4
-                    py-3
-                    text-sm
-                    text-zinc-400
-                    shadow-[0_8px_30px_rgba(0,0,0,0.2)]
-                    backdrop-blur-md
-                  "
-                >
-                  <div className="flex items-center gap-1">
-                    <span
-                      className="
-                        h-1.5
-                        w-1.5
-                        animate-bounce
-                        rounded-full
-                        bg-zinc-400
-                      "
-                    />
-
-                    <span
-                      className="
-                        h-1.5
-                        w-1.5
-                        animate-bounce
-                        rounded-full
-                        bg-zinc-500
-                        [animation-delay:120ms]
-                      "
-                    />
-
-                    <span
-                      className="
-                        h-1.5
-                        w-1.5
-                        animate-bounce
-                        rounded-full
-                        bg-zinc-600
-                        [animation-delay:240ms]
-                      "
-                    />
-                  </div>
-
-                  <span>QELVORA düşünüyor...</span>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        <div ref={bottomRef} className="h-2" />
-      </div>
+        ref={bottomRef}
+        className="h-px"
+      />
     </div>
   );
 }

@@ -476,7 +476,7 @@ return (
       onClose={() => setSidebarOpen(false)}
     />
 
-    <main className="flex min-w-0 flex-1 flex-col">
+    <main className="flex-1 min-w-0 min-h-0 flex flex-col p-3 sm:p-5 lg:p-8">
       {/* MOBILE HEADER */}
       <header className="flex h-14 shrink-0 items-center border-b border-zinc-800 px-4 md:hidden">
         <button
