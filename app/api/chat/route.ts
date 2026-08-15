@@ -716,16 +716,13 @@ Kurallar:
     // AI
     //------------------------------------
 
-    const reply =
-      await askQelvora(
-        messages,
-        userId ?? undefined
-      );
+   const reply =
+  await askQelvora(
+    messages,
+    userId ?? undefined
+  );
 
-    return NextResponse.json({
-      reply,
-    });
-    //------------------------------------
+//------------------------------------
 // ACTIONS
 //------------------------------------
 
@@ -746,6 +743,10 @@ if (userId && userMessage) {
     );
   }
 }
+
+return NextResponse.json({
+  reply,
+});
   } catch (error) {
     console.error(
       "CHAT API HATASI:",
