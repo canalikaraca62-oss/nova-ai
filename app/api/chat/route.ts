@@ -8,6 +8,8 @@ import {
 
 import { analyzeImage } from "@/services/vision.server";
 
+import { parseAction } from "@/services/action-parser";
+
 import {
   readPdf,
   readDocx,
@@ -723,6 +725,27 @@ Kurallar:
     return NextResponse.json({
       reply,
     });
+    //------------------------------------
+// ACTIONS
+//------------------------------------
+
+if (userId && userMessage) {
+  try {
+    const action = await parseAction(userMessage);
+
+    if (action) {
+      console.log(
+        "⚡ QELVORA ACTION:",
+        action
+      );
+    }
+  } catch (error) {
+    console.error(
+      "Action parser hatası:",
+      error
+    );
+  }
+}
   } catch (error) {
     console.error(
       "CHAT API HATASI:",
