@@ -31,7 +31,6 @@ export default function Message({
 
     try {
       await navigator.clipboard.writeText(text);
-
       setCopied(true);
 
       setTimeout(() => {
@@ -65,11 +64,7 @@ export default function Message({
         <div
           className={`
             mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em]
-            ${
-              isUser
-                ? "text-blue-100/80"
-                : "text-zinc-500"
-            }
+            ${isUser ? "text-blue-100/80" : "text-zinc-500"}
           `}
         >
           <span
@@ -85,9 +80,7 @@ export default function Message({
             {isUser ? "U" : "✦"}
           </span>
 
-          <span>
-            {isUser ? "Sen" : "QELVORA"}
-          </span>
+          <span>{isUser ? "Sen" : "QELVORA"}</span>
         </div>
 
         {/* ATTACHMENT */}
@@ -163,11 +156,7 @@ export default function Message({
               text-sm
               leading-7
               sm:text-[15px]
-              ${
-                isUser
-                  ? "text-white"
-                  : "text-zinc-200"
-              }
+              ${isUser ? "text-white" : "text-zinc-200"}
             `}
           >
             <ReactMarkdown
@@ -175,7 +164,7 @@ export default function Message({
               components={{
                 p({ children }) {
                   return (
-                    <p className="mb-4 last:mb-0 break-words">
+                    <p className="mb-4 break-words last:mb-0">
                       {children}
                     </p>
                   );
@@ -282,79 +271,101 @@ export default function Message({
                   );
                 },
 
+                /*
+                 * INLINE CODE + CODE BLOCK
+                 */
                 code({
-  className,
-  children,
-  ...props
-}) {
-  const match =
-    /language-(\w+)/.exec(
-      className || ""
-    );
+                  className,
+                  children,
+                  ...props
+                }) {
+                  const match =
+                    /language-(\w+)/.exec(className || "");
 
-  const code = String(children)
-    .replace(/\n$/, "");
+                  const code = String(children).replace(
+                    /\n$/,
+                    ""
+                  );
 
-  if (match) {
-    const language = match[1];
+                  /*
+                   * CODE BLOCK
+                   */
+                  if (match) {
+                    const language = match[1];
 
-    return (
-      <div className="my-5 min-w-0 overflow-hidden rounded-xl border border-white/10 bg-[#0d1117]">
-        <div className="flex items-center justify-between gap-3 border-b border-white/10 bg-white/[0.035] px-3 py-2">
-          <span className="truncate text-[11px] font-medium uppercase tracking-wider text-zinc-500">
-            {language}
-          </span>
+                    return (
+                      <div className="my-5 min-w-0 overflow-hidden rounded-xl border border-white/10 bg-[#0d1117]">
+                        {/* CODE HEADER */}
+                        <div className="flex items-center justify-between gap-3 border-b border-white/10 bg-white/[0.035] px-3 py-2">
+                          <span className="truncate text-[11px] font-medium uppercase tracking-wider text-zinc-500">
+                            {language}
+                          </span>
 
-          <button
-            type="button"
-            onClick={async () => {
-              try {
-                await navigator.clipboard.writeText(
-                  code
-                );
-              } catch (error) {
-                console.error(
-                  "Kod kopyalama hatası:",
-                  error
-                );
-              }
-            }}
-            className="shrink-0 rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-1.5 text-[11px] text-zinc-400 transition hover:bg-white/[0.08] hover:text-white"
-          >
-            Kopyala
-          </button>
-        </div>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              try {
+                                await navigator.clipboard.writeText(
+                                  code
+                                );
+                              } catch (error) {
+                                console.error(
+                                  "Kod kopyalama hatası:",
+                                  error
+                                );
+                              }
+                            }}
+                            className="shrink-0 rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-1.5 text-[11px] text-zinc-400 transition hover:bg-white/[0.08] hover:text-white"
+                          >
+                            Kopyala
+                          </button>
+                        </div>
 
-        <pre
-          className="max-w-full overflow-x-auto p-4 text-[13px] leading-7 text-zinc-200"
-          {...props}
-        >
-          <code>{code}</code>
-        </pre>
-      </div>
-    );
-  }
+                        {/* CODE */}
+                        <pre
+                          className="
+                            max-w-full
+                            overflow-x-auto
+                            p-4
+                            text-[13px]
+                            leading-7
+                            text-zinc-200
+                          "
+                        >
+                          <code
+                            className={`font-mono ${className || ""}`}
+                            {...props}
+                          >
+                            {children}
+                          </code>
+                        </pre>
+                      </div>
+                    );
+                  }
 
-  return (
-    <code
-      className="
-        break-words
-        rounded-md
-        border
-        border-white/10
-        bg-black/20
-        px-1.5
-        py-0.5
-        font-mono
-        text-[0.9em]
-        text-zinc-200
-      "
-      {...props}
-    >
-      {children}
-    </code>
-  );
-},
+                  /*
+                   * INLINE CODE
+                   */
+                  return (
+                    <code
+                      className="
+                        break-words
+                        rounded-md
+                        border
+                        border-white/10
+                        bg-black/20
+                        px-1.5
+                        py-0.5
+                        font-mono
+                        text-[0.9em]
+                        text-zinc-200
+                      "
+                      {...props}
+                    >
+                      {children}
+                    </code>
+                  );
+                },
               }}
             >
               {text}
