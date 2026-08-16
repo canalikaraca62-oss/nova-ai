@@ -18,17 +18,24 @@ type MessageType = {
 type ChatWindowProps = {
   messages: MessageType[];
   isLoading: boolean;
+  isStreaming: boolean;
 };
 
 export default function ChatWindow({
   messages,
   isLoading,
+  isStreaming,
 }: ChatWindowProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const bottomRef = useRef<HTMLDivElement>(null);
 
   const shouldAutoScrollRef = useRef(true);
-  const scrollFrameRef = useRef<number | null>(null);
+
+  const animationFrameRef =
+    useRef<number | null>(null);
+
+  //----------------------------------
+  // SCROLL DURUMUNU KONTROL ET
+  //----------------------------------
 
   function handleScroll() {
     const container = containerRef.current;
@@ -40,63 +47,233 @@ export default function ChatWindow({
       container.scrollTop -
       container.clientHeight;
 
-    // Kullanıcı aşağıya yakınsa otomatik takip et.
-    // Yukarı çıktıysa artık zorla aşağı indirme.
     shouldAutoScrollRef.current =
-      distanceFromBottom < 120;
+      distanceFromBottom < 150;
   }
 
-  useEffect(() => {
-    if (!shouldAutoScrollRef.current) {
-      return;
-    }
+  //----------------------------------
+  // AŞAĞI KAYDIR
+  //----------------------------------
 
-    // Her streaming chunk'ında ayrı ayrı scroll çalıştırma.
-    // Browser'ın frame'ine bağla.
-    if (scrollFrameRef.current !== null) {
-      cancelAnimationFrame(scrollFrameRef.current);
-    }
-
-    scrollFrameRef.current =
-      requestAnimationFrame(() => {
-        const container = containerRef.current;
-
-        if (!container) return;
-
-        container.scrollTop =
-          container.scrollHeight;
-
-        scrollFrameRef.current = null;
-      });
-
-    return () => {
-      if (scrollFrameRef.current !== null) {
-        cancelAnimationFrame(
-          scrollFrameRef.current
-        );
-      }
-    };
-  }, [messages.length, isLoading]);
-
-  // Yeni mesaj geldiğinde aşağıya git.
-  // Streaming sırasında her chunk'ta smooth scroll yapma.
-  useEffect(() => {
-    if (!shouldAutoScrollRef.current) {
-      return;
-    }
-
+  function scrollToBottom() {
     const container = containerRef.current;
 
     if (!container) return;
 
-    container.scrollTop =
-      container.scrollHeight;
-  }, [messages.length]);
+    if (!shouldAutoScrollRef.current) {
+      return;
+    }
+
+    if (
+      animationFrameRef.current !== null
+    ) {
+      cancelAnimationFrame(
+        animationFrameRef.current
+      );
+    }
+
+    animationFrameRef.current =
+      requestAnimationFrame(() => {
+        const current =
+          containerRef.current;
+
+        if (!current) return;
+
+        current.scrollTop =
+          current.scrollHeight;
+
+        animationFrameRef.current = null;
+      });
+  }
+
+  //----------------------------------
+  // YENİ MESAJ + STREAMING
+  //----------------------------------
+
+  useEffect(() => {
+    const container = containerRef.current;
+
+    if (!container) return;
+
+    const distanceFromBottom =
+      container.scrollHeight -
+      container.scrollTop -
+      container.clientHeight;
+
+    /*
+     * Kullanıcı zaten aşağıdaysa
+     * otomatik takip devam eder.
+     */
+    if (distanceFromBottom < 300) {
+      shouldAutoScrollRef.current = true;
+    }
+
+    /*
+     * Yeni AI cevabı streaming yaparken
+     * otomatik olarak aşağıyı takip et.
+     */
+    if (isStreaming) {
+      shouldAutoScrollRef.current = true;
+    }
+
+    scrollToBottom();
+  }, [messages, isStreaming]);
+
+  //----------------------------------
+  // CEVAP BİTTİĞİNDE EN ALTA GİT
+  //----------------------------------
+
+  useEffect(() => {
+    if (!isStreaming && messages.length > 0) {
+      shouldAutoScrollRef.current = true;
+
+      const container = containerRef.current;
+
+      if (!container) return;
+
+      requestAnimationFrame(() => {
+        container.scrollTop =
+          container.scrollHeight;
+      });
+    }
+  }, [isStreaming, messages.length]);
+
+  //----------------------------------
+  // KLAVYE SCROLL
+  //----------------------------------
+
+  useEffect(() => {
+    function handleKeyDown(
+      event: KeyboardEvent
+    ) {
+      const container =
+        containerRef.current;
+
+      if (!container) return;
+
+      const activeElement =
+        document.activeElement;
+
+      const tag =
+        activeElement?.tagName;
+
+      /*
+       * Kullanıcı mesaj yazıyorsa
+       * klavyeye müdahale etme.
+       */
+      if (
+        tag === "INPUT" ||
+        tag === "TEXTAREA" ||
+        (activeElement as HTMLElement)
+          ?.isContentEditable
+      ) {
+        return;
+      }
+
+      const amount = 120;
+
+      //----------------------------------
+      // AŞAĞI
+      //----------------------------------
+
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+
+        container.scrollTop += amount;
+      }
+
+      //----------------------------------
+      // YUKARI
+      //----------------------------------
+
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+
+        container.scrollTop -= amount;
+      }
+
+      //----------------------------------
+      // PAGE DOWN
+      //----------------------------------
+
+      if (event.key === "PageDown") {
+        event.preventDefault();
+
+        container.scrollTop +=
+          container.clientHeight * 0.8;
+      }
+
+      //----------------------------------
+      // PAGE UP
+      //----------------------------------
+
+      if (event.key === "PageUp") {
+        event.preventDefault();
+
+        container.scrollTop -=
+          container.clientHeight * 0.8;
+      }
+
+      //----------------------------------
+      // HOME
+      //----------------------------------
+
+      if (event.key === "Home") {
+        event.preventDefault();
+
+        container.scrollTop = 0;
+      }
+
+      //----------------------------------
+      // END
+      //----------------------------------
+
+      if (event.key === "End") {
+        event.preventDefault();
+
+        container.scrollTop =
+          container.scrollHeight;
+      }
+    }
+
+    window.addEventListener(
+      "keydown",
+      handleKeyDown
+    );
+
+    return () => {
+      window.removeEventListener(
+        "keydown",
+        handleKeyDown
+      );
+    };
+  }, []);
+
+  //----------------------------------
+  // TEMİZLE
+  //----------------------------------
+
+  useEffect(() => {
+    return () => {
+      if (
+        animationFrameRef.current !== null
+      ) {
+        cancelAnimationFrame(
+          animationFrameRef.current
+        );
+      }
+    };
+  }, []);
+
+  //----------------------------------
+  // UI
+  //----------------------------------
 
   return (
     <div
       ref={containerRef}
       onScroll={handleScroll}
+      tabIndex={0}
       className="
         min-h-0
         flex-1
@@ -115,6 +292,7 @@ export default function ChatWindow({
         overscroll-contain
         touch-pan-y
         [scrollbar-width:thin]
+        focus:outline-none
       "
     >
       {messages.map((msg, index) => (
@@ -130,7 +308,9 @@ export default function ChatWindow({
         <div className="flex justify-start mt-4">
           <div className="rounded-2xl bg-zinc-800 px-4 py-3 text-white">
             <span className="inline-flex items-center gap-1">
-              <span>QELVORA yazıyor</span>
+              <span>
+                QELVORA yazıyor
+              </span>
 
               <span className="animate-pulse">
                 ...
@@ -140,10 +320,7 @@ export default function ChatWindow({
         </div>
       )}
 
-      <div
-        ref={bottomRef}
-        className="h-px"
-      />
+      <div className="h-4" />
     </div>
   );
 }

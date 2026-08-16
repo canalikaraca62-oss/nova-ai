@@ -35,8 +35,6 @@ export default function ChatDetailPage() {
     const abortControllerRef =
   useRef<AbortController | null>(null);
     const [isStreaming, setIsStreaming] = useState(false);
-    const [sidebarOpen, setSidebarOpen] =
-  useState(false);
 
   useEffect(() => {
     if (chatId) {
@@ -330,14 +328,29 @@ async function sendMessage() {
 
     return;
   }
+
   //----------------------------------
   // NORMAL METİN MESAJI
   // STREAMING
   //----------------------------------
+const { data: memories, error: memoryError } =
+  await supabase
+    .from("memories")
+    .select("content")
+    .eq("user_id", user.id)
+    .order("created_at", {
+      ascending: false,
+    })
+    .limit(20);
 
-  const controller = new AbortController();
+if (memoryError) {
+  console.error("MEMORY YÜKLENEMEDİ:", memoryError);
+}
+  const controller =
+    new AbortController();
 
-  abortControllerRef.current = controller;
+  abortControllerRef.current =
+    controller;
 
   setIsStreaming(true);
   setIsLoading(true);
@@ -355,43 +368,67 @@ async function sendMessage() {
     assistantMessage,
   ]);
 
+let pendingText = "";
+let frameId: number | null = null;
+
+const flushStream = () => {
+  if (!pendingText) {
+    frameId = null;
+    return;
+  }
+
+  const textToAdd = pendingText;
+  pendingText = "";
+
+  setMessages((prev) => {
+    const updated = [...prev];
+
+    const lastIndex = updated.length - 1;
+
+    if (lastIndex < 0) {
+      return prev;
+    }
+
+    updated[lastIndex] = {
+      ...updated[lastIndex],
+      text: updated[lastIndex].text + textToAdd,
+    };
+
+    return updated;
+  });
+
+  frameId = null;
+};
   try {
     await streamChat(
-      updatedMessages.map((m) => ({
-        role:
-          m.sender === "qelvora"
-            ? ("assistant" as const)
-            : ("user" as const),
+  [
+    ...(memories || []).map((memory) => ({
+      role: "system" as const,
+      content: `Kullanıcı hakkında kayıtlı bilgi: ${memory.content}`,
+    })),
 
-        content: m.text,
-      })),
+    ...updatedMessages.map((m) => ({
+      role:
+        m.sender === "qelvora"
+          ? ("assistant" as const)
+          : ("user" as const),
 
-      (chunk) => {
-        fullAssistantText += chunk;
+      content: m.text,
+    })),
+  ],
 
-        setMessages((prev) => {
-          const updated = [...prev];
+  (chunk) => {
+  fullAssistantText += chunk;
+  pendingText += chunk;
 
-          const lastIndex = updated.length - 1;
+  if (frameId === null) {
+    frameId = requestAnimationFrame(flushStream);
+  }
+},
 
-          if (lastIndex < 0) {
-            return prev;
-          }
-
-          updated[lastIndex] = {
-            ...updated[lastIndex],
-
-            text:
-              updated[lastIndex].text +
-              chunk,
-          };
-
-          return updated;
-        });
-      },
-
-      controller.signal
-    );
+  controller.signal
+);
+  
   } catch (error) {
     if (
       error instanceof DOMException &&
@@ -417,10 +454,37 @@ async function sendMessage() {
       ]);
     }
   } finally {
-    setIsLoading(false);
-    setIsStreaming(false);
-    abortControllerRef.current = null;
+  if (frameId !== null) {
+    cancelAnimationFrame(frameId);
+    frameId = null;
   }
+
+  if (pendingText) {
+    const remainingText = pendingText;
+    pendingText = "";
+
+    setMessages((prev) => {
+      const updated = [...prev];
+
+      const lastIndex = updated.length - 1;
+
+      if (lastIndex < 0) {
+        return prev;
+      }
+
+      updated[lastIndex] = {
+        ...updated[lastIndex],
+        text: updated[lastIndex].text + remainingText,
+      };
+
+      return updated;
+    });
+  }
+
+  setIsLoading(false);
+  setIsStreaming(false);
+  abortControllerRef.current = null;
+}
 
   //----------------------------------
   // STREAMING AI MESAJINI KAYDET
@@ -470,52 +534,26 @@ async function sendMessage() {
   setSelectedFile(null);
 }
 return (
-  <div className="flex h-screen w-full overflow-hidden bg-black text-white">
-    <Sidebar
-      open={sidebarOpen}
-      onClose={() => setSidebarOpen(false)}
-    />
+  <div className="flex h-screen min-h-0 overflow-hidden bg-black text-white">
+    <Sidebar />
 
-    <main className="flex-1 min-w-0 min-h-0 flex flex-col p-3 sm:p-5 lg:p-8">
-      {/* MOBILE HEADER */}
-      <header className="flex h-14 shrink-0 items-center border-b border-zinc-800 px-4 md:hidden">
-        <button
-          type="button"
-          onClick={() => setSidebarOpen(true)}
-          className="mr-3 rounded-lg p-2 text-zinc-300 transition hover:bg-zinc-800 hover:text-white"
-          aria-label="Menüyü aç"
-        >
-          <span className="text-xl">☰</span>
-        </button>
-
-        <div>
-          <p className="text-sm font-semibold">
-            QELVORA
-          </p>
-
-          <p className="text-[10px] text-zinc-500">
-            AI Workspace
-          </p>
-        </div>
-      </header>
-
-      {/* DESKTOP TITLE */}
-      <div className="hidden shrink-0 px-8 pb-4 pt-6 md:block lg:px-8">
-        <h1 className="text-3xl font-bold lg:text-4xl">
+    <main className="flex-1 min-h-0 flex flex-col p-8 overflow-hidden">
+      {/* Başlık */}
+      <div className="shrink-0">
+        <h1 className="text-4xl font-bold mb-8">
           QELVORA Chat
         </h1>
       </div>
 
-      {/* CHAT */}
-      <div className="min-h-0 flex-1">
-        <ChatWindow
-          messages={messages}
-          isLoading={isLoading}
-        />
-      </div>
+      {/* Sadece mesaj alanı scroll olacak */}
+    <ChatWindow
+  messages={messages}
+  isLoading={isLoading}
+  isStreaming={isStreaming}
+/>
 
-      {/* INPUT */}
-      <div className="shrink-0 px-3 pb-3 pt-2 sm:px-5 sm:pb-5 lg:px-8">
+      {/* Mesaj kutusu her zaman aşağıda kalacak */}
+      <div className="shrink-0 pt-4">
         <ChatInput
           input={input}
           setInput={setInput}
@@ -531,5 +569,5 @@ return (
       </div>
     </main>
   </div>
-  );
+);
 }

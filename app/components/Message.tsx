@@ -3,10 +3,6 @@
 import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import {
-  Prism as SyntaxHighlighter,
-} from "react-syntax-highlighter";
-import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 
 type Attachment = {
   name: string;
@@ -287,96 +283,78 @@ export default function Message({
                 },
 
                 code({
-                  className,
-                  children,
-                  ...props
-                }) {
-                  const match =
-                    /language-(\w+)/.exec(
-                      className || ""
-                    );
+  className,
+  children,
+  ...props
+}) {
+  const match =
+    /language-(\w+)/.exec(
+      className || ""
+    );
 
-                  if (match) {
-                    const language =
-                      match[1];
+  const code = String(children)
+    .replace(/\n$/, "");
 
-                    const code = String(
-                      children
-                    ).replace(/\n$/, "");
+  if (match) {
+    const language = match[1];
 
-                    return (
-                      <div className="my-5 min-w-0 overflow-hidden rounded-xl border border-white/10 bg-[#0d1117]">
-                        <div className="flex items-center justify-between gap-3 border-b border-white/10 bg-white/[0.035] px-3 py-2">
-                          <div className="flex min-w-0 items-center gap-2">
-                            <span className="h-2 w-2 shrink-0 rounded-full bg-zinc-600" />
+    return (
+      <div className="my-5 min-w-0 overflow-hidden rounded-xl border border-white/10 bg-[#0d1117]">
+        <div className="flex items-center justify-between gap-3 border-b border-white/10 bg-white/[0.035] px-3 py-2">
+          <span className="truncate text-[11px] font-medium uppercase tracking-wider text-zinc-500">
+            {language}
+          </span>
 
-                            <span className="truncate text-[11px] font-medium uppercase tracking-wider text-zinc-500">
-                              {language}
-                            </span>
-                          </div>
+          <button
+            type="button"
+            onClick={async () => {
+              try {
+                await navigator.clipboard.writeText(
+                  code
+                );
+              } catch (error) {
+                console.error(
+                  "Kod kopyalama hatası:",
+                  error
+                );
+              }
+            }}
+            className="shrink-0 rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-1.5 text-[11px] text-zinc-400 transition hover:bg-white/[0.08] hover:text-white"
+          >
+            Kopyala
+          </button>
+        </div>
 
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              try {
-                                await navigator.clipboard.writeText(
-                                  code
-                                );
-                              } catch (error) {
-                                console.error(
-                                  "Kod kopyalama hatası:",
-                                  error
-                                );
-                              }
-                            }}
-                            className="shrink-0 rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-1.5 text-[11px] text-zinc-400 transition hover:bg-white/[0.08] hover:text-white"
-                          >
-                            Kopyala
-                          </button>
-                        </div>
+        <pre
+          className="max-w-full overflow-x-auto p-4 text-[13px] leading-7 text-zinc-200"
+          {...props}
+        >
+          <code>{code}</code>
+        </pre>
+      </div>
+    );
+  }
 
-                        <div className="max-w-full overflow-x-auto">
-                          <SyntaxHighlighter
-                            style={oneDark}
-                            language={language}
-                            PreTag="div"
-                            customStyle={{
-                              margin: 0,
-                              padding: "16px",
-                              minWidth: "max-content",
-                              fontSize: "13px",
-                              lineHeight: "1.7",
-                              background:
-                                "transparent",
-                            }}
-                          >
-                            {code}
-                          </SyntaxHighlighter>
-                        </div>
-                      </div>
-                    );
-                  }
-
-                  return (
-                    <code
-                      className="
-                        break-words
-                        rounded-md
-                        border
-                        border-white/10
-                        bg-black/20
-                        px-1.5
-                        py-0.5
-                        font-mono
-                        text-[0.9em]
-                        text-zinc-200
-                      "
-                      {...props}
-                    >
-                      {children}
-                    </code>
-                  );
-                },
+  return (
+    <code
+      className="
+        break-words
+        rounded-md
+        border
+        border-white/10
+        bg-black/20
+        px-1.5
+        py-0.5
+        font-mono
+        text-[0.9em]
+        text-zinc-200
+      "
+      {...props}
+    >
+      {children}
+    </code>
+  );
+},
               }}
             >
               {text}
