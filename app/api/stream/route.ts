@@ -470,6 +470,8 @@ Kullanıcının cümlesini gereksiz yere uzun şekilde kopyalama.
 
           stream: true,
 
+          max_tokens: 8000,
+
           temperature: 0.7,
 
           messages: [
@@ -483,7 +485,10 @@ Kurallar:
 
 - Türkçe konuş.
 - Profesyonel ol.
-- Gereksiz uzun cevap verme.
+- Kullanıcının istediği uzunluğa uy.
+- Kullanıcı belirli bir kelime sayısı istiyorsa mümkün olduğunca o uzunluğa yaklaş.
+- Kullanıcı uzun ve detaylı bir cevap istiyorsa cevabı gereksiz yere kısaltma.
+- Kullanıcı açıkça belirli sayıda bölüm istiyorsa tüm bölümleri tamamla.
 - Yazılım konusunda uzmansın.
 - Konuşmanın tamamını dikkate al.
 
