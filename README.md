@@ -1,36 +1,125 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# QELVORA
 
-## Getting Started
+> The intelligent workspace for the future.
 
-First, run the development server:
+QELVORA is an AI-powered workspace designed to bring intelligent conversations, persistent memory, document interaction, coding assistance, and AI tools together in one unified environment.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+The project focuses on creating a clean and modern AI workspace where users can have conversations, manage chats, interact with AI-generated content, and build a more personalized experience through persistent memory.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+---
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## ✨ Features
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### 💬 AI Chat
 
-## Learn More
+Interact with advanced AI models through a modern chat interface.
 
-To learn more about Next.js, take a look at the following resources:
+Features include:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- Real-time streaming responses
+- Conversation history
+- Multiple chat sessions
+- Persistent messages
+- Markdown rendering
+- GitHub Flavored Markdown support
+- Syntax highlighting for code blocks
+- Long-form AI responses
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+---
 
-## Deploy on Vercel
+### 🧠 Persistent Memory
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+QELVORA can store useful long-term information about a user to create more personalized conversations.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Examples include:
+
+- Name
+- Location
+- Education
+- Career goals
+- Long-term plans
+- Interests
+- Preferences
+- Hobbies
+- Explicitly requested memories
+
+The memory system analyzes user messages and avoids storing temporary or sensitive information such as passwords, API keys, authentication tokens, banking information, or security codes.
+
+Users can enable or disable memory through their settings.
+
+---
+
+### 📄 Document Intelligence
+
+The application includes document-related functionality and dependencies for working with multiple file formats.
+
+Supported processing capabilities include:
+
+- PDF
+- DOCX
+- PPTX
+
+Users can upload files and interact with document content inside the workspace.
+
+---
+
+### 💻 AI Coding Experience
+
+QELVORA supports technical conversations and code-focused workflows.
+
+The interface includes:
+
+- Markdown rendering
+- Code block rendering
+- Syntax highlighting
+- Technical AI assistance
+
+---
+
+### ⚡ Streaming Responses
+
+AI responses are streamed in real time.
+
+The application uses a streaming API route to send generated content to the client progressively instead of waiting for the complete response.
+
+---
+
+### 🔐 Authentication
+
+Authentication is handled with Supabase.
+
+The application validates the authenticated user before processing protected AI requests.
+
+User-specific data such as chats, messages, memories, and settings are separated through user IDs.
+
+---
+
+## 🏗️ Architecture
+
+The application is built using a modern full-stack architecture.
+
+```text
+┌─────────────────────┐
+│      Next.js App    │
+│                     │
+│  React + TypeScript │
+└──────────┬──────────┘
+           │
+           ▼
+┌─────────────────────┐
+│     API Routes      │
+│                     │
+│ /api/chat           │
+│ /api/stream         │
+└──────────┬──────────┘
+           │
+           ├──────────────────► Groq AI API
+           │
+           ▼
+┌─────────────────────┐
+│      Supabase       │
+│                     │
+│ Authentication      │
+│ Database            │
+│ Row Level Security  │
+└─────────────────────┘
