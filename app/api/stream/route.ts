@@ -192,7 +192,7 @@ export async function POST(req: NextRequest) {
 
             body: JSON.stringify({
               model:
-                "llama-3.3-70b-versatile",
+                "openai/gpt-oss-20b",
 
               temperature: 0,
 
@@ -466,11 +466,11 @@ Kullanıcının cümlesini gereksiz yere uzun şekilde kopyalama.
 
         body: JSON.stringify({
           model:
-            "llama-3.3-70b-versatile",
+            "openai/gpt-oss-20b",
 
           stream: true,
 
-          max_tokens: 8000,
+          max_tokens: 4096,
 
           temperature: 0.7,
 

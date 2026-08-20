@@ -15,7 +15,7 @@ const GROQ_API_URL =
 
 const MODEL =
   process.env.GROQ_MODEL ||
-  "llama-3.3-70b-versatile";
+  "openai/gpt-oss-20b";
 
 const ACTION_TYPES: ActionType[] = [
   "none",

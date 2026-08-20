@@ -10,7 +10,7 @@ const GROQ_API_URL =
 
 const DEFAULT_MODEL =
   process.env.GROQ_MODEL ||
-  "llama-3.3-70b-versatile";
+  "openai/gpt-oss-20b";
 
 const MAX_MEMORIES = 20;
 
@@ -73,8 +73,13 @@ async function callGroq(
 
   const data = await response.json();
 
-  const content =
-    data?.choices?.[0]?.message?.content;
+console.log(
+  "GROQ RESPONSE:",
+  JSON.stringify(data, null, 2)
+);
+
+const content =
+  data?.choices?.[0]?.message?.content;
 
   if (
     typeof content !== "string" ||
@@ -229,38 +234,42 @@ ${memoryContext
   );
 }
 
-export async function generateChatTitle(
+ export async function generateChatTitle(
   firstMessage: string
 ) {
-  const cleanMessage =
-    firstMessage.trim();
+  const cleanMessage = firstMessage.trim();
 
   if (!cleanMessage) {
     return "Yeni Sohbet";
   }
 
-  const title =
-    await callGroq(
+  // Çok kısa selamlaşmalarda AI çağırmaya gerek yok
+  const shortGreetings = [
+    "merhaba",
+    "selam",
+    "hey",
+    "sa",
+    "slm",
+    "günaydın",
+    "iyi akşamlar",
+  ];
+
+  if (
+    shortGreetings.includes(
+      cleanMessage.toLocaleLowerCase("tr-TR")
+    )
+  ) {
+    return "Yeni Sohbet";
+  }
+
+  try {
+    const title = await callGroq(
       [
         {
           role: "system",
-
-          content: `
-Sen QELVORA için profesyonel sohbet başlıkları üreten bir asistansın.
-
-Kurallar:
-
-- En fazla 5 kelime.
-- Türkçe yaz.
-- Sadece başlığı döndür.
-- Tırnak kullanma.
-- Nokta kullanma.
-- Emoji kullanma.
-- Gereksiz kelimeler kullanma.
-- Kullanıcının asıl konusunu mümkün olduğunca doğru özetle.
-`.trim(),
+          content:
+            "En fazla 5 kelimelik kısa bir Türkçe sohbet başlığı yaz. Sadece başlığı yaz. Açıklama, düşünme veya başka metin ekleme.",
         },
-
         {
           role: "user",
           content: cleanMessage,
@@ -268,15 +277,26 @@ Kurallar:
       ],
       {
         temperature: 0.2,
-        maxTokens: 30,
+        maxTokens: 500,
       }
     );
 
-  return title
-    .replace(/^["']|["']$/g, "")
-    .replace(/[.!?]+$/g, "")
-    .trim()
-    .split(/\s+/)
-    .slice(0, 5)
-    .join(" ");
+    const cleanedTitle = title
+      .replace(/^["']|["']$/g, "")
+      .replace(/[.!?]+$/g, "")
+      .trim()
+      .split(/\s+/)
+      .slice(0, 5)
+      .join(" ");
+
+    return cleanedTitle || "Yeni Sohbet";
+  } catch (error) {
+    console.error(
+      "CHAT TITLE HATASI:",
+      error
+    );
+
+    // Başlık oluşturulamazsa sohbeti bozma
+    return "Yeni Sohbet";
+  }
 }
