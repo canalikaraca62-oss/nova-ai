@@ -714,7 +714,7 @@ export default function ChatDetailPage() {
   }
 
   return (
-    <div className="flex h-screen min-h-0 overflow-hidden bg-black text-white">
+    <div className="fixed inset-0 flex min-h-0 overflow-hidden bg-black text-white">
 
       {/* SIDEBAR */}
       <Sidebar
