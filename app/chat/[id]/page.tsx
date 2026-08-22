@@ -21,7 +21,7 @@ type Attachment = {
 } | null;
 
 type ChatMessage = {
-  sender: "user" | "qelvora";
+  sender: "user" | "syraven";
   text: string;
   attachment?: Attachment;
 };
@@ -148,7 +148,7 @@ export default function ChatDetailPage() {
         return {
           sender:
             msg.role === "assistant"
-              ? ("qelvora" as const)
+              ? ("syraven" as const)
               : ("user" as const),
 
           text: msg.content || "",
@@ -328,7 +328,7 @@ export default function ChatDetailPage() {
                     (m) => ({
                       role:
                         m.sender ===
-                        "qelvora"
+                        "syraven"
                           ? "assistant"
                           : "user",
 
@@ -354,7 +354,7 @@ export default function ChatDetailPage() {
 
         const assistantMessage = {
           sender:
-            "qelvora" as const,
+            "syraven" as const,
 
           text: data.reply,
 
@@ -422,7 +422,7 @@ export default function ChatDetailPage() {
         setMessages((prev) => [
           ...prev,
           {
-            sender: "qelvora",
+            sender: "syraven",
 
             text:
               "Dosya işlenirken bir hata oluştu. Lütfen tekrar deneyin.",
@@ -481,7 +481,7 @@ export default function ChatDetailPage() {
 
     const assistantMessage = {
       sender:
-        "qelvora" as const,
+        "syraven" as const,
 
       text: "",
 
@@ -553,7 +553,7 @@ export default function ChatDetailPage() {
             (m) => ({
               role:
                 m.sender ===
-                "qelvora"
+                "syraven"
                   ? ("assistant" as const)
                   : ("user" as const),
 
@@ -587,7 +587,7 @@ export default function ChatDetailPage() {
         error.name === "AbortError"
       ) {
         console.log(
-          "QELVORA üretimi kullanıcı tarafından durduruldu."
+          " SYRAVEN üretimi kullanıcı tarafından durduruldu."
         );
       } else {
         console.error(
@@ -598,7 +598,7 @@ export default function ChatDetailPage() {
         setMessages((prev) => [
           ...prev,
           {
-            sender: "qelvora",
+            sender: "syraven",
 
             text:
               "Üzgünüm, cevap oluşturulurken bir hata oluştu. Lütfen tekrar deneyin.",
@@ -740,14 +740,14 @@ export default function ChatDetailPage() {
           </button>
 
           <h1 className="text-lg font-bold text-white">
-            QELVORA Chat
+             SYRAVEN Chat
           </h1>
         </div>
 
         {/* DESKTOP BAŞLIK */}
         <div className="hidden shrink-0 p-8 md:block">
           <h1 className="text-4xl font-bold">
-            QELVORA Chat
+            SYRAVEN Chat
           </h1>
         </div>
 

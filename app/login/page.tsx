@@ -89,7 +89,7 @@ export default function LoginPage() {
             href="/"
             className="text-2xl sm:text-3xl font-bold tracking-[0.2em]"
           >
-            QELVORA
+            SYRAVEN
           </a>
 
           <p className="text-zinc-500 text-sm mt-2">
@@ -106,7 +106,7 @@ export default function LoginPage() {
             </h1>
 
             <p className="text-zinc-400 text-sm mt-2">
-              QELVORA hesabına giriş yap.
+              SYRAVEN hesabına giriş yap.
             </p>
           </div>
 
@@ -190,7 +190,7 @@ export default function LoginPage() {
         </div>
 
         <p className="text-center text-xs text-zinc-600 mt-5">
-          QELVORA ile daha akıllı çalış.
+          SYRAVEN ile daha akıllı çalış.
         </p>
 
       </div>

@@ -1,8 +1,8 @@
-# QELVORA
+# SYRAVEN
 
 > The intelligent workspace for the future.
 
-QELVORA is an AI-powered workspace designed to bring intelligent conversations, persistent memory, document interaction, coding assistance, and AI tools together in one unified environment.
+SYRAVEN is an AI-powered workspace designed to bring intelligent conversations, persistent memory, document interaction, coding assistance, and AI tools together in one unified environment.
 
 The project focuses on creating a clean and modern AI workspace where users can have conversations, manage chats, interact with AI-generated content, and build a more personalized experience through persistent memory.
 
@@ -29,7 +29,7 @@ Features include:
 
 ### 🧠 Persistent Memory
 
-QELVORA can store useful long-term information about a user to create more personalized conversations.
+SYRAVEN can store useful long-term information about a user to create more personalized conversations.
 
 Examples include:
 
@@ -65,7 +65,7 @@ Users can upload files and interact with document content inside the workspace.
 
 ### 💻 AI Coding Experience
 
-QELVORA supports technical conversations and code-focused workflows.
+SYRAVEN supports technical conversations and code-focused workflows.
 
 The interface includes:
 

@@ -13,7 +13,7 @@ export async function GET() {
         messages: [
           {
             role: "user",
-            content: "Sadece 'Merhaba QELVORA' yaz.",
+            content: "Sadece 'Merhaba SYRAVEN' yaz.",
           },
         ],
       });

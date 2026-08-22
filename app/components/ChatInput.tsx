@@ -63,7 +63,7 @@ export default function ChatInput({
             setInput(event.target.value)
           }
           onKeyDown={handleKeyDown}
-          placeholder="QELVORA'ya bir şey sor..."
+          placeholder="SYRAVEN'ya bir şey sor..."
           disabled={isStreaming}
           rows={2}
           className="block w-full min-w-0 resize-none rounded-xl bg-transparent px-3 py-2.5 sm:px-4 sm:py-3 text-sm sm:text-base text-white placeholder:text-zinc-500 outline-none disabled:opacity-50"

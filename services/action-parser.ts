@@ -159,7 +159,7 @@ export async function parseAction(
               role: "system",
 
               content: `
-Sen QELVORA'nın ACTION ANALYZER sistemisin.
+Sen SYRAVEN'nın ACTION ANALYZER sistemisin.
 
 Görevin kullanıcının mesajının bir işlem
 yapılmasını isteyip istemediğini belirlemektir.

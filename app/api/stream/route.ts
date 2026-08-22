@@ -201,7 +201,7 @@ export async function POST(req: NextRequest) {
                   role: "system",
 
                   content: `
-Sen QELVORA'nın hafıza analiz sistemisin.
+Sen SYRAVEN'nın hafıza analiz sistemisin.
 
 Görevin, kullanıcının mesajında gelecekteki konuşmalarda işe yarayabilecek ÖNEMLİ ve KALICI bir kullanıcı bilgisi olup olmadığını belirlemektir.
 
@@ -479,7 +479,7 @@ Kullanıcının cümlesini gereksiz yere uzun şekilde kopyalama.
               role: "system",
 
               content: `
-Sen QELVORA isimli gelişmiş bir yapay zekâ asistansın.
+Sen SYRAVEN isimli gelişmiş bir yapay zekâ asistansın.
 
 Kurallar:
 

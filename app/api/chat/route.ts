@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 import {
-  askQelvora,
+  askSyraven,
   generateChatTitle,
 } from "@/services/ai.server";
 
@@ -188,7 +188,7 @@ async function analyzeMemory(
             role: "system",
 
             content: `
-Sen QELVORA'nın gelişmiş hafıza yöneticisisin.
+Sen SYRAVEN'in gelişmiş hafıza yöneticisisin.
 
 Görevin:
 Kullanıcının mesajını incele ve gelecekte yardımcı olacak kalıcı bir bilgi olup olmadığını belirle.
@@ -406,7 +406,7 @@ async function extractAndSaveMemory(
       }
 
       console.log(
-        "🧠 QELVORA MEMORY GÜNCELLEDİ:",
+        "🧠 SYRAVEN MEMORY GÜNCELLEDİ:",
         cleanMemory
       );
 
@@ -473,7 +473,7 @@ if (searchError) {
 
 if (existingMemory) {
   console.log(
-    "🧠 QELVORA: Bu bilgi zaten hafızada."
+    "🧠 SYRAVEN: Bu bilgi zaten hafızada."
   );
 
   return;
@@ -497,12 +497,12 @@ if (error) {
 }
 
 console.log(
-  "🧠 QELVORA MEMORY KAYDETTİ:",
+  "🧠 SYRAVEN MEMORY KAYDETTİ:",
   memory
 );
 
       console.log(
-        "🧠 QELVORA MEMORY KAYDETTİ:",
+        "🧠 SYRAVEN MEMORY KAYDETTİ:",
         cleanMemory
       );
     }
@@ -717,7 +717,7 @@ Kurallar:
     //------------------------------------
 
    const reply =
-  await askQelvora(
+  await askSyraven(
     messages,
     userId ?? undefined
   );
@@ -732,7 +732,7 @@ if (userId && userMessage) {
 
     if (action) {
       console.log(
-        "⚡ QELVORA ACTION:",
+        "⚡ SYRAVEN ACTION:",
         action
       );
     }

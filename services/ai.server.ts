@@ -94,7 +94,7 @@ const content =
 }
 
 /**
- * Kullanıcının QELVORA hafızalarını getirir.
+ * Kullanıcının SYRAVEN hafızalarını getirir.
  */
 async function getUserMemories(
   userId?: string
@@ -160,7 +160,7 @@ function buildMemoryContext(
 KULLANICI HAFIZASI
 
 Aşağıdaki bilgiler kullanıcının daha önce
-QELVORA ile paylaştığı ve gelecekte yardımcı
+SYRAVEN ile paylaştığı ve gelecekte yardımcı
 olabilecek bilgileridir.
 
 ${memoryText}
@@ -176,7 +176,7 @@ Hafıza kullanım kuralları:
 `.trim();
 }
 
-export async function askQelvora(
+export async function askSyraven(
   messages: ChatMessage[],
   userId?: string
 ) {
@@ -187,7 +187,7 @@ export async function askQelvora(
     buildMemoryContext(memories);
 
   const systemPrompt = `
-Sen QELVORA isimli gelişmiş bir yapay zekâ asistanısın.
+Sen SYRAVEN isimli gelişmiş bir yapay zekâ asistanısın.
 
 Kimliğin:
 - Profesyonel

@@ -15,7 +15,7 @@ export default function Navbar() {
           </div>
 
           <span className="text-xl font-bold tracking-[0.18em] text-white sm:text-2xl">
-            QELVORA
+            SYRAVEN
           </span>
         </Link>
 

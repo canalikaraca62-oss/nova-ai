@@ -4,7 +4,7 @@ export default function Features() {
       icon: "✦",
       title: "Intelligent AI Chat",
       description:
-        "Ask questions, explore ideas and work through complex tasks with QELVORA in one continuous conversation.",
+        "Ask questions, explore ideas and work through complex tasks with SYRAVEN in one continuous conversation.",
       accent: "from-blue-500/[0.08]",
       preview: (
         <>
@@ -12,7 +12,7 @@ export default function Features() {
             <div className="h-2 w-2 rounded-full bg-emerald-400" />
 
             <span className="text-sm text-zinc-400">
-              QELVORA Intelligence
+              SYRAVEN Intelligence
             </span>
           </div>
 
@@ -52,7 +52,7 @@ export default function Features() {
       icon: "◉",
       title: "Persistent Memory",
       description:
-        "Save important information and preferences so QELVORA can use relevant context across conversations.",
+        "Save important information and preferences so SYRAVEN can use relevant context across conversations.",
       accent: "from-cyan-500/[0.08]",
       preview: (
         <>
@@ -80,7 +80,7 @@ export default function Features() {
       preview: (
         <>
           <div className="flex items-center gap-2 text-sm text-zinc-300">
-            <span>QELVORA is thinking</span>
+            <span>SYRAVEN is thinking</span>
 
             <span className="animate-pulse">
               ...
@@ -175,7 +175,7 @@ export default function Features() {
           </h2>
 
           <p className="mt-6 text-base leading-7 text-zinc-400 sm:text-lg sm:leading-8">
-            QELVORA brings intelligent conversations, files,
+            SYRAVEN brings intelligent conversations, files,
             memory and your conversation history together
             in one seamless workspace.
           </p>

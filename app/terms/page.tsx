@@ -9,7 +9,7 @@ export default function TermsPage() {
           href="/"
           className="inline-flex items-center text-sm text-zinc-500 transition hover:text-white"
         >
-          ← Back to QELVORA
+          ← Back to SYRAVEN
         </Link>
 
         {/* Header */}
@@ -35,7 +35,7 @@ export default function TermsPage() {
             </h2>
 
             <p className="mt-4 leading-8">
-              By accessing or using QELVORA, you agree to these Terms of
+              By accessing or using SYRAVEN, you agree to these Terms of
               Service. If you do not agree with these terms, you should not
               use the platform.
             </p>
@@ -47,7 +47,7 @@ export default function TermsPage() {
             </h2>
 
             <p className="mt-4 leading-8">
-              QELVORA provides artificial intelligence tools, conversations,
+              SYRAVEN provides artificial intelligence tools, conversations,
               document processing, memory, and related features. You agree
               to use the platform responsibly and in accordance with
               applicable laws.
@@ -73,7 +73,7 @@ export default function TermsPage() {
             </h2>
 
             <p className="mt-4 leading-8">
-              QELVORA uses artificial intelligence to generate responses and
+              SYRAVEN uses artificial intelligence to generate responses and
               other content. AI-generated content may be inaccurate,
               incomplete, or unsuitable for your specific situation. You are
               responsible for reviewing and evaluating generated content
@@ -88,7 +88,7 @@ export default function TermsPage() {
 
             <p className="mt-4 leading-8">
               You are responsible for files, documents, messages, and other
-              content that you upload or submit to QELVORA. You should only
+              content that you upload or submit to SYRAVEN. You should only
               upload content that you have the right to use and share.
             </p>
           </section>
@@ -99,7 +99,7 @@ export default function TermsPage() {
             </h2>
 
             <p className="mt-4 leading-8">
-              You may not use QELVORA for unlawful, harmful, fraudulent, or
+              You may not use SYRAVEN for unlawful, harmful, fraudulent, or
               abusive purposes, or attempt to interfere with the security,
               availability, or proper operation of the platform.
             </p>
@@ -111,7 +111,7 @@ export default function TermsPage() {
             </h2>
 
             <p className="mt-4 leading-8">
-              We aim to provide a reliable service, but QELVORA may
+              We aim to provide a reliable service, but SYRAVEN may
               occasionally be unavailable due to maintenance, technical
               issues, updates, or circumstances outside our control.
             </p>
@@ -123,7 +123,7 @@ export default function TermsPage() {
             </h2>
 
             <p className="mt-4 leading-8">
-              QELVORA may modify, improve, suspend, or discontinue parts of
+              SYRAVEN may modify, improve, suspend, or discontinue parts of
               the platform at any time as the product continues to evolve.
             </p>
           </section>
@@ -134,7 +134,7 @@ export default function TermsPage() {
             </h2>
 
             <p className="mt-4 leading-8">
-              To the extent permitted by applicable law, QELVORA is provided
+              To the extent permitted by applicable law, SYRAVEN is provided
               on an “as is” and “as available” basis. We do not guarantee
               that the service will always be uninterrupted, error-free, or
               suitable for every purpose.
@@ -162,10 +162,10 @@ export default function TermsPage() {
               If you have questions about these Terms of Service, please
               contact us at{" "}
               <a
-                href="mailto:support@qelvora.com"
+                href="mailto:support@syraven.com"
                 className="text-white underline decoration-white/30 underline-offset-4 transition hover:decoration-white"
               >
-                support@qelvora.com
+                support@syraven.com
               </a>
               .
             </p>
@@ -175,7 +175,7 @@ export default function TermsPage() {
         {/* Bottom */}
         <div className="border-t border-white/10 py-8">
           <p className="text-sm text-zinc-600">
-            © {new Date().getFullYear()} QELVORA. All rights reserved.
+            © {new Date().getFullYear()} SYRAVEN. All rights reserved.
           </p>
         </div>
       </div>

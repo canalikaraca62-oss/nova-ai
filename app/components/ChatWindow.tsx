@@ -10,7 +10,7 @@ type Attachment = {
 };
 
 type MessageType = {
-  sender: "user" | "qelvora";
+  sender: "user" | "syraven";
   text: string;
   attachment?: Attachment | null;
 };
@@ -187,7 +187,7 @@ export default function ChatWindow({
             <div className="rounded-2xl bg-zinc-800 px-4 py-3 text-white">
               <span className="inline-flex items-center gap-1">
                 <span>
-                  QELVORA yazıyor
+                  SYRAVEN yazıyor
                 </span>
 
                 <span className="animate-pulse">

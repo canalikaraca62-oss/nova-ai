@@ -14,7 +14,7 @@ export async function readPptx(
 
   const tempPath = path.join(
     os.tmpdir(),
-    `qelvora-${Date.now()}.pptx`
+    `syraven-${Date.now()}.pptx`
   );
 
   try {

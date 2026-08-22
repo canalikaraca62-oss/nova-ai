@@ -9,7 +9,7 @@ export default function PrivacyPage() {
           href="/"
           className="inline-flex items-center text-sm text-zinc-500 transition hover:text-white"
         >
-          ← Back to QELVORA
+          ← Back to SYRAVEN
         </Link>
 
         {/* Header */}
@@ -35,9 +35,9 @@ export default function PrivacyPage() {
             </h2>
 
             <p className="mt-4 leading-8">
-              QELVORA respects your privacy. This Privacy Policy explains
+              SYRAVEN respects your privacy. This Privacy Policy explains
               how we collect, use, and protect information when you use
-              the QELVORA platform.
+              the SYRAVEN platform.
             </p>
           </section>
 
@@ -48,7 +48,7 @@ export default function PrivacyPage() {
 
             <p className="mt-4 leading-8">
               We may collect information you provide directly when using
-              QELVORA, including account information, conversations,
+              SYRAVEN, including account information, conversations,
               uploaded files, and information you choose to save or share
               through the platform.
             </p>
@@ -60,7 +60,7 @@ export default function PrivacyPage() {
             </h2>
 
             <p className="mt-4 leading-8">
-              Information is used to provide and improve QELVORA, operate
+              Information is used to provide and improve SYRAVEN, operate
               your account, process conversations and files, maintain
               relevant context, and improve the functionality and security
               of the platform.
@@ -73,7 +73,7 @@ export default function PrivacyPage() {
             </h2>
 
             <p className="mt-4 leading-8">
-              Messages and content submitted to QELVORA may be processed
+              Messages and content submitted to SYRAVEN may be processed
               by artificial intelligence services in order to generate
               responses and provide requested functionality.
             </p>
@@ -85,7 +85,7 @@ export default function PrivacyPage() {
             </h2>
 
             <p className="mt-4 leading-8">
-              Files uploaded to QELVORA may be stored and processed in
+              Files uploaded to SYRAVEN may be stored and processed in
               order to provide document analysis and other requested
               features. Please avoid uploading sensitive information unless
               necessary.
@@ -98,7 +98,7 @@ export default function PrivacyPage() {
             </h2>
 
             <p className="mt-4 leading-8">
-              QELVORA may store information that you choose to save or that
+              SYRAVEN may store information that you choose to save or that
               is used to provide persistent context and personalized
               experiences. You may be able to manage or remove saved
               information through the platform.
@@ -112,7 +112,7 @@ export default function PrivacyPage() {
 
             <p className="mt-4 leading-8">
               We take reasonable measures to protect information stored
-              within QELVORA. However, no method of transmission or storage
+              within SYRAVEN. However, no method of transmission or storage
               can be guaranteed to be completely secure.
             </p>
           </section>
@@ -123,7 +123,7 @@ export default function PrivacyPage() {
             </h2>
 
             <p className="mt-4 leading-8">
-              QELVORA may rely on third-party infrastructure, authentication,
+             SYRAVEN may rely on third-party infrastructure, authentication,
               storage, hosting, and artificial intelligence providers to
               operate the platform.
             </p>
@@ -150,10 +150,10 @@ export default function PrivacyPage() {
               If you have questions about this Privacy Policy, please contact
               us at{" "}
               <a
-                href="mailto:support@qelvora.com"
+                href="mailto:support@syraven.com"
                 className="text-white underline decoration-white/30 underline-offset-4 transition hover:decoration-white"
               >
-                support@qelvora.com
+                support@syraven.com
               </a>
               .
             </p>
@@ -163,7 +163,7 @@ export default function PrivacyPage() {
         {/* Bottom */}
         <div className="border-t border-white/10 py-8">
           <p className="text-sm text-zinc-600">
-            © {new Date().getFullYear()} QELVORA. All rights reserved.
+            © {new Date().getFullYear()} SYRAVEN. All rights reserved.
           </p>
         </div>
       </div>

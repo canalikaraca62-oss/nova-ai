@@ -133,7 +133,7 @@ export default function MemoryPage() {
             </h1>
 
             <p className="text-zinc-400 mt-2">
-              QELVORA'nın senin hakkında kaydettiği bilgiler.
+              SYRAVEN'in senin hakkında kaydettiği bilgiler.
             </p>
           </div>
 

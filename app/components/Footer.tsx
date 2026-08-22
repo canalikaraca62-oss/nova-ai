@@ -15,7 +15,7 @@ export default function Footer() {
               href="/"
               className="text-2xl font-bold tracking-widest"
             >
-              QELVORA
+              SYRAVEN
             </Link>
 
             <p className="mt-5 text-sm leading-7 text-zinc-500">
@@ -26,7 +26,7 @@ export default function Footer() {
             <div className="mt-6 flex items-center gap-2 text-xs text-zinc-600">
               <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.8)]" />
 
-              <span>QELVORA is online</span>
+              <span>SYRAVEN is online</span>
             </div>
           </div>
 
@@ -89,7 +89,7 @@ export default function Footer() {
               </Link>
 
               <Link
-                href="mailto:support@qelvora.com"
+                href="mailto:support@syraven.com"
                 className="text-zinc-500 transition hover:text-white"
               >
                 Contact
@@ -127,7 +127,7 @@ export default function Footer() {
         {/* Bottom */}
         <div className="flex flex-col gap-4 text-xs text-zinc-600 sm:flex-row sm:items-center sm:justify-between">
           <p>
-            © {new Date().getFullYear()} QELVORA. All rights reserved.
+            © {new Date().getFullYear()} SYRAVEN. All rights reserved.
           </p>
 
           <p>

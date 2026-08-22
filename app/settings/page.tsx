@@ -240,7 +240,7 @@ export default function SettingsPage() {
             </h2>
 
             <p className="text-sm text-zinc-400 mb-5">
-              QELVORA'nın senin hakkında önemli
+              SYRAVEN'nın senin hakkında önemli
               bilgileri hatırlamasına izin ver.
             </p>
 
@@ -253,8 +253,8 @@ export default function SettingsPage() {
 
                 <p className="text-sm text-zinc-400 mt-1">
                   {memoryEnabled
-                    ? "QELVORA önemli bilgileri hatırlayabilir."
-                    : "QELVORA yeni hafıza bilgileri kaydetmez ve mevcut hafızayı kullanmaz."}
+                    ? "SYRAVEN önemli bilgileri hatırlayabilir."
+                    : "SYRAVEN yeni hafıza bilgileri kaydetmez ve mevcut hafızayı kullanmaz."}
                 </p>
               </div>
 
@@ -360,7 +360,7 @@ export default function SettingsPage() {
             </h2>
 
             <p className="text-sm text-zinc-400 mb-4">
-              QELVORA hesabınızdan çıkış yapın.
+              SYRAVEN hesabınızdan çıkış yapın.
             </p>
 
             <button

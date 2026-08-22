@@ -11,7 +11,7 @@ type Attachment = {
 };
 
 type MessageProps = {
-  sender: "user" | "qelvora";
+  sender: "user" | "syraven";
   text: string;
   attachment?: Attachment | null;
 };
@@ -80,7 +80,7 @@ export default function Message({
             {isUser ? "U" : "✦"}
           </span>
 
-          <span>{isUser ? "Sen" : "QELVORA"}</span>
+          <span>{isUser ? "Sen" : " SYRAVEN"}</span>
         </div>
 
         {/* ATTACHMENT */}

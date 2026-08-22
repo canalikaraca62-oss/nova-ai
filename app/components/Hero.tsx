@@ -44,7 +44,7 @@ export default function Hero() {
 
         {/* Description */}
         <p className="mt-6 w-full max-w-2xl px-2 text-sm leading-6 text-zinc-400 sm:mt-8 sm:text-lg sm:leading-7">
-          QELVORA brings AI chat, document intelligence, persistent memory,
+          SYRAVEN brings AI chat, document intelligence, persistent memory,
           coding and powerful AI tools into one elegant workspace.
         </p>
 
@@ -65,7 +65,7 @@ export default function Hero() {
             href="#features"
             className="inline-flex w-full items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] px-7 py-3.5 text-sm font-semibold text-white backdrop-blur-xl transition duration-300 hover:border-white/20 hover:bg-white/[0.07] sm:w-auto"
           >
-            Explore QELVORA
+            Explore SYRAVEN
           </a>
         </div>
 
@@ -90,7 +90,7 @@ export default function Hero() {
               </div>
 
               <div className="mx-auto max-w-[150px] truncate rounded-md border border-white/5 bg-white/[0.03] px-4 py-1 text-[8px] text-zinc-600 sm:max-w-none sm:px-20 sm:text-[10px]">
-                app.qelvora.ai
+                app.syraven.ai
               </div>
             </div>
 
@@ -99,7 +99,7 @@ export default function Hero() {
               {/* Sidebar */}
               <div className="border-r border-white/10 bg-white/[0.015] p-2 sm:p-4">
                 <div className="mb-5 truncate text-[9px] font-bold tracking-[0.18em] sm:mb-8 sm:text-sm">
-                  QELVORA
+                  SYRAVEN
                 </div>
 
                 <div className="space-y-1 text-[8px] sm:space-y-2 sm:text-xs">
@@ -134,7 +134,7 @@ export default function Hero() {
                     </p>
 
                     <p className="mt-0.5 truncate text-[8px] text-zinc-600 sm:text-[11px]">
-                      QELVORA Intelligence
+                      SYRAVEN Intelligence
                     </p>
                   </div>
 
@@ -147,7 +147,7 @@ export default function Hero() {
                   <div className="mx-auto w-full max-w-2xl">
                     <div className="mb-5 sm:mb-8">
                       <p className="text-[8px] uppercase tracking-[0.18em] text-zinc-600 sm:text-xs sm:tracking-[0.2em]">
-                        QELVORA
+                        SYRAVEN
                       </p>
 
                       <h2 className="mt-2 text-base font-medium tracking-tight text-zinc-200 sm:mt-3 sm:text-2xl">

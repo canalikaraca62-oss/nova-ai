@@ -15,18 +15,18 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://qelvora.vercel.app"),
+  metadataBase: new URL("https://syraven.vercel.app"),
 
   title: {
-    default: "QELVORA | AI Workspace",
-    template: "%s | QELVORA",
+    default: "SYRAVEN | AI Workspace",
+    template: "%s | SYRAVEN",
   },
 
   description:
-    "QELVORA is an intelligent AI workspace for conversations, document analysis, persistent memory, coding, and powerful AI tools.",
+    "SYRAVEN is an intelligent AI workspace for conversations, document analysis, persistent memory, coding, and powerful AI tools.",
 
   keywords: [
-    "QELVORA",
+    "SYRAVEN",
     "AI workspace",
     "AI assistant",
     "artificial intelligence",
@@ -38,19 +38,19 @@ export const metadata: Metadata = {
 
   authors: [
     {
-      name: "QELVORA",
+      name: "SYRAVEN",
     },
   ],
 
-  creator: "QELVORA",
+  creator: "SYRAVEN",
 
   openGraph: {
     type: "website",
     locale: "en_US",
-    url: "https://qelvora.vercel.app",
-    siteName: "QELVORA",
+    url: "https://syraven.vercel.app",
+    siteName: "SYRAVEN",
 
-    title: "QELVORA | AI Workspace",
+    title: "SYRAVEN | AI Workspace",
 
     description:
       "One workspace. Limitless intelligence. AI chat, document intelligence, persistent memory, coding and powerful AI tools.",
@@ -59,7 +59,7 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
 
-    title: "QELVORA | AI Workspace",
+    title: "SYRAVEN | AI Workspace",
 
     description:
       "One workspace. Limitless intelligence.",
