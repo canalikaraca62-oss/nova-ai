@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 import {
-  askSyraven,
+askSyraven,
   generateChatTitle,
 } from "@/services/ai.server";
 

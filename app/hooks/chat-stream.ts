@@ -31,8 +31,23 @@ export async function streamChat(
   });
 
   if (!response.ok) {
-    throw new Error("Stream isteği başarısız.");
+  let message = "AI yanıtı alınamadı.";
+
+  try {
+    const errorData = await response.json();
+
+    if (
+      typeof errorData?.error === "string" &&
+      errorData.error.trim()
+    ) {
+      message = errorData.error;
+    }
+  } catch {
+    // JSON olmayan hata cevaplarında varsayılan mesaj kullanılır.
   }
+
+  throw new Error(message);
+}
 
   if (!response.body) {
     throw new Error("Response body bulunamadı.");
@@ -77,8 +92,8 @@ export async function streamChat(
         const data = trimmedLine.slice(6).trim();
 
         if (data === "[DONE]") {
-          continue;
-        }
+  return;
+}
 
         try {
           const json = JSON.parse(data);
