@@ -4,7 +4,13 @@ import {
   NextResponse,
 } from "next/server";
 
-import { createClient } from "@supabase/supabase-js";
+import {
+  createClient,
+} from "@supabase/supabase-js";
+
+// --------------------------------------------------
+// ENV
+// --------------------------------------------------
 
 const supabaseUrl =
   process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -22,6 +28,33 @@ const GROQ_MODEL =
   process.env.GROQ_MODEL ||
   "openai/gpt-oss-20b";
 
+// --------------------------------------------------
+// CONTEXT LIMITS
+// --------------------------------------------------
+
+// Son kaç mesaj AI'a gönderilecek
+const MAX_CHAT_MESSAGES = 10;
+
+// Tek mesaj maksimum karakter
+const MAX_MESSAGE_CHARS = 5000;
+
+// Toplam sohbet context karakter limiti
+const MAX_CONTEXT_CHARS = 16000;
+
+// Hafıza sayısı
+const MAX_MEMORIES = 10;
+
+// Tüm hafıza context limiti
+const MAX_MEMORY_CHARS = 3000;
+
+// Memory analizine gönderilecek
+// kullanıcı mesajı maksimum karakteri
+const MAX_MEMORY_ANALYSIS_CHARS = 4000;
+
+// --------------------------------------------------
+// TYPES
+// --------------------------------------------------
+
 type ChatMessage = {
   role: "system" | "user" | "assistant";
   content: string;
@@ -32,14 +65,21 @@ type MemoryDecision = {
   memory: string;
 };
 
-function createSupabaseClient(token: string) {
-  return createClient<any>(
+// --------------------------------------------------
+// SUPABASE
+// --------------------------------------------------
+
+function createSupabaseClient(
+  token: string
+) {
+  return createClient(
     supabaseUrl,
     supabaseAnonKey,
     {
       global: {
         headers: {
-          Authorization: `Bearer ${token}`,
+          Authorization:
+            `Bearer ${token}`,
         },
       },
 
@@ -51,12 +91,105 @@ function createSupabaseClient(token: string) {
   );
 }
 
-/**
- * Kullanıcının mesajını analiz eder.
- * Kalıcı bilgi varsa hafızaya kaydeder.
- *
- * Bu işlem ana AI cevabını bekletmez.
- */
+// --------------------------------------------------
+// TEXT LIMIT
+// --------------------------------------------------
+
+function truncateText(
+  text: string,
+  maxLength: number,
+  suffix =
+    "\n\n[İçeriğin devamı bağlam sınırı nedeniyle kısaltıldı.]"
+) {
+  if (
+    text.length <= maxLength
+  ) {
+    return text;
+  }
+
+  return (
+    text.slice(
+      0,
+      Math.max(
+        0,
+        maxLength - suffix.length
+      )
+    ) + suffix
+  );
+}
+
+// --------------------------------------------------
+// CHAT CONTEXT LIMIT
+// --------------------------------------------------
+
+function limitMessages(
+  messages: ChatMessage[]
+): ChatMessage[] {
+  const validMessages =
+    messages
+      .filter(
+        (message) =>
+          message &&
+          message.role !== "system" &&
+          typeof message.content ===
+            "string" &&
+          message.content.trim()
+      )
+      .slice(-MAX_CHAT_MESSAGES)
+      .map(
+        (message) => ({
+          role: message.role,
+
+          content: truncateText(
+            message.content.trim(),
+            MAX_MESSAGE_CHARS
+          ),
+        })
+      );
+
+  const result: ChatMessage[] = [];
+
+  let totalChars = 0;
+
+  // En yeni mesajlardan başlayarak
+  // context oluştur.
+  for (
+    let i =
+      validMessages.length - 1;
+    i >= 0;
+    i--
+  ) {
+    const message =
+      validMessages[i];
+
+    const messageLength =
+      message.content.length;
+
+    // Yeni mesaj tek başına çok büyükse
+    // zaten yukarıda truncate edildi.
+    if (
+      totalChars +
+        messageLength >
+      MAX_CONTEXT_CHARS
+    ) {
+      continue;
+    }
+
+    result.unshift(
+      message
+    );
+
+    totalChars +=
+      messageLength;
+  }
+
+  return result;
+}
+
+// --------------------------------------------------
+// MEMORY ANALYSIS
+// --------------------------------------------------
+
 async function analyzeAndSaveMemory({
   supabase,
   userId,
@@ -66,36 +199,44 @@ async function analyzeAndSaveMemory({
   userId: string;
   userText: string;
 }) {
-  const cleanText = userText.trim();
+  const cleanText =
+    truncateText(
+      userText.trim(),
+      MAX_MEMORY_ANALYSIS_CHARS
+    );
 
   if (!cleanText) {
     return;
   }
 
   try {
-    const memoryResponse = await fetch(
-      GROQ_API_URL,
-      {
-        method: "POST",
+    const memoryResponse =
+      await fetch(
+        GROQ_API_URL,
+        {
+          method: "POST",
 
-        headers: {
-          Authorization: `Bearer ${groqApiKey}`,
-          "Content-Type":
-            "application/json",
-        },
+          headers: {
+            Authorization:
+              `Bearer ${groqApiKey}`,
 
-        body: JSON.stringify({
-          model: GROQ_MODEL,
+            "Content-Type":
+              "application/json",
+          },
 
-          temperature: 0,
+          body: JSON.stringify({
+            model: GROQ_MODEL,
 
-          max_tokens: 250,
+            temperature: 0,
 
-          messages: [
-            {
-              role: "system",
+            // Memory için 250 gereksiz.
+            max_tokens: 120,
 
-              content: `
+            messages: [
+              {
+                role: "system",
+
+                content: `
 Sen SYRAVEN'ın hafıza analiz sistemisin.
 
 Görevin, kullanıcının mesajında gelecekteki konuşmalarda işe yarayabilecek önemli ve kalıcı bir bilgi olup olmadığını belirlemektir.
@@ -114,11 +255,10 @@ Kaydedilebilecek bilgiler:
 - Öğrenmek istediği şeyler
 - Hobileri
 - İlgi alanları
-- Sevdiği veya sevmediği şeyler
 - Kalıcı tercihleri
 - Kullanıcının açıkça hatırlanmasını istediği bilgiler
 
-Kaydet:
+Kaydetme:
 
 "KKTC'de yaşıyorum."
 → KAYDET
@@ -177,19 +317,23 @@ veya:
 }
 
 Memory kısa, açık ve üçüncü şahıs şeklinde olmalıdır.
-              `.trim(),
-            },
+                `.trim(),
+              },
 
-            {
-              role: "user",
-              content: cleanText,
-            },
-          ],
-        }),
-      }
-    );
+              {
+                role: "user",
 
-    if (!memoryResponse.ok) {
+                content:
+                  cleanText,
+              },
+            ],
+          }),
+        }
+      );
+
+    if (
+      !memoryResponse.ok
+    ) {
       console.error(
         "MEMORY AI HATASI:",
         await memoryResponse.text()
@@ -202,40 +346,42 @@ Memory kısa, açık ve üçüncü şahıs şeklinde olmalıdır.
       await memoryResponse.json();
 
     const rawContent =
-      memoryData?.choices?.[0]?.message
-        ?.content;
+      memoryData?.choices?.[0]
+        ?.message?.content;
 
     if (
-      typeof rawContent !== "string" ||
+      typeof rawContent !==
+        "string" ||
       !rawContent.trim()
     ) {
       return;
     }
 
-    let cleanedContent =
-      rawContent.trim();
+    const cleanedContent =
+      rawContent
+        .trim()
+        .replace(
+          /^```json/i,
+          ""
+        )
+        .replace(
+          /^```/i,
+          ""
+        )
+        .replace(
+          /```$/i,
+          ""
+        )
+        .trim();
 
-    cleanedContent = cleanedContent
-      .replace(
-        /^```json\s*/i,
-        ""
-      )
-      .replace(
-        /^```\s*/i,
-        ""
-      )
-      .replace(
-        /\s*```$/i,
-        ""
-      )
-      .trim();
-
-    let decision: MemoryDecision;
+    let decision:
+      MemoryDecision;
 
     try {
-      decision = JSON.parse(
-        cleanedContent
-      ) as MemoryDecision;
+      decision =
+        JSON.parse(
+          cleanedContent
+        ) as MemoryDecision;
     } catch {
       console.error(
         "MEMORY JSON PARSE HATASI:",
@@ -247,14 +393,19 @@ Memory kısa, açık ve üçüncü şahıs şeklinde olmalıdır.
 
     if (
       decision.save !== true ||
-      typeof decision.memory !== "string" ||
+      typeof decision.memory !==
+        "string" ||
       !decision.memory.trim()
     ) {
       return;
     }
 
     const memoryContent =
-      decision.memory.trim();
+      truncateText(
+        decision.memory.trim(),
+        300,
+        ""
+      );
 
     const {
       data: existingMemory,
@@ -262,11 +413,19 @@ Memory kısa, açık ve üçüncü şahıs şeklinde olmalıdır.
     } = await supabase
       .from("memories")
       .select("id")
-      .eq("user_id", userId)
-      .eq("content", memoryContent)
+      .eq(
+        "user_id",
+        userId
+      )
+      .eq(
+        "content",
+        memoryContent
+      )
       .maybeSingle();
 
-    if (findMemoryError) {
+    if (
+      findMemoryError
+    ) {
       console.error(
         "MEMORY ARAMA HATASI:",
         findMemoryError
@@ -275,7 +434,9 @@ Memory kısa, açık ve üçüncü şahıs şeklinde olmalıdır.
       return;
     }
 
-    if (existingMemory) {
+    if (
+      existingMemory
+    ) {
       return;
     }
 
@@ -284,16 +445,28 @@ Memory kısa, açık ve üçüncü şahıs şeklinde olmalıdır.
     } = await supabase
       .from("memories")
       .insert({
-        user_id: userId,
-        content: memoryContent,
+        user_id:
+          userId,
+
+        content:
+          memoryContent,
       });
 
-    if (insertMemoryError) {
+    if (
+      insertMemoryError
+    ) {
       console.error(
         "MEMORY KAYDETME HATASI:",
         insertMemoryError
       );
+
+      return;
     }
+
+    console.log(
+      "🧠 SYRAVEN MEMORY KAYDETTİ:",
+      memoryContent
+    );
   } catch (error) {
     console.error(
       "MEMORY ANALİZ HATASI:",
@@ -302,16 +475,23 @@ Memory kısa, açık ve üçüncü şahıs şeklinde olmalıdır.
   }
 }
 
+// --------------------------------------------------
+// POST
+// --------------------------------------------------
+
 export async function POST(
   req: NextRequest
 ) {
   try {
-    //------------------------------------
+
+    // ------------------------------------
     // AUTH TOKEN
-    //------------------------------------
+    // ------------------------------------
 
     const authHeader =
-      req.headers.get("authorization");
+      req.headers.get(
+        "authorization"
+      );
 
     if (
       !authHeader?.startsWith(
@@ -335,22 +515,30 @@ export async function POST(
         ""
       );
 
-    //------------------------------------
+    // ------------------------------------
     // SUPABASE
-    //------------------------------------
+    // ------------------------------------
 
     const supabase =
-      createSupabaseClient(token);
+      createSupabaseClient(
+        token
+      );
 
     const {
-      data: { user },
+      data: {
+        user,
+      },
+
       error: userError,
     } =
       await supabase.auth.getUser(
         token
       );
 
-    if (userError || !user) {
+    if (
+      userError ||
+      !user
+    ) {
       return NextResponse.json(
         {
           error:
@@ -362,39 +550,46 @@ export async function POST(
       );
     }
 
-    //------------------------------------
+    // ------------------------------------
     // REQUEST BODY
-    //------------------------------------
+    // ------------------------------------
 
-    const body = await req.json();
+    const body =
+      await req.json();
 
-    const messages: ChatMessage[] =
-      Array.isArray(body.messages)
-        ? body.messages.filter(
-            (
-              message: unknown
-            ): message is ChatMessage =>
-              typeof message ===
-                "object" &&
-              message !== null &&
-              "role" in message &&
-              "content" in message &&
-              typeof (
-                message as ChatMessage
-              ).content === "string" &&
-              [
-                "system",
-                "user",
-                "assistant",
-              ].includes(
-                (
+    const rawMessages:
+      ChatMessage[] =
+        Array.isArray(
+          body.messages
+        )
+          ? body.messages.filter(
+              (
+                message: unknown
+              ): message is ChatMessage =>
+                typeof message ===
+                  "object" &&
+                message !== null &&
+                "role" in message &&
+                "content" in message &&
+                typeof (
                   message as ChatMessage
-                ).role
-              )
-          )
-        : [];
+                ).content ===
+                  "string" &&
+                [
+                  "system",
+                  "user",
+                  "assistant",
+                ].includes(
+                  (
+                    message as ChatMessage
+                  ).role
+                )
+            )
+          : [];
 
-    if (!messages.length) {
+    if (
+      !rawMessages.length
+    ) {
       return NextResponse.json(
         {
           error:
@@ -406,123 +601,178 @@ export async function POST(
       );
     }
 
-    //------------------------------------
-    // MEMORY SETTING
-    //------------------------------------
+    // ------------------------------------
+    // LIMIT CHAT CONTEXT
+    // ------------------------------------
 
-    let memoryEnabled = true;
+    const messages =
+      limitMessages(
+        rawMessages
+      );
+
+    if (
+      !messages.length
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Geçerli mesaj bulunamadı.",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    // ------------------------------------
+    // MEMORY SETTING
+    // ------------------------------------
+
+    let memoryEnabled =
+      true;
 
     const {
       data: userSettings,
       error: settingsError,
-    } = await supabase
-      .from("user_settings")
-      .select("memory_enabled")
-      .eq(
-        "user_id",
-        user.id
-      )
-      .maybeSingle();
+    } =
+      await supabase
+        .from(
+          "user_settings"
+        )
+        .select(
+          "memory_enabled"
+        )
+        .eq(
+          "user_id",
+          user.id
+        )
+        .maybeSingle();
 
-    if (settingsError) {
+    if (
+      settingsError
+    ) {
       console.error(
         "HAFIZA AYARI OKUMA HATASI:",
         settingsError
       );
     }
 
-    if (userSettings) {
+    if (
+      userSettings
+    ) {
       memoryEnabled =
         userSettings.memory_enabled !==
         false;
     }
 
-    //------------------------------------
+    // ------------------------------------
     // MEMORY GETİR
-    //------------------------------------
+    // ------------------------------------
 
-    let memoryText = "";
+    let memoryText =
+      "";
 
-    if (memoryEnabled) {
+    if (
+      memoryEnabled
+    ) {
       const {
         data: memories,
         error: memoryError,
-      } = await supabase
-        .from("memories")
-        .select("content")
-        .eq(
-          "user_id",
-          user.id
-        )
-        .order(
-          "created_at",
-          {
-            ascending: false,
-          }
-        )
-        .limit(20);
+      } =
+        await supabase
+          .from(
+            "memories"
+          )
+          .select(
+            "content"
+          )
+          .eq(
+            "user_id",
+            user.id
+          )
+          .order(
+            "created_at",
+            {
+              ascending: false,
+            }
+          )
+          .limit(
+            MAX_MEMORIES
+          );
 
-      if (memoryError) {
+      if (
+        memoryError
+      ) {
         console.error(
           "HAFIZA OKUMA HATASI:",
           memoryError
         );
       } else {
+
+        let totalMemoryChars =
+          0;
+
+        const selectedMemories:
+          string[] =
+            [];
+
+        for (
+          const memory of
+            memories || []
+        ) {
+          const content =
+            memory.content.trim();
+
+          if (
+            !content
+          ) {
+            continue;
+          }
+
+          if (
+            totalMemoryChars +
+              content.length >
+            MAX_MEMORY_CHARS
+          ) {
+            break;
+          }
+
+          selectedMemories.push(
+            `- ${content}`
+          );
+
+          totalMemoryChars +=
+            content.length;
+        }
+
         memoryText =
-          (memories || [])
-            .map(
-              (memory: {
-                content: string;
-              }) =>
-                `- ${memory.content}`
-            )
-            .join("\n");
+          selectedMemories.join(
+            "\n"
+          );
       }
     }
 
-    //------------------------------------
-    // SON KULLANICI MESAJI
-    //------------------------------------
+    // ------------------------------------
+    // SON USER MESAJI
+    // ------------------------------------
 
     const latestUserMessage =
-      [...messages]
+      [...rawMessages]
         .reverse()
         .find(
-          (message) =>
-            message.role === "user"
+          (
+            message
+          ) =>
+            message.role ===
+            "user"
         );
 
-    //------------------------------------
-    // ANA AI STREAM
-    //------------------------------------
+    // ------------------------------------
+    // SYSTEM PROMPT
+    // ------------------------------------
 
-    const response = await fetch(
-      GROQ_API_URL,
-      {
-        method: "POST",
-
-        headers: {
-          Authorization:
-            `Bearer ${groqApiKey}`,
-
-          "Content-Type":
-            "application/json",
-        },
-
-        body: JSON.stringify({
-          model: GROQ_MODEL,
-
-          stream: true,
-
-          max_tokens: 4096,
-
-          temperature: 0.7,
-
-          messages: [
-            {
-              role: "system",
-
-              content: `
+    const systemPrompt =
+      `
 Sen SYRAVEN isimli gelişmiş bir yapay zekâ asistanısın.
 
 Kimliğin:
@@ -540,15 +790,15 @@ Davranış kuralları:
 - Kullanıcının dilinde cevap ver.
 - Türkçe sorulara Türkçe cevap ver.
 - Gereksiz tekrar yapma.
-- Gereksiz uzunlukta cevap verme.
 - Kullanıcı özellikle detay isterse kapsamlı cevap ver.
 - Karmaşık konuları anlaşılır şekilde açıkla.
 - Yazılım konusunda uzman davran.
 - Kod verirken temiz ve üretime uygun kod yaz.
 - Konuşmanın bağlamını dikkate al.
 - Emin olmadığın bilgileri kesin gerçek gibi sunma.
-- Kullanıcı bir dosya sağladıysa mevcut dosya içeriğini dikkate al.
+- Kullanıcı bir dosya sağladıysa verilen dosya içeriğini dikkate al.
 - Aynı bilgiyi kullanıcıya tekrar tekrar sordurma.
+- Kullanıcı istemedikçe cevabı gereksiz uzatma.
 
 KULLANICI HAFIZASI:
 
@@ -564,25 +814,67 @@ Hafıza kullanım kuralları:
 - Hafızadaki bilgileri yalnızca gerçekten ilgili olduğunda kullan.
 - Hafızadaki bilgiler ile mevcut kullanıcı mesajı çelişirse mevcut mesajı esas al.
 - Hafızayı kullanıcıya gereksiz yere listeleme.
-- Kullanıcı "bunu hatırlıyor musun?" gibi bir soru sorarsa ilgili bilgiyi kullan.
 - Hassas veya gereksiz çıkarımlar yapma.
-              `.trim(),
-            },
+      `
+        .trim();
 
-            ...messages.filter(
-              (message) =>
-                message.role !== "system"
-            ),
-          ],
-        }),
-      }
-    );
+    // ------------------------------------
+    // GROQ STREAM
+    // ------------------------------------
 
-    //------------------------------------
+    const response =
+      await fetch(
+        GROQ_API_URL,
+        {
+          method: "POST",
+
+          headers: {
+            Authorization:
+              `Bearer ${groqApiKey}`,
+
+            "Content-Type":
+              "application/json",
+          },
+
+          body:
+            JSON.stringify({
+              model:
+                GROQ_MODEL,
+
+              stream:
+                true,
+
+              temperature:
+                0.7,
+
+              // 4096 yerine daha dengeli.
+              // Uzun cevaplar için yeterli,
+              // TPM yükünü azaltır.
+              max_tokens:
+                2500,
+
+              messages: [
+                {
+                  role:
+                    "system",
+
+                  content:
+                    systemPrompt,
+                },
+
+                ...messages,
+              ],
+            }),
+        }
+      );
+
+    // ------------------------------------
     // GROQ ERROR
-    //------------------------------------
+    // ------------------------------------
 
-    if (!response.ok) {
+    if (
+      !response.ok
+    ) {
       const errorText =
         await response.text();
 
@@ -590,6 +882,21 @@ Hafıza kullanım kuralları:
         "GROQ STREAM HATASI:",
         errorText
       );
+
+      if (
+        response.status ===
+        413
+      ) {
+        return NextResponse.json(
+          {
+            error:
+              "Mesaj veya sohbet bağlamı çok büyük. SYRAVEN isteği işleyemedi.",
+          },
+          {
+            status: 413,
+          }
+        );
+      }
 
       return NextResponse.json(
         {
@@ -602,28 +909,32 @@ Hafıza kullanım kuralları:
       );
     }
 
-    //------------------------------------
-    // MEMORY ANALİZİNİ
-    // RESPONSE SONRASINA BIRAK
-    //------------------------------------
+    // ------------------------------------
+    // MEMORY
+    // ------------------------------------
 
     if (
       memoryEnabled &&
       latestUserMessage?.content
     ) {
-      after(async () => {
-        await analyzeAndSaveMemory({
-          supabase,
-          userId: user.id,
-          userText:
-            latestUserMessage.content,
-        });
-      });
+      after(
+        async () => {
+          await analyzeAndSaveMemory({
+            supabase,
+
+            userId:
+              user.id,
+
+            userText:
+              latestUserMessage.content,
+          });
+        }
+      );
     }
 
-    //------------------------------------
+    // ------------------------------------
     // STREAM RESPONSE
-    //------------------------------------
+    // ------------------------------------
 
     return new Response(
       response.body,
@@ -643,7 +954,10 @@ Hafıza kullanım kuralları:
         },
       }
     );
-  } catch (error) {
+
+  } catch (
+    error
+  ) {
     console.error(
       "STREAM SERVER HATASI:",
       error
