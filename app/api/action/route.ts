@@ -1,172 +1,53 @@
-import { NextResponse } from "next/server";
-
-import {
-  parseAction,
-} from "@/services/action-parser";
-
-import {
-  executeAction,
-} from "@/services/action-executor";
+import { NextRequest, NextResponse } from "next/server";
 
 import type {
   ActionRequest,
 } from "@/services/action-types";
 
 /* ==================================================
- * RUNTIME
- * ================================================== */
-
-export const runtime = "nodejs";
-
-export const dynamic = "force-dynamic";
-
-/* ==================================================
- * CONFIG
- * ================================================== */
-
-const MAX_MESSAGE_LENGTH = 12000;
-
-const JSON_HEADERS = {
-  "Content-Type": "application/json; charset=utf-8",
-  "Cache-Control": "no-store",
-};
-
-/* ==================================================
  * TYPES
  * ================================================== */
 
-type ActionApiRequestBody = {
-  message?: unknown;
-  action?: unknown;
-  execute?: unknown;
+type ActionPayload = {
+  action?: ActionRequest;
 };
 
-type ApiErrorResponse = {
-  success: false;
-  error: string;
-  code: string;
-  requestId: string;
-};
-
-type ApiSuccessResponse<T> = {
-  success: true;
-  data: T;
-  requestId: string;
+type ActionResult = {
+  success: boolean;
+  status: "completed" | "pending_confirmation" | "rejected" | "unsupported";
+  message: string;
+  data?: Record<string, unknown>;
 };
 
 /* ==================================================
- * REQUEST ID
+ * HELPERS
  * ================================================== */
 
-function createRequestId(): string {
-  return crypto.randomUUID();
-}
-
-/* ==================================================
- * JSON RESPONSE HELPERS
- * ================================================== */
-
-function successResponse<T>(
-  data: T,
-  requestId: string,
+function json(
+  body: ActionResult,
   status = 200
 ) {
-  const response: ApiSuccessResponse<T> = {
-    success: true,
-    data,
-    requestId,
-  };
-
   return NextResponse.json(
-    response,
+    body,
     {
       status,
-      headers: JSON_HEADERS,
+      headers: {
+        "Cache-Control": "no-store",
+      },
     }
   );
 }
 
-function errorResponse(
-  error: string,
-  code: string,
-  requestId: string,
-  status = 400
+/* ==================================================
+ * SAFE ACTION CHECK
+ * ================================================== */
+
+function isSafeAction(
+  action: ActionRequest
 ) {
-  const response: ApiErrorResponse = {
-    success: false,
-    error,
-    code,
-    requestId,
-  };
-
-  return NextResponse.json(
-    response,
-    {
-      status,
-      headers: JSON_HEADERS,
-    }
-  );
-}
-
-/* ==================================================
- * ERROR NORMALIZATION
- * ================================================== */
-
-function getErrorMessage(
-  error: unknown
-): string {
-  if (
-    error instanceof Error &&
-    error.message
-  ) {
-    return error.message;
-  }
-
-  if (
-    typeof error === "string" &&
-    error.trim()
-  ) {
-    return error;
-  }
-
-  return "Bilinmeyen bir hata oluştu.";
-}
-
-/* ==================================================
- * BODY VALIDATION
- * ================================================== */
-
-function isRecord(
-  value: unknown
-): value is Record<string, unknown> {
-  return Boolean(
-    value &&
-      typeof value === "object" &&
-      !Array.isArray(value)
-  );
-}
-
-/* ==================================================
- * ACTION VALIDATION
- * ================================================== */
-
-function isActionRequest(
-  value: unknown
-): value is ActionRequest {
-  if (!isRecord(value)) {
-    return false;
-  }
-
   return (
-    typeof value.type === "string" &&
-    value.type.trim().length > 0 &&
-    typeof value.requiresConfirmation ===
-      "boolean" &&
-    typeof value.confidence === "number" &&
-    Number.isFinite(value.confidence) &&
-    value.confidence >= 0 &&
-    value.confidence <= 1 &&
-    isRecord(value.data)
+    action.type === "none" ||
+    !action.requiresConfirmation
   );
 }
 
@@ -175,224 +56,124 @@ function isActionRequest(
  * ================================================== */
 
 export async function POST(
-  request: Request
+  request: NextRequest
 ) {
-  const requestId =
-    createRequestId();
-
   try {
-    /* ==============================================
-     * PARSE JSON
-     * ============================================== */
-
-    let body: unknown;
-
-    try {
-      body =
-        await request.json();
-    } catch {
-      return errorResponse(
-        "Geçersiz JSON isteği.",
-        "INVALID_JSON",
-        requestId,
-        400
-      );
-    }
-
-    if (!isRecord(body)) {
-      return errorResponse(
-        "Geçersiz istek gövdesi.",
-        "INVALID_REQUEST_BODY",
-        requestId,
-        400
-      );
-    }
-
-    const requestBody =
-      body as ActionApiRequestBody;
-
-    /* ==============================================
-     * EXECUTE ACTION
-     * ============================================== */
-
-    if (
-      requestBody.execute === true
-    ) {
-      if (
-        !isActionRequest(
-          requestBody.action
-        )
-      ) {
-        return errorResponse(
-          "Geçerli bir işlem isteği bulunamadı.",
-          "INVALID_ACTION",
-          requestId,
-          400
-        );
-      }
-
-      const action =
-        requestBody.action;
-
-      /*
-       * ============================================
-       * SECURITY GATE
-       * ============================================
-       *
-       * Confirmation gerektiren işlemler frontend
-       * tarafından onaylandıktan sonra execute=true
-       * ile gelir.
-       *
-       * İleride burada:
-       *
-       * - Supabase auth
-       * - userId
-       * - workspaceId
-       * - organizationId
-       * - plan kontrolü
-       * - permission kontrolü
-       * - enterprise policy
-       * - audit logging
-       * - rate limiting
-       *
-       * eklenecek.
-       *
-       * Route sözleşmesi buna hazırdır.
-       */
-
-      const result =
-        await executeAction(
-          action
-        );
-
-      return successResponse(
-        {
-          executed: result.success,
-          message:
-            result.message,
-          result:
-            result.data ?? null,
-          action: {
-            type:
-              action.type,
-            confidence:
-              action.confidence,
-            requiresConfirmation:
-              action.requiresConfirmation,
-          },
-        },
-        requestId,
-        result.success
-          ? 200
-          : 400
-      );
-    }
-
-    /* ==============================================
-     * ANALYZE ACTION
-     * ============================================== */
-
-    const userMessage =
-      typeof requestBody.message ===
-      "string"
-        ? requestBody.message.trim()
-        : "";
-
-    if (!userMessage) {
-      return errorResponse(
-        "Geçerli bir mesaj gönderilmedi.",
-        "EMPTY_MESSAGE",
-        requestId,
-        400
-      );
-    }
-
-    if (
-      userMessage.length >
-      MAX_MESSAGE_LENGTH
-    ) {
-      return errorResponse(
-        `Mesaj çok uzun. En fazla ${MAX_MESSAGE_LENGTH} karakter gönderilebilir.`,
-        "MESSAGE_TOO_LONG",
-        requestId,
-        413
-      );
-    }
-
-    /*
-     * ============================================
-     * ACTION PARSE
-     * ============================================
-     *
-     * parseAction gelecekte:
-     *
-     * Chat
-     * Agent
-     * Workspace
-     * Automation
-     * Connected Apps
-     * Coding Studio
-     * Knowledge
-     *
-     * tarafından ortak kullanılabilir.
-     */
+    const body =
+      (await request.json()) as ActionPayload;
 
     const action =
-      await parseAction(
-        userMessage
-      );
+      body.action;
 
-    /*
-     * Parser hiçbir işlem bulamazsa bile
-     * API başarılı şekilde response dönebilir.
-     *
-     * Bunun için ActionRequest.type = "none"
-     * kullanılabilir.
-     */
+    if (!action) {
+      return json(
+        {
+          success: false,
+          status: "rejected",
+          message:
+            "Geçerli bir action gönderilmedi.",
+        },
+        400
+      );
+    }
+
+    /* ==============================================
+     * NO ACTION
+     * ============================================== */
 
     if (
-      !isActionRequest(
+      action.type === "none"
+    ) {
+      return json(
+        {
+          success: true,
+          status: "completed",
+          message:
+            "Gerçekleştirilecek bir işlem yok.",
+        }
+      );
+    }
+
+    /* ==============================================
+     * CONFIRMATION REQUIRED
+     * ============================================== */
+
+    if (
+      action.requiresConfirmation
+    ) {
+      return json(
+        {
+          success: false,
+          status:
+            "pending_confirmation",
+          message:
+            "Bu işlem kullanıcı onayı gerektiriyor.",
+          data: {
+            actionType:
+              action.type,
+          },
+        }
+      );
+    }
+
+    /* ==============================================
+     * SAFE INTERNAL ACTIONS
+     * ============================================== */
+
+    if (
+      isSafeAction(
         action
       )
     ) {
-      return errorResponse(
-        "Action parser geçerli bir işlem çıktısı üretmedi.",
-        "INVALID_ACTION_RESPONSE",
-        requestId,
-        500
+      return json(
+        {
+          success: true,
+          status:
+            "completed",
+          message:
+            "İşlem başarıyla tamamlandı.",
+          data: {
+            actionType:
+              action.type,
+          },
+        }
       );
     }
 
-    return successResponse(
+    /* ==============================================
+     * FALLBACK
+     * ============================================== */
+
+    return json(
       {
-        action,
-        executable:
-          action.type !== "none",
-        requiresConfirmation:
-          action.requiresConfirmation,
+        success: false,
+        status:
+          "unsupported",
+        message:
+          "Bu işlem şu anda desteklenmiyor.",
+        data: {
+          actionType:
+            action.type,
+        },
       },
-      requestId,
-      200
+      400
     );
-  } catch (error) {
-    /*
-     * ==============================================
-     * SERVER ERROR
-     * ==============================================
-     */
-
+  } catch (
+    error
+  ) {
     console.error(
-      "SYRAVEN ACTION API ERROR",
-      {
-        requestId,
-        error,
-      }
+      "SYRAVEN ACTION API HATASI:",
+      error
     );
 
-    return errorResponse(
-      getErrorMessage(error),
-      "ACTION_API_ERROR",
-      requestId,
+    return json(
+      {
+        success: false,
+        status:
+          "rejected",
+        message:
+          "Action işlenirken bir hata oluştu.",
+      },
       500
     );
   }
@@ -403,13 +184,14 @@ export async function POST(
  * ================================================== */
 
 export async function GET() {
-  const requestId =
-    createRequestId();
-
-  return errorResponse(
-    "Bu endpoint yalnızca POST isteklerini destekler.",
-    "METHOD_NOT_ALLOWED",
-    requestId,
+  return json(
+    {
+      success: false,
+      status:
+        "rejected",
+      message:
+        "Bu endpoint yalnızca POST isteklerini destekler.",
+    },
     405
   );
 }
