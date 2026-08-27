@@ -1,28 +1,168 @@
 import { supabase } from "@/lib/supabase";
 
-export async function getChats(userId: string) {
-  const { data, error } = await supabase
-    .from("chats")
-    .select("*")
-    .eq("user_id", userId)
-    .order("created_at", { ascending: false });
+export type ChatMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
 
-  if (error) throw error;
+export type Chat = {
+  id: string;
+  title: string;
+  user_id: string;
+  created_at?: string;
+};
+
+export async function sendChatMessage(
+  messages: ChatMessage[],
+  file?: string
+) {
+  const {
+    data: {
+      session,
+    },
+    error: sessionError,
+  } = await supabase.auth.getSession();
+
+  if (
+    sessionError ||
+    !session?.access_token
+  ) {
+    throw new Error(
+      "Oturum bulunamadı."
+    );
+  }
+
+  const response =
+    await fetch(
+      "/api/chat",
+      {
+        method: "POST",
+
+        headers: {
+          "Content-Type":
+            "application/json",
+
+          Authorization:
+            `Bearer ${session.access_token}`,
+        },
+
+        body: JSON.stringify({
+          messages,
+
+          ...(file
+            ? {
+                file,
+              }
+            : {}),
+        }),
+      }
+    );
+
+  let data: {
+    reply?: unknown;
+  };
+
+  try {
+    data =
+      await response.json();
+  } catch {
+    throw new Error(
+      "Sunucudan geçersiz yanıt alındı."
+    );
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      typeof data?.reply ===
+        "string"
+        ? data.reply
+        : "AI yanıtı alınamadı."
+    );
+  }
+
+  if (
+    typeof data?.reply !==
+      "string"
+  ) {
+    throw new Error(
+      "AI geçerli bir yanıt döndürmedi."
+    );
+  }
+
+  return data.reply;
+}
+
+export async function getChats(
+  userId: string
+): Promise<Chat[]> {
+  const {
+    data,
+    error,
+  } =
+    await supabase
+      .from("chats")
+      .select("*")
+      .eq(
+        "user_id",
+        userId
+      )
+      .order(
+        "created_at",
+        {
+          ascending: false,
+        }
+      );
+
+  if (error) {
+    throw error;
+  }
+
+  return data ?? [];
+}
+
+export async function getChat(
+  chatId: string
+): Promise<Chat> {
+  const {
+    data,
+    error,
+  } =
+    await supabase
+      .from("chats")
+      .select("*")
+      .eq(
+        "id",
+        chatId
+      )
+      .single();
+
+  if (error) {
+    throw error;
+  }
 
   return data;
 }
 
-export async function createChat(userId: string) {
-  const { data, error } = await supabase
-    .from("chats")
-    .insert({
-      title: "Yeni Sohbet",
-      user_id: userId,
-    })
-    .select()
-    .single();
+export async function createChat(
+  userId: string,
+  title = "Yeni Sohbet"
+): Promise<Chat> {
+  const {
+    data,
+    error,
+  } =
+    await supabase
+      .from("chats")
+      .insert({
+        title,
+        user_id: userId,
+      })
+      .select()
+      .single();
 
-  if (error) throw error;
+  if (error) {
+    throw error;
+  }
 
   return data;
 }
@@ -30,35 +170,69 @@ export async function createChat(userId: string) {
 export async function renameChat(
   chatId: string,
   title: string
-) {
-  const { data, error } = await supabase
-    .from("chats")
-    .update({
-      title,
-    })
-    .eq("id", chatId)
-    .select();
+): Promise<Chat> {
+  const cleanTitle =
+    title.trim();
 
-  console.log("UPDATE DATA:", data);
-  console.log("UPDATE ERROR:", error);
+  if (!cleanTitle) {
+    throw new Error(
+      "Sohbet başlığı boş olamaz."
+    );
+  }
 
-  if (error) throw error;
+  const {
+    data,
+    error,
+  } =
+    await supabase
+      .from("chats")
+      .update({
+        title: cleanTitle,
+      })
+      .eq(
+        "id",
+        chatId
+      )
+      .select()
+      .single();
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
 }
 
-export async function deleteChat(chatId: string) {
-  // Önce mesajları sil
-  const { error: messageError } = await supabase
-    .from("messages")
-    .delete()
-    .eq("chat_id", chatId);
+export async function deleteChat(
+  chatId: string
+): Promise<void> {
+  const {
+    error: messageError,
+  } =
+    await supabase
+      .from("messages")
+      .delete()
+      .eq(
+        "chat_id",
+        chatId
+      );
 
-  if (messageError) throw messageError;
+  if (messageError) {
+    throw messageError;
+  }
 
-  // Sonra sohbeti sil
-  const { error: chatError } = await supabase
-    .from("chats")
-    .delete()
-    .eq("id", chatId);
+  const {
+    error: chatError,
+  } =
+    await supabase
+      .from("chats")
+      .delete()
+      .eq(
+        "id",
+        chatId
+      );
 
-  if (chatError) throw chatError;
+  if (chatError) {
+    throw chatError;
+  }
 }

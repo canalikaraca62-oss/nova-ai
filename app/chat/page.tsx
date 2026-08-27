@@ -1,20 +1,29 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
 export default function ChatPage() {
   const router = useRouter();
 
+  const hasCreatedChat = useRef(false);
+
   useEffect(() => {
     async function createChat() {
+      if (hasCreatedChat.current) {
+        return;
+      }
+
+      hasCreatedChat.current = true;
+
       const {
         data: { user },
+        error: userError,
       } = await supabase.auth.getUser();
 
-      if (!user) {
-        router.push("/login");
+      if (userError || !user) {
+        router.replace("/login");
         return;
       }
 
@@ -24,11 +33,17 @@ export default function ChatPage() {
           title: "Yeni Sohbet",
           user_id: user.id,
         })
-        .select()
+        .select("id")
         .single();
 
-      if (error) {
-        console.error(error);
+      if (error || !data) {
+        console.error(
+          "SOHBET OLUŞTURMA HATASI:",
+          error
+        );
+
+        hasCreatedChat.current = false;
+
         return;
       }
 
@@ -39,8 +54,14 @@ export default function ChatPage() {
   }, [router]);
 
   return (
-    <div className="min-h-screen bg-black flex items-center justify-center text-white">
-      Sohbet hazırlanıyor...
-    </div>
+    <main className="flex min-h-screen items-center justify-center bg-black text-white">
+      <div className="text-center">
+        <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-2 border-white/10 border-t-white" />
+
+        <p className="text-sm text-zinc-400">
+          Yeni sohbet hazırlanıyor...
+        </p>
+      </div>
+    </main>
   );
 }

@@ -11,10 +11,7 @@ export type ActionType =
 
 export type ActionRequest = {
   type: ActionType;
-
   requiresConfirmation: boolean;
-
   confidence: number;
-
   data: Record<string, unknown>;
 };

@@ -1,762 +1,727 @@
-import { NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import {
+  NextRequest,
+  NextResponse,
+} from "next/server";
 
 import {
-askSyraven,
-  generateChatTitle,
-} from "@/services/ai.server";
+  createClient,
+} from "@supabase/supabase-js";
 
-import { analyzeImage } from "@/services/vision.server";
+// ==================================================
+// ENV
+// ==================================================
 
-import { parseAction } from "@/services/action-parser";
+const supabaseUrl =
+  process.env.NEXT_PUBLIC_SUPABASE_URL;
 
-import {
-  readPdf,
-  readDocx,
-  readText,
-  readPptx,
-} from "@/services/document-reader";
+const supabaseAnonKey =
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-const MAX_FILE_SIZE = 15 * 1024 * 1024;
-const MAX_AI_FILE_TEXT = 25_000;
-const MAX_MEMORIES_FOR_CHECK = 30;
+const groqApiKey =
+  process.env.GROQ_API_KEY;
 
-function getExtension(filePath: string) {
-  return (
-    filePath
-      .split(".")
-      .pop()
-      ?.toLowerCase() ?? ""
+const GROQ_API_URL =
+  "https://api.groq.com/openai/v1/chat/completions";
+
+const GROQ_MODEL =
+  process.env.GROQ_MODEL ||
+  "openai/gpt-oss-20b";
+
+// ==================================================
+// ENV VALIDATION
+// ==================================================
+
+if (!supabaseUrl) {
+  throw new Error(
+    "NEXT_PUBLIC_SUPABASE_URL bulunamadı."
   );
 }
 
-async function getPrivateFileUrl(filePath: string) {
-  const { data, error } = await supabaseAdmin.storage
-    .from("files")
-    .createSignedUrl(filePath, 60 * 5);
-
-  if (error || !data?.signedUrl) {
-    throw new Error(
-      "Dosya için güvenli erişim bağlantısı oluşturulamadı."
-    );
-  }
-
-  return data.signedUrl;
-}
-
-function isImage(extension: string) {
-  return ["png", "jpg", "jpeg", "webp"].includes(extension);
-}
-
-async function extractFileText(filePath: string) {
-  const extension = getExtension(filePath);
-
-  const supportedExtensions = [
-    "pdf",
-    "docx",
-    "pptx",
-    "txt",
-    "md",
-    "json",
-    "csv",
-    "js",
-    "jsx",
-    "ts",
-    "tsx",
-    "css",
-    "html",
-    "xml",
-    "py",
-    "java",
-    "c",
-    "cpp",
-    "cs",
-    "sql",
-  ];
-
-  if (!supportedExtensions.includes(extension)) {
-    throw new Error(
-      `Şimdilik .${extension} dosyalarını okuyamıyorum.`
-    );
-  }
-
-  const fileUrl = await getPrivateFileUrl(filePath);
-
-  const fileResponse = await fetch(fileUrl);
-
-  if (!fileResponse.ok) {
-    throw new Error(
-      `Dosya indirilemedi. HTTP ${fileResponse.status}`
-    );
-  }
-
-  const contentLength = Number(
-    fileResponse.headers.get("content-length") ?? 0
+if (!supabaseAnonKey) {
+  throw new Error(
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY bulunamadı."
   );
-
-  if (contentLength > MAX_FILE_SIZE) {
-    throw new Error("Dosya çok büyük.");
-  }
-
-  switch (extension) {
-    case "pdf":
-      return readPdf(fileResponse);
-
-    case "docx":
-      return readDocx(fileResponse);
-
-    case "pptx":
-      return readPptx(fileResponse);
-
-    default:
-      return readText(fileResponse);
-  }
 }
 
-/**
- * Kullanıcının mevcut hafızalarını getirir.
- */
-async function getExistingMemories(userId: string) {
-  try {
-    const { data, error } = await supabaseAdmin
-      .from("memories")
-      .select("id, content, created_at")
-      .eq("user_id", userId)
-      .order("created_at", {
-        ascending: false,
-      })
-      .limit(MAX_MEMORIES_FOR_CHECK);
-
-    if (error) {
-      console.error(
-        "Mevcut hafızalar alınamadı:",
-        error
-      );
-
-      return [];
-    }
-
-    return data || [];
-  } catch (error) {
-    console.error(
-      "Hafıza sorgulama hatası:",
-      error
-    );
-
-    return [];
-  }
+if (!groqApiKey) {
+  throw new Error(
+    "GROQ_API_KEY bulunamadı."
+  );
 }
 
-/**
- * AI ile yeni bilginin gerçekten memory olup olmadığını
- * ve mevcut memory'lerden biriyle aynı olup olmadığını kontrol eder.
- */
-async function analyzeMemory(
-  userMessage: string,
-  existingMemories: Array<{
-    id: string;
-    content: string;
-  }>
+// ==================================================
+// SETTINGS
+// ==================================================
+
+const MAX_MESSAGES = 12;
+
+const MAX_MESSAGE_LENGTH = 12000;
+
+const MAX_RESPONSE_TOKENS =  4000;
+
+const MAX_MEMORIES = 8;
+
+const MAX_MEMORY_CHARS = 1800;
+
+// ==================================================
+// TYPES
+// ==================================================
+
+type ChatRole =
+  | "user"
+  | "assistant"
+  | "system";
+
+type ChatMessage = {
+  role: ChatRole;
+  content: string;
+};
+
+// ==================================================
+// SUPABASE
+// ==================================================
+
+function createSupabaseClient(
+  token: string
 ) {
-  const existingMemoryText =
-    existingMemories.length > 0
-      ? existingMemories
-          .map(
-            (memory, index) =>
-              `${index + 1}. [ID: ${memory.id}] ${memory.content}`
-          )
-          .join("\n")
-      : "Henüz kayıtlı hafıza yok.";
-
-  const response = await fetch(
-    "https://api.groq.com/openai/v1/chat/completions",
+  return createClient(
+    supabaseUrl!,
+    supabaseAnonKey!,
     {
-      method: "POST",
-
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+      global: {
+        headers: {
+          Authorization:
+            `Bearer ${token}`,
+        },
       },
 
-      body: JSON.stringify({
-        model:
-          process.env.GROQ_MODEL ||
-          "openai/gpt-oss-20b",
-
-        messages: [
-          {
-            role: "system",
-
-            content: `
-Sen SYRAVEN'in gelişmiş hafıza yöneticisisin.
-
-Görevin:
-Kullanıcının mesajını incele ve gelecekte yardımcı olacak kalıcı bir bilgi olup olmadığını belirle.
-
-Önemli olabilecek bilgiler:
-
-- Kullanıcının mesleği
-- Uzmanlık alanları
-- Kullandığı teknolojiler
-- Uzun vadeli projeleri
-- Proje hedefleri
-- Tercihleri
-- Çalışma şekli
-- Öğrenme tercihleri
-- Kalıcı hedefleri
-
-Kaydetme:
-
-- Selamlaşmaları
-- Geçici soruları
-- Tek seferlik istekleri
-- Şakaları
-- Genel bilgileri
-- Hassas kişisel bilgileri
-- Gereksiz ayrıntıları
-
-ÇOK ÖNEMLİ:
-
-Eğer yeni bilgi mevcut hafızalardan biriyle aynı anlama geliyorsa yeni kayıt oluşturma.
-
-Eğer kullanıcı mevcut bir bilgiyi açıkça değiştiriyorsa,
-UPDATE olarak işaretle.
-
-Eğer yeni ve önemli bir bilgi varsa,
-CREATE olarak işaretle.
-
-Eğer memory gerekmiyorsa,
-NONE olarak işaretle.
-
-SADECE aşağıdaki JSON formatında cevap ver:
-
-{
-  "action": "CREATE",
-  "memory": "Kısa ve net hafıza cümlesi",
-  "memoryId": null
-}
-
-veya:
-
-{
-  "action": "UPDATE",
-  "memory": "Güncellenmiş kısa hafıza cümlesi",
-  "memoryId": "mevcut-memory-id"
-}
-
-veya:
-
-{
-  "action": "NONE",
-  "memory": null,
-  "memoryId": null
-}
-
-Kurallar:
-
-- memory en fazla 300 karakter olsun.
-- Kullanıcının söylediğinden fazlasını çıkarma.
-- Tahmin yapma.
-- Hassas bilgi üretme.
-- Aynı bilgiyi farklı kelimelerle tekrar kaydetme.
-`.trim(),
-          },
-
-          {
-            role: "user",
-
-            content: `
-MEVCUT HAFIZALAR:
-
-${existingMemoryText}
-
-KULLANICININ YENİ MESAJI:
-
-${userMessage}
-`.trim(),
-          },
-        ],
-
-        temperature: 0.1,
-        max_tokens: 180,
-      }),
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
     }
   );
-
-  if (!response.ok) {
-    console.error(
-      "Memory AI hatası:",
-      await response.text()
-    );
-
-    return null;
-  }
-
-  const data = await response.json();
-
-  const content =
-    data?.choices?.[0]?.message?.content?.trim();
-
-  if (!content) {
-    return null;
-  }
-
-  try {
-    const cleaned = content
-      .replace(/^```json/i, "")
-      .replace(/^```/i, "")
-      .replace(/```$/i, "")
-      .trim();
-
-    return JSON.parse(cleaned);
-  } catch (error) {
-    console.error(
-      "Memory JSON parse hatası:",
-      error,
-      content
-    );
-
-    return null;
-  }
 }
 
-/**
- * Yeni memory oluşturur veya mevcut memory'yi günceller.
- */
-async function extractAndSaveMemory(
-  userId: string,
-  userMessage: string
+// ==================================================
+// MESSAGE VALIDATION
+// ==================================================
+
+function isValidChatMessage(
+  message: unknown
+): message is ChatMessage {
+  if (
+    typeof message !== "object" ||
+    message === null
+  ) {
+    return false;
+  }
+
+  if (
+    !("role" in message) ||
+    !("content" in message)
+  ) {
+    return false;
+  }
+
+  const candidate =
+    message as ChatMessage;
+
+  const validRoles: ChatRole[] = [
+    "user",
+    "assistant",
+    "system",
+  ];
+
+  return (
+    validRoles.includes(
+      candidate.role
+    ) &&
+    typeof candidate.content ===
+      "string" &&
+    candidate.content.trim().length > 0
+  );
+}
+
+// ==================================================
+// TEXT TRUNCATION
+// ==================================================
+
+function truncateText(
+  text: string,
+  maxLength: number
+): string {
+  if (
+    text.length <= maxLength
+  ) {
+    return text;
+  }
+
+  return (
+    text.slice(
+      0,
+      maxLength
+    ) +
+    "\n\n[Mesaj bağlam sınırı nedeniyle kısaltıldı.]"
+  );
+}
+
+// ==================================================
+// BUILD CONTEXT
+// ==================================================
+
+function buildMessages(
+  rawMessages: ChatMessage[]
+): ChatMessage[] {
+  return rawMessages
+    .filter(
+      (message) =>
+        message.role !== "system" &&
+        message.content.trim()
+    )
+    .slice(-MAX_MESSAGES)
+    .map(
+      (message) => ({
+        role: message.role,
+
+        content: truncateText(
+          message.content.trim(),
+          MAX_MESSAGE_LENGTH
+        ),
+      })
+    );
+}
+
+// ==================================================
+// POST
+// ==================================================
+
+export async function POST(
+  req: NextRequest
 ) {
-  if (!userMessage.trim()) {
-    return;
-  }
-
   try {
-    const existingMemories =
-      await getExistingMemories(userId);
-
-    const result = await analyzeMemory(
-      userMessage,
-      existingMemories
-    );
-
-    if (!result) {
-      return;
-    }
-
-    const action = result.action;
-    const memory = result.memory;
-    const memoryId = result.memoryId;
-
-    if (
-      action !== "CREATE" &&
-      action !== "UPDATE"
-    ) {
-      return;
-    }
-
-    if (
-      typeof memory !== "string" ||
-      memory.trim().length < 5 ||
-      memory.trim().length > 300
-    ) {
-      return;
-    }
-
-    const cleanMemory = memory.trim();
-
-    //------------------------------------
-    // UPDATE
-    //------------------------------------
-
-    if (
-      action === "UPDATE" &&
-      typeof memoryId === "string"
-    ) {
-      const existingMemory =
-        existingMemories.find(
-          (item) =>
-            item.id === memoryId
-        );
-
-      if (!existingMemory) {
-        console.warn(
-          "Memory update reddedildi: kayıt bulunamadı."
-        );
-
-        return;
-      }
-
-      const { error } =
-        await supabaseAdmin
-          .from("memories")
-          .update({
-            content: cleanMemory,
-          })
-          .eq("id", memoryId)
-          .eq("user_id", userId);
-
-      if (error) {
-        console.error(
-          "Memory güncelleme hatası:",
-          error
-        );
-
-        return;
-      }
-
-      console.log(
-        "🧠 SYRAVEN MEMORY GÜNCELLEDİ:",
-        cleanMemory
-      );
-
-      return;
-    }
-
-    //------------------------------------
-    // CREATE
-    //------------------------------------
-
-    if (action === "CREATE") {
-      /**
-       * Ek güvenlik:
-       * AI CREATE dese bile mevcut memory'lerde
-       * neredeyse aynı metin varsa tekrar kaydetme.
-       */
-      const normalizedNewMemory =
-        cleanMemory
-          .toLowerCase()
-          .replace(/\s+/g, " ")
-          .trim();
-
-      const duplicate =
-        existingMemories.some(
-          (existing) => {
-            const normalizedExisting =
-              existing.content
-                .toLowerCase()
-                .replace(/\s+/g, " ")
-                .trim();
-
-            return (
-              normalizedExisting ===
-              normalizedNewMemory
-            );
-          }
-        );
-
-      if (duplicate) {
-        console.log(
-          "🧠 Aynı memory zaten mevcut, kayıt atlandı."
-        );
-
-        return;
-      }
-
-     const { data: existingMemory, error: searchError } =
-  await supabaseAdmin
-    .from("memories")
-    .select("id, content")
-    .eq("user_id", userId)
-    .ilike("content", memory)
-    .limit(1)
-    .maybeSingle();
-
-if (searchError) {
-  console.error(
-    "Mevcut hafıza kontrolü hatası:",
-    searchError
-  );
-
-  return;
-}
-
-if (existingMemory) {
-  console.log(
-    "🧠 SYRAVEN: Bu bilgi zaten hafızada."
-  );
-
-  return;
-}
-
-const { error } =
-  await supabaseAdmin
-    .from("memories")
-    .insert({
-      user_id: userId,
-      content: memory,
-    });
-
-if (error) {
-  console.error(
-    "Memory kaydetme hatası:",
-    error
-  );
-
-  return;
-}
-
-console.log(
-  "🧠 SYRAVEN MEMORY KAYDETTİ:",
-  memory
-);
-
-      console.log(
-        "🧠 SYRAVEN MEMORY KAYDETTİ:",
-        cleanMemory
-      );
-    }
-  } catch (error) {
-    console.error(
-      "Memory analiz hatası:",
-      error
-    );
-  }
-}
-
-export async function POST(req: Request) {
-  try {
-    const body = await req.json();
-
-    //------------------------------------
-    // KULLANICI
-    //------------------------------------
+    // ==============================================
+    // AUTH HEADER
+    // ==============================================
 
     const authHeader =
-      req.headers.get("authorization");
-
-    let userId: string | null = null;
+      req.headers.get(
+        "authorization"
+      );
 
     if (
-      authHeader?.startsWith(
+      !authHeader?.startsWith(
         "Bearer "
       )
     ) {
-      const token =
-        authHeader.replace(
+      return NextResponse.json(
+        {
+          error:
+            "Yetkilendirme gerekli.",
+        },
+        {
+          status: 401,
+        }
+      );
+    }
+
+    const token =
+      authHeader
+        .replace(
           "Bearer ",
           ""
-        );
+        )
+        .trim();
 
-      const {
-        data: { user },
-      } =
-        await supabaseAdmin.auth.getUser(
-          token
-        );
-
-      userId = user?.id ?? null;
+    if (!token) {
+      return NextResponse.json(
+        {
+          error:
+            "Geçersiz yetkilendirme.",
+        },
+        {
+          status: 401,
+        }
+      );
     }
 
-    //------------------------------------
-    // SOHBET BAŞLIĞI
-    //------------------------------------
+    // ==============================================
+    // SUPABASE
+    // ==============================================
 
-    if (body.generateTitle) {
-      const title =
-        await generateChatTitle(
-          body.firstMessage ?? ""
-        );
+    const supabase =
+      createSupabaseClient(
+        token
+      );
 
-      return NextResponse.json({
-        reply: title,
-      });
+    // ==============================================
+    // USER AUTH
+    // ==============================================
+
+    const {
+      data: {
+        user,
+      },
+      error: userError,
+    } =
+      await supabase.auth.getUser(
+        token
+      );
+
+    if (
+      userError ||
+      !user
+    ) {
+      console.error(
+        "AUTH HATASI:",
+        userError
+      );
+
+      return NextResponse.json(
+        {
+          error:
+            "Geçersiz oturum.",
+        },
+        {
+          status: 401,
+        }
+      );
     }
 
-    //------------------------------------
-    // MESAJLAR
-    //------------------------------------
+    // ==============================================
+    // REQUEST BODY
+    // ==============================================
+
+    let body: unknown;
+
+    try {
+      body =
+        await req.json();
+    } catch {
+      return NextResponse.json(
+        {
+          error:
+            "Geçersiz JSON isteği.",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    const requestBody =
+      body as {
+        messages?: unknown;
+      };
+
+    if (
+      !Array.isArray(
+        requestBody.messages
+      )
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Mesajlar bulunamadı.",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    const rawMessages =
+      requestBody.messages.filter(
+        isValidChatMessage
+      );
+
+    if (
+      rawMessages.length === 0
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Geçerli mesaj bulunamadı.",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
 
     const messages =
-      Array.isArray(body.messages)
-        ? [...body.messages]
-        : [];
+      buildMessages(
+        rawMessages
+      );
 
-    //------------------------------------
-    // SON KULLANICI MESAJI
-    //------------------------------------
+    if (
+      messages.length === 0
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "İşlenecek mesaj bulunamadı.",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
 
-    const lastUserMessage =
-      [...messages]
-        .reverse()
-        .find(
-          (message) =>
-            message?.role === "user"
+    // ==============================================
+    // MEMORY SETTINGS
+    // ==============================================
+
+    let memoryEnabled = true;
+
+    const {
+      data: userSettings,
+      error: settingsError,
+    } =
+      await supabase
+        .from("user_settings")
+        .select(
+          "memory_enabled"
+        )
+        .eq(
+          "user_id",
+          user.id
+        )
+        .maybeSingle();
+
+    if (settingsError) {
+      console.error(
+        "HAFIZA AYARI HATASI:",
+        settingsError
+      );
+    }
+
+    if (userSettings) {
+      memoryEnabled =
+        userSettings.memory_enabled !==
+        false;
+    }
+
+    // ==============================================
+    // GET MEMORIES
+    // ==============================================
+
+    let memoryText = "";
+
+    if (memoryEnabled) {
+      const {
+        data: memories,
+        error: memoryError,
+      } =
+        await supabase
+          .from("memories")
+          .select(
+            "content"
+          )
+          .eq(
+            "user_id",
+            user.id
+          )
+          .order(
+            "created_at",
+            {
+              ascending: false,
+            }
+          )
+          .limit(
+            MAX_MEMORIES
+          );
+
+      if (memoryError) {
+        console.error(
+          "HAFIZA OKUMA HATASI:",
+          memoryError
         );
-
-    const userMessage =
-      typeof lastUserMessage?.content ===
-      "string"
-        ? lastUserMessage.content
-        : "";
-
-    //------------------------------------
-    // DOSYA VARSA
-    //------------------------------------
-
-    if (body.file) {
-      const extension =
-        getExtension(body.file);
-
-      //------------------------------------
-      // RESİM
-      //------------------------------------
-
-      if (isImage(extension)) {
-        const imageUrl =
-          await getPrivateFileUrl(
-            body.file
-          );
-
-        const visionReply =
-          await analyzeImage(
-            imageUrl
-          );
-
-        return NextResponse.json({
-          reply: visionReply,
-        });
       }
 
-      //------------------------------------
-      // BELGE
-      //------------------------------------
+      if (memories) {
+        const selectedMemories:
+          string[] = [];
 
-      try {
-        const fileText =
-          await extractFileText(
-            body.file
+        let totalChars = 0;
+
+        for (
+          const memory of memories
+        ) {
+          const content =
+            memory.content?.trim();
+
+          if (!content) {
+            continue;
+          }
+
+          if (
+            totalChars +
+              content.length >
+            MAX_MEMORY_CHARS
+          ) {
+            break;
+          }
+
+          selectedMemories.push(
+            `- ${content}`
           );
 
-        if (!fileText) {
-          return NextResponse.json(
-            {
-              reply:
-                "Dosya okunamadı.",
-            },
-            {
-              status: 400,
-            }
-          );
+          totalChars +=
+            content.length;
         }
 
-        const limitedFileText =
-          fileText.length >
-          MAX_AI_FILE_TEXT
-            ? fileText.slice(
-                0,
-                MAX_AI_FILE_TEXT
-              ) +
-              "\n\n[Dosyanın geri kalanı çok uzun olduğu için buraya eklenmedi.]"
-            : fileText;
+        memoryText =
+          selectedMemories.join(
+            "\n"
+          );
+      }
+    }
 
-        messages.push({
-          role: "system",
+    // ==============================================
+    // SYSTEM PROMPT
+    // ==============================================
 
-          content: `
-Kullanıcı bu dosyayı yükledi:
+    const systemPrompt =
+      `
+Sen SYRAVEN isimli gelişmiş bir yapay zekâ asistanısın.
 
-${body.file}
+TEMEL ÖZELLİKLERİN:
 
-Dosya içeriği:
+- Profesyonel
+- Zeki
+- Açık
+- Güvenilir
+- Kullanıcı odaklı
+- Yardımcı
+- Teknoloji ve yazılım konusunda güçlü
 
-${limitedFileText}
+DAVRANIŞ KURALLARI:
 
-Kurallar:
+- Kullanıcının dilinde cevap ver.
+- Türkçe sorulara Türkçe cevap ver.
+- Gereksiz tekrar yapma.
+- Kullanıcı detay isterse kapsamlı cevap ver.
+- Karmaşık konuları anlaşılır şekilde açıkla.
+- Emin olmadığın bilgileri kesin gerçek gibi sunma.
+- Kullanıcı istemedikçe cevapları gereksiz uzatma.
+- Konuşmanın önceki bağlamını dikkate al.
 
-- Dosyayı gerçekten okumuş gibi davran.
-- Soruları bu dosyaya göre cevapla.
-- "Dosyayı göremiyorum" deme.
-- "Dosyaya erişemiyorum" deme.
-- Dosya çok uzunsa mevcut içerikten mümkün olduğunca doğru cevap ver.
-`.trim(),
-        });
-      } catch (err) {
-        console.error(err);
+YAZILIM VE KOD KURALLARI:
 
+- Kod hatalarını dikkatlice analiz et.
+- Syntax hatalarını tespit et.
+- TypeScript tip uyumsuzluklarını dikkate al.
+- Next.js App Router yapısını dikkate al.
+- Server ve Client Component farkını doğru uygula.
+- Güvenlik açısından riskli kodları belirt.
+- Environment variable ve gizli anahtarları asla cevapta tekrar etme.
+- Production için temiz ve sürdürülebilir kod yaz.
+- Kullanıcı "tam kodu ver" derse eksiksiz dosyayı gönder.
+- Kullanıcının mevcut mimarisini gereksiz yere değiştirme.
+
+KULLANICI HAFIZASI:
+
+${
+  memoryEnabled
+    ? (
+        memoryText ||
+        "Kullanıcı hakkında kayıtlı bilgi yok."
+      )
+    : "Hafıza kapalı."
+}
+
+HAFIZA KURALLARI:
+
+- Hafızadaki bilgileri yalnızca gerçekten ilgili olduğunda kullan.
+- Mevcut kullanıcı mesajı hafızayla çelişirse mevcut mesajı esas al.
+- Hafızadan yeni bilgi uydurma.
+- Hassas bilgiler hakkında çıkarım yapma.
+      `.trim();
+
+    // ==============================================
+    // GROQ REQUEST
+    // ==============================================
+
+    const response =
+      await fetch(
+        GROQ_API_URL,
+        {
+          method: "POST",
+
+          headers: {
+            Authorization:
+              `Bearer ${groqApiKey}`,
+
+            "Content-Type":
+              "application/json",
+          },
+
+          body:
+            JSON.stringify({
+              model:
+                GROQ_MODEL,
+
+              stream: false,
+
+              temperature: 0.6,
+
+              top_p: 0.95,
+
+              reasoning_effort:
+                "low",
+
+              include_reasoning:
+                false,
+
+              max_completion_tokens:
+                MAX_RESPONSE_TOKENS,
+
+              messages: [
+                {
+                  role: "system",
+
+                  content:
+                    systemPrompt,
+                },
+
+                ...messages,
+              ],
+            }),
+        }
+      );
+
+    // ==============================================
+    // GROQ ERROR
+    // ==============================================
+
+    if (!response.ok) {
+      const errorText =
+        await response.text();
+
+      console.error(
+        "GROQ HATASI:",
+        response.status,
+        errorText
+      );
+
+      if (
+        response.status === 400
+      ) {
         return NextResponse.json(
           {
-            reply:
-              err instanceof Error
-                ? err.message
-                : "Dosya okunamadı.",
+            error:
+              "AI isteği geçersiz.",
           },
           {
             status: 400,
           }
         );
       }
+
+      if (
+        response.status === 401
+      ) {
+        return NextResponse.json(
+          {
+            error:
+              "AI servis yetkilendirmesi başarısız.",
+          },
+          {
+            status: 500,
+          }
+        );
+      }
+
+      if (
+        response.status === 429
+      ) {
+        return NextResponse.json(
+          {
+            error:
+              "AI kullanım limiti geçici olarak aşıldı. Birkaç saniye sonra tekrar deneyin.",
+          },
+          {
+            status: 429,
+          }
+        );
+      }
+
+      return NextResponse.json(
+        {
+          error:
+            "AI servisi şu anda cevap veremedi.",
+        },
+        {
+          status: 502,
+        }
+      );
     }
 
-    //------------------------------------
-    // MEMORY
-    //------------------------------------
+    // ==============================================
+    // RESPONSE DATA
+    // ==============================================
+
+    const data =
+      await response.json();
+
+    const content =
+      data?.choices?.[0]
+        ?.message?.content;
 
     if (
-      userId &&
-      userMessage
+      typeof content !== "string" ||
+      !content.trim()
     ) {
-      /**
-       * Hafıza analizinin ana cevabı
-       * gereksiz yere bekletmemesi için
-       * arka planda çalışmasına izin veriyoruz.
-       *
-       * Not:
-       * Node process kapanmadan promise'ın
-       * tamamlanmasına fırsat vermek için
-       * await kullanıyoruz.
-       */
-      await extractAndSaveMemory(
-        userId,
-        userMessage
+      console.error(
+        "GEÇERSİZ AI CEVABI:",
+        data
+      );
+
+      return NextResponse.json(
+        {
+          error:
+            "AI geçerli bir cevap üretmedi.",
+        },
+        {
+          status: 502,
+        }
       );
     }
 
-    //------------------------------------
-    // AI
-    //------------------------------------
+    // ==============================================
+    // SUCCESS
+    // ==============================================
 
-   const reply =
-  await askSyraven(
-    messages,
-    userId ?? undefined
-  );
+    return NextResponse.json(
+      {
+        message: {
+          role: "assistant",
 
-//------------------------------------
-// ACTIONS
-//------------------------------------
-
-if (userId && userMessage) {
-  try {
-    const action = await parseAction(userMessage);
-
-    if (action) {
-      console.log(
-        "⚡ SYRAVEN ACTION:",
-        action
-      );
-    }
-  } catch (error) {
-    console.error(
-      "Action parser hatası:",
-      error
+          content:
+            content.trim(),
+        },
+      },
+      {
+        status: 200,
+      }
     );
-  }
-}
-
-return NextResponse.json({
-  reply,
-});
   } catch (error) {
     console.error(
-      "CHAT API HATASI:",
+      "CHAT SERVER HATASI:",
       error
     );
 
     return NextResponse.json(
       {
-        reply:
+        error:
           "Sunucu hatası oluştu.",
+
+        details:
+          process.env.NODE_ENV ===
+          "development"
+            ? String(error)
+            : undefined,
       },
       {
         status: 500,

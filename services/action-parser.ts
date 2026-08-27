@@ -1,13 +1,13 @@
-import {
+import type {
   ActionRequest,
   ActionType,
 } from "./action-types";
 
 type ParsedActionResponse = {
-  type?: string;
-  requiresConfirmation?: boolean;
-  confidence?: number;
-  data?: Record<string, unknown>;
+  type?: unknown;
+  requiresConfirmation?: unknown;
+  confidence?: unknown;
+  data?: unknown;
 };
 
 const GROQ_API_URL =
@@ -16,6 +16,8 @@ const GROQ_API_URL =
 const MODEL =
   process.env.GROQ_MODEL ||
   "openai/gpt-oss-20b";
+
+const MAX_MESSAGE_LENGTH = 12000;
 
 const ACTION_TYPES: ActionType[] = [
   "none",
@@ -29,6 +31,17 @@ const ACTION_TYPES: ActionType[] = [
   "web_task",
 ];
 
+function createNoneAction(
+  confidence = 1
+): ActionRequest {
+  return {
+    type: "none",
+    requiresConfirmation: false,
+    confidence,
+    data: {},
+  };
+}
+
 function isActionType(
   value: unknown
 ): value is ActionType {
@@ -40,26 +53,88 @@ function isActionType(
   );
 }
 
+function isRecord(
+  value: unknown
+): value is Record<string, unknown> {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !Array.isArray(value)
+  );
+}
+
+function clampConfidence(
+  value: unknown
+): number {
+  if (
+    typeof value !== "number" ||
+    !Number.isFinite(value)
+  ) {
+    return 0;
+  }
+
+  return Math.max(
+    0,
+    Math.min(1, value)
+  );
+}
+
 function extractJson(
   text: string
 ): ParsedActionResponse | null {
+  const cleaned =
+    text
+      .trim()
+      .replace(
+        /^```(?:json)?\s*/i,
+        ""
+      )
+      .replace(
+        /\s*```$/i,
+        ""
+      )
+      .trim();
+
   try {
-    return JSON.parse(text);
+    const parsed =
+      JSON.parse(cleaned);
+
+    if (isRecord(parsed)) {
+      return parsed;
+    }
   } catch {
-    // Model bazen JSON'u markdown
-    // code fence içerisinde döndürebilir.
+    // JSON doğrudan parse edilemedi.
   }
 
-  const match = text.match(
-    /\{[\s\S]*\}/
-  );
+  const start =
+    cleaned.indexOf("{");
 
-  if (!match) {
+  const end =
+    cleaned.lastIndexOf("}");
+
+  if (
+    start === -1 ||
+    end === -1 ||
+    end <= start
+  ) {
     return null;
   }
 
+  const jsonCandidate =
+    cleaned.slice(
+      start,
+      end + 1
+    );
+
   try {
-    return JSON.parse(match[0]);
+    const parsed =
+      JSON.parse(jsonCandidate);
+
+    if (!isRecord(parsed)) {
+      return null;
+    }
+
+    return parsed;
   } catch {
     return null;
   }
@@ -68,39 +143,34 @@ function extractJson(
 function normalizeAction(
   result: ParsedActionResponse
 ): ActionRequest {
-  const type: ActionType =
+  const type =
     isActionType(result.type)
       ? result.type
       : "none";
 
-  const confidence =
-    typeof result.confidence ===
-      "number" &&
-    Number.isFinite(result.confidence)
-      ? Math.max(
-          0,
-          Math.min(1, result.confidence)
-        )
-      : 0;
-
-  const requiresConfirmation =
-    type === "none"
-      ? false
-      : Boolean(
-          result.requiresConfirmation ??
-            true
-        );
+  if (type === "none") {
+    return {
+      type: "none",
+      requiresConfirmation: false,
+      confidence:
+        clampConfidence(
+          result.confidence
+        ),
+      data: {},
+    };
+  }
 
   return {
     type,
-    requiresConfirmation,
-    confidence,
+    requiresConfirmation: true,
+    confidence:
+      clampConfidence(
+        result.confidence
+      ),
     data:
-      result.data &&
-      typeof result.data ===
-        "object"
-      ? result.data
-      : {},
+      isRecord(result.data)
+        ? result.data
+        : {},
   };
 }
 
@@ -108,15 +178,15 @@ export async function parseAction(
   userMessage: string
 ): Promise<ActionRequest> {
   const cleanMessage =
-    userMessage.trim();
+    userMessage
+      .trim()
+      .slice(
+        0,
+        MAX_MESSAGE_LENGTH
+      );
 
   if (!cleanMessage) {
-    return {
-      type: "none",
-      requiresConfirmation: false,
-      confidence: 1,
-      data: {},
-    };
+    return createNoneAction();
   }
 
   const apiKey =
@@ -127,46 +197,67 @@ export async function parseAction(
       "GROQ_API_KEY bulunamadı."
     );
 
-    return {
-      type: "none",
-      requiresConfirmation: false,
-      confidence: 0,
-      data: {},
-    };
+    return createNoneAction(0);
   }
 
   try {
-    const response = await fetch(
-      GROQ_API_URL,
-      {
-        method: "POST",
+    const response =
+      await fetch(
+        GROQ_API_URL,
+        {
+          method: "POST",
 
-        headers: {
-          "Content-Type":
-            "application/json",
-          Authorization: `Bearer ${apiKey}`,
-        },
+          headers: {
+            "Content-Type":
+              "application/json",
 
-        body: JSON.stringify({
-          model: MODEL,
+            Authorization:
+              `Bearer ${apiKey}`,
+          },
 
-          temperature: 0,
+          body: JSON.stringify({
+            model: MODEL,
 
-          max_tokens: 300,
+            temperature: 0,
 
-          messages: [
-            {
-              role: "system",
+            reasoning_effort:
+              "low",
 
-              content: `
-Sen SYRAVEN'nın ACTION ANALYZER sistemisin.
+            include_reasoning:
+              false,
 
-Görevin kullanıcının mesajının bir işlem
-yapılmasını isteyip istemediğini belirlemektir.
+            max_completion_tokens:
+              500,
 
-SADECE geçerli JSON döndür.
+            response_format: {
+              type:
+                "json_object",
+            },
 
-Şema:
+            messages: [
+              {
+                role: "system",
+
+                content: `
+Sen SYRAVEN ACTION ANALYZER sistemisin.
+
+Görevin kullanıcının mesajında gerçekten bir işlem isteği olup olmadığını belirlemektir.
+
+Sadece JSON döndür.
+
+Geçerli action türleri:
+
+- none
+- calendar_create
+- calendar_update
+- calendar_delete
+- email_send
+- email_reply
+- reminder_create
+- notification_send
+- web_task
+
+JSON formatı:
 
 {
   "type": "none",
@@ -175,39 +266,25 @@ SADECE geçerli JSON döndür.
   "data": {}
 }
 
-Geçerli action türleri:
-
-none
-calendar_create
-calendar_update
-calendar_delete
-email_send
-email_reply
-reminder_create
-notification_send
-web_task
-
 Kurallar:
 
-1. Kullanıcı yalnızca bilgi istiyorsa:
-type = "none"
+1. Kullanıcı sadece soru soruyorsa type "none" kullan.
 
-2. Kullanıcı gerçekten bir işlem yapılmasını
-istiyorsa uygun action türünü seç.
+2. Kullanıcı gerçekten bir işlem yapılmasını istiyorsa uygun action türünü seç.
 
-3. Şimdilik hiçbir işlemi gerçekten gerçekleştirme.
-Sadece kullanıcının niyetini sınıflandır.
+3. Şimdilik hiçbir işlemi gerçekleştirme.
 
-4. İşlem yapmayı gerektiren bütün action'larda
-requiresConfirmation varsayılan olarak true olsun.
+4. Action türü "none" değilse requiresConfirmation her zaman true olmalıdır.
 
-5. confidence 0 ile 1 arasında olsun.
+5. type "none" ise requiresConfirmation her zaman false olmalıdır.
 
-6. Kullanıcının söylemediği bilgileri uydurma.
+6. confidence 0 ile 1 arasında sayı olmalıdır.
 
-7. Tarih, saat, e-posta adresi, kişi adı,
-başlık veya diğer bilgileri yalnızca mesajda
-varsa data içine koy.
+7. Kullanıcının söylemediği bilgileri uydurma.
+
+8. data içine sadece kullanıcının açıkça verdiği bilgileri koy.
+
+9. Mesaj belirsizse tahmin yürütme. type "none" kullan.
 
 Örnek:
 
@@ -238,8 +315,7 @@ JSON:
 }
 
 Kullanıcı:
-"Ahmet'e toplantının yarına alındığını
-mail at."
+"Ahmet'e toplantının yarına alındığını mail at."
 
 JSON:
 {
@@ -251,49 +327,50 @@ JSON:
     "content": "toplantının yarına alındığını bildir"
   }
 }
-`.trim(),
-            },
+                `.trim(),
+              },
 
-            {
-              role: "user",
-              content: cleanMessage,
-            },
-          ],
-        }),
-      }
-    );
+              {
+                role: "user",
 
-    if (!response.ok) {
-      console.error(
-        "Action parser API hatası:",
-        response.status
+                content:
+                  cleanMessage,
+              },
+            ],
+          }),
+        }
       );
 
-      return {
-        type: "none",
-        requiresConfirmation: false,
-        confidence: 0,
-        data: {},
-      };
+    if (!response.ok) {
+      const errorText =
+        await response.text();
+
+      console.error(
+        "Action parser API hatası:",
+        response.status,
+        errorText
+      );
+
+      return createNoneAction(0);
     }
 
     const responseData =
       await response.json();
 
     const content =
-      responseData?.choices?.[0]
+      responseData
+        ?.choices?.[0]
         ?.message?.content;
 
     if (
-      typeof content !==
-      "string"
+      typeof content !== "string" ||
+      !content.trim()
     ) {
-      return {
-        type: "none",
-        requiresConfirmation: false,
-        confidence: 0,
-        data: {},
-      };
+      console.error(
+        "Action parser boş yanıt döndürdü."
+      );
+
+      return createNoneAction(0);
     }
 
     const parsed =
@@ -305,12 +382,7 @@ JSON:
         content
       );
 
-      return {
-        type: "none",
-        requiresConfirmation: false,
-        confidence: 0,
-        data: {},
-      };
+      return createNoneAction(0);
     }
 
     return normalizeAction(
@@ -322,11 +394,6 @@ JSON:
       error
     );
 
-    return {
-      type: "none",
-      requiresConfirmation: false,
-      confidence: 0,
-      data: {},
-    };
+    return createNoneAction(0);
   }
 }

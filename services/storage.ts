@@ -1,21 +1,77 @@
 import { supabase } from "@/lib/supabase";
 
-export async function uploadFile(file: File) {
-  console.log("UPLOAD BAŞLADI");
+export async function uploadFile(
+  file: File
+): Promise<string> {
+  if (!file) {
+    throw new Error(
+      "Yüklenecek dosya bulunamadı."
+    );
+  }
 
-  const extension = file.name.split(".").pop();
+  const fileName =
+    file.name || "dosya";
 
-  const fileName = `${crypto.randomUUID()}.${extension}`;
+  const extension =
+    fileName
+      .split(".")
+      .pop()
+      ?.toLowerCase();
 
-  const { data, error } = await supabase.storage
-    .from("files")
-    .upload(fileName, file);
+  const uniqueFileName =
+    extension
+      ? `${crypto.randomUUID()}.${extension}`
+      : crypto.randomUUID();
 
-  console.log(data);
-  console.log(error);
+  console.log(
+    "UPLOAD BAŞLADI:",
+    {
+      name: file.name,
+      size: file.size,
+      type: file.type,
+    }
+  );
 
-  if (error) throw error;
+  const {
+    data,
+    error,
+  } =
+    await supabase.storage
+      .from("files")
+      .upload(
+        uniqueFileName,
+        file,
+        {
+          cacheControl: "3600",
+          upsert: false,
+          contentType:
+            file.type ||
+            undefined,
+        }
+      );
 
-  // Public URL yerine Storage path döndür
-  return fileName;
+  if (error) {
+    console.error(
+      "UPLOAD HATASI:",
+      error
+    );
+
+    throw new Error(
+      error.message ||
+        "Dosya yüklenemedi."
+    );
+  }
+
+  if (!data?.path) {
+    throw new Error(
+      "Dosya yüklendi ancak dosya yolu alınamadı."
+    );
+  }
+
+  console.log(
+    "UPLOAD BAŞARILI:",
+    data.path
+  );
+
+  return data.path;
 }

@@ -1,6 +1,10 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import {
+  useEffect,
+  useRef,
+} from "react";
+
 import Message from "./Message";
 
 type Attachment = {
@@ -10,6 +14,7 @@ type Attachment = {
 };
 
 type MessageType = {
+  id?: string;
   sender: "user" | "syraven";
   text: string;
   attachment?: Attachment | null;
@@ -35,28 +40,20 @@ export default function ChatWindow({
   const animationFrameRef =
     useRef<number | null>(null);
 
-  function handleScroll() {
+  function scrollToBottom(
+    force = false
+  ) {
     const container =
       containerRef.current;
 
-    if (!container) return;
+    if (!container) {
+      return;
+    }
 
-    const distanceFromBottom =
-      container.scrollHeight -
-      container.scrollTop -
-      container.clientHeight;
-
-    shouldAutoScrollRef.current =
-      distanceFromBottom < 150;
-  }
-
-  function scrollToBottom() {
-    const container =
-      containerRef.current;
-
-    if (!container) return;
-
-    if (!shouldAutoScrollRef.current) {
+    if (
+      !force &&
+      !shouldAutoScrollRef.current
+    ) {
       return;
     }
 
@@ -73,56 +70,55 @@ export default function ChatWindow({
         const current =
           containerRef.current;
 
-        if (!current) return;
+        if (!current) {
+          animationFrameRef.current =
+            null;
 
-        current.scrollTop =
-          current.scrollHeight;
+          return;
+        }
+
+        if (
+          force ||
+          shouldAutoScrollRef.current
+        ) {
+          current.scrollTop =
+            current.scrollHeight;
+        }
 
         animationFrameRef.current =
           null;
       });
   }
 
-  useEffect(() => {
+  function handleScroll() {
     const container =
       containerRef.current;
 
-    if (!container) return;
+    if (!container) {
+      return;
+    }
 
     const distanceFromBottom =
       container.scrollHeight -
       container.scrollTop -
       container.clientHeight;
 
-    if (distanceFromBottom < 300) {
-      shouldAutoScrollRef.current = true;
-    }
-
-    if (isStreaming) {
-      shouldAutoScrollRef.current = true;
-    }
-
-    scrollToBottom();
-  }, [messages, isStreaming]);
+    shouldAutoScrollRef.current =
+      distanceFromBottom < 120;
+  }
 
   useEffect(() => {
-    if (
-      !isStreaming &&
-      messages.length > 0
-    ) {
-      shouldAutoScrollRef.current = true;
+    scrollToBottom();
+  }, [messages]);
 
-      requestAnimationFrame(() => {
-        const container =
-          containerRef.current;
+  useEffect(() => {
+    if (isStreaming) {
+      shouldAutoScrollRef.current =
+        true;
 
-        if (!container) return;
-
-        container.scrollTop =
-          container.scrollHeight;
-      });
+      scrollToBottom(true);
     }
-  }, [isStreaming, messages.length]);
+  }, [isStreaming]);
 
   useEffect(() => {
     return () => {
@@ -136,6 +132,10 @@ export default function ChatWindow({
     };
   }, []);
 
+  const isEmpty =
+    messages.length === 0 &&
+    !isLoading;
+
   return (
     <div
       ref={containerRef}
@@ -148,57 +148,172 @@ export default function ChatWindow({
         overflow-y-auto
         overflow-x-hidden
         overscroll-contain
-        touch-pan-y
-        px-3
-        py-3
-        sm:px-5
-        sm:py-5
-        [scrollbar-width:thin]
+        px-4
+        py-6
+        sm:px-6
+        sm:py-8
+        lg:px-8
       "
     >
       <div
         className="
+          flex
+          min-h-full
           w-full
           max-w-4xl
           mx-auto
-          rounded-xl
-          bg-zinc-900
-          p-3
-          sm:p-5
-          lg:p-6
-          min-h-full
+          flex-col
         "
       >
-        {messages.map(
-          (msg, index) => (
-            <Message
-              key={index}
-              sender={msg.sender}
-              text={msg.text}
-              attachment={
-                msg.attachment
-              }
-            />
-          )
-        )}
-
-        {isLoading && (
-          <div className="flex justify-start mt-4">
-            <div className="rounded-2xl bg-zinc-800 px-4 py-3 text-white">
-              <span className="inline-flex items-center gap-1">
-                <span>
-                  SYRAVEN yazıyor
-                </span>
-
-                <span className="animate-pulse">
-                  ...
-                </span>
-              </span>
+        {isEmpty && (
+          <div
+            className="
+              flex
+              flex-1
+              flex-col
+              items-center
+              justify-center
+              pb-20
+              text-center
+            "
+          >
+            <div
+              className="
+                mb-6
+                flex
+                h-16
+                w-16
+                items-center
+                justify-center
+                rounded-2xl
+                border
+                border-white/10
+                bg-white/[0.04]
+                text-2xl
+                shadow-2xl
+              "
+            >
+              ✦
             </div>
+
+            <h1
+              className="
+                text-3xl
+                font-semibold
+                tracking-tight
+                text-white
+                sm:text-4xl
+              "
+            >
+              Merhaba, ben SYRAVEN
+            </h1>
+
+            <p
+              className="
+                mt-3
+                max-w-md
+                text-sm
+                leading-6
+                text-zinc-500
+                sm:text-base
+              "
+            >
+              Sorularını sor, fikirlerini geliştir,
+              dosyalarını analiz et ve birlikte üretelim.
+            </p>
           </div>
         )}
 
-        <div className="h-4" />
+        {!isEmpty && (
+          <div
+            className="
+              flex
+              flex-col
+              gap-5
+              pb-8
+            "
+          >
+            {messages.map(
+              (message, index) => (
+                <Message
+                  key={
+                    message.id ||
+                    `${message.sender}-${index}`
+                  }
+                  sender={message.sender}
+                  text={message.text}
+                  attachment={
+                    message.attachment
+                  }
+                />
+              )
+            )}
+
+            {isLoading &&
+              !isStreaming && (
+                <div className="flex justify-start">
+                  <div
+                    className="
+                      flex
+                      items-center
+                      gap-3
+                      rounded-2xl
+                      border
+                      border-white/10
+                      bg-white/[0.035]
+                      px-4
+                      py-3
+                      text-sm
+                      text-zinc-400
+                    "
+                  >
+                    <div className="flex gap-1">
+                      <span
+                        className="
+                          h-1.5
+                          w-1.5
+                          animate-bounce
+                          rounded-full
+                          bg-zinc-400
+                          [animation-delay:-0.3s]
+                        "
+                      />
+
+                      <span
+                        className="
+                          h-1.5
+                          w-1.5
+                          animate-bounce
+                          rounded-full
+                          bg-zinc-400
+                          [animation-delay:-0.15s]
+                        "
+                      />
+
+                      <span
+                        className="
+                          h-1.5
+                          w-1.5
+                          animate-bounce
+                          rounded-full
+                          bg-zinc-400
+                        "
+                      />
+                    </div>
+
+                    <span>
+                      SYRAVEN düşünüyor...
+                    </span>
+                  </div>
+                </div>
+              )}
+          </div>
+        )}
+
+        <div
+          aria-hidden="true"
+          className="h-4 shrink-0"
+        />
       </div>
     </div>
   );

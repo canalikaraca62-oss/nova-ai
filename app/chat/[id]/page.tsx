@@ -1,781 +1,1345 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { useParams } from "next/navigation";
-import { Menu } from "lucide-react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+
+import {
+  useParams,
+  useRouter,
+} from "next/navigation";
+
+import {
+  Menu,
+} from "lucide-react";
 
 import { supabase } from "@/lib/supabase";
 
-import { generateChatTitle } from "@/services/ai";
-import { uploadFile } from "@/services/storage";
-
 import Sidebar from "@/app/components/Menu";
+
 import ChatWindow from "@/app/components/ChatWindow";
+
 import ChatInput from "@/app/components/ChatInput";
-import { streamChat } from "@/app/hooks/chat-stream";
+
+import {
+  streamChat,
+  type StreamMessage,
+} from "@/app/hooks/chat-stream";
+
+import {
+  generateChatTitle,
+} from "@/services/ai";
+
+import {
+  renameChat,
+} from "@/services/chats";
+
+import type {
+  ActionRequest,
+} from "@/services/action-types";
+
+/* ==================================================
+ * TYPES
+ * ================================================== */
 
 type Attachment = {
   name: string;
   url: string;
   type: string;
-} | null;
-
-type ChatMessage = {
-  sender: "user" | "syraven";
-  text: string;
-  attachment?: Attachment;
 };
 
-export default function ChatDetailPage() {
-  const params = useParams();
+type ChatMessage = {
+  id?: string;
+  sender: "user" | "syraven";
+  text: string;
+  attachment?: Attachment | null;
+};
 
-  const chatId = params.id as string;
+type DatabaseMessage = {
+  id: string;
+  sender: string;
+  text: string;
+  attachment_name?: string | null;
+  attachment_url?: string | null;
+  attachment_type?: string | null;
+  created_at?: string;
+};
 
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [input, setInput] = useState("");
+/* ==================================================
+ * FILE UPLOAD
+ * ================================================== */
 
-  const [isLoading, setIsLoading] = useState(false);
+async function uploadFile(
+  file: File
+): Promise<string> {
+  const extension =
+    file.name
+      .split(".")
+      .pop();
 
-  const [selectedFile, setSelectedFile] =
-    useState<File | null>(null);
+  const safeExtension =
+    extension &&
+    extension.trim()
+      ? `.${extension}`
+      : "";
 
-  const [isUploading, setIsUploading] =
-    useState(false);
+  const fileName =
+    `${crypto.randomUUID()}${safeExtension}`;
 
-  const [isStreaming, setIsStreaming] =
-    useState(false);
-
-  const [sidebarOpen, setSidebarOpen] =
-    useState(false);
-
-  const abortControllerRef =
-    useRef<AbortController | null>(null);
-
-  useEffect(() => {
-    if (chatId) {
-      loadMessages();
-    }
-  }, [chatId]);
-
-  async function loadMessages() {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-
-    console.log(
-      "SESSION VAR MI:",
-      !!session
-    );
-
-    console.log(
-      "USER ID:",
-      session?.user?.id
-    );
-
-    const { data, error } = await supabase
-      .from("messages")
-      .select("*")
-      .eq("chat_id", chatId)
-      .order("created_at", {
-        ascending: true,
-      });
-
-    if (error) {
-      console.error(
-        "MESAJLAR YÜKLENEMEDİ:",
-        error
+  const {
+    data,
+    error,
+  } =
+    await supabase.storage
+      .from("files")
+      .upload(
+        fileName,
+        file
       );
 
-      console.error(
-        "HATA MESAJI:",
-        error.message
-      );
-
-      console.error(
-        "HATA DETAYI:",
-        error.details
-      );
-
-      console.error(
-        "HATA İPUCU:",
-        error.hint
-      );
-
-      console.error(
-        "HATA KODU:",
-        error.code
-      );
-
-      return;
-    }
-
-    const loadedMessages = await Promise.all(
-      (data || []).map(async (msg) => {
-        let attachment: Attachment = null;
-
-        if (msg.attachment_path) {
-          const {
-            data: signedUrlData,
-            error: signedUrlError,
-          } = await supabase.storage
-            .from("files")
-            .createSignedUrl(
-              msg.attachment_path,
-              60 * 60
-            );
-
-          if (signedUrlError) {
-            console.error(
-              "Attachment URL hatası:",
-              signedUrlError
-            );
-          } else {
-            attachment = {
-              name:
-                msg.attachment_name ||
-                "Dosya",
-
-              url:
-                signedUrlData.signedUrl,
-
-              type:
-                msg.attachment_type ||
-                "application/octet-stream",
-            };
-          }
-        }
-
-        return {
-          sender:
-            msg.role === "assistant"
-              ? ("syraven" as const)
-              : ("user" as const),
-
-          text: msg.content || "",
-
-          attachment,
-        };
-      })
-    );
-
-    setMessages(loadedMessages);
+  if (error) {
+    throw error;
   }
 
-  async function sendMessage() {
-    if (isStreaming || isUploading) {
-      return;
+  if (!data) {
+    throw new Error(
+      "Dosya yüklenemedi."
+    );
+  }
+
+  return fileName;
+}
+
+/* ==================================================
+ * PAGE
+ * ================================================== */
+
+export default function ChatDetailPage() {
+  const params =
+    useParams();
+
+  const router =
+    useRouter();
+
+  const chatId =
+    typeof params?.id === "string"
+      ? params.id
+      : "";
+
+  /* ==================================================
+   * STATE
+   * ================================================== */
+
+  const [
+    messages,
+    setMessages,
+  ] =
+    useState<ChatMessage[]>(
+      []
+    );
+
+  const [
+    input,
+    setInput,
+  ] =
+    useState("");
+
+  const [
+    selectedFile,
+    setSelectedFile,
+  ] =
+    useState<File | null>(
+      null
+    );
+
+  const [
+    isUploading,
+    setIsUploading,
+  ] =
+    useState(false);
+
+  const [
+    isLoading,
+    setIsLoading,
+  ] =
+    useState(true);
+
+  const [
+    isStreaming,
+    setIsStreaming,
+  ] =
+    useState(false);
+
+  const [
+    menuOpen,
+    setMenuOpen,
+  ] =
+    useState(false);
+
+  const [
+    pendingAction,
+    setPendingAction,
+  ] =
+    useState<ActionRequest | null>(
+      null
+    );
+
+  /* ==================================================
+   * REFS
+   * ================================================== */
+
+  const abortControllerRef =
+    useRef<AbortController | null>(
+      null
+    );
+
+  const hasGeneratedTitleRef =
+    useRef(false);
+
+  /* ==================================================
+   * CHAT ID CONTROL
+   * ================================================== */
+
+  useEffect(() => {
+    if (!chatId) {
+      router.replace(
+        "/chat"
+      );
     }
+  }, [
+    chatId,
+    router,
+  ]);
 
-    if (!input.trim() && !selectedFile) {
-      return;
-    }
+  /* ==================================================
+   * LOAD MESSAGES
+   * ================================================== */
 
-    const userMessage = input;
+  const loadMessages =
+    useCallback(
+      async () => {
+        if (!chatId) {
+          return;
+        }
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return;
-    }
-
-    //----------------------------------
-    // DOSYA YÜKLE
-    //----------------------------------
-
-    let uploadedFile: string | null =
-      null;
-
-    let attachmentUrl: string | null =
-      null;
-
-    const fileName =
-      selectedFile?.name || null;
-
-    const fileType =
-      selectedFile?.type ||
-      "application/octet-stream";
-
-    if (selectedFile) {
-      try {
-        setIsUploading(true);
-
-        uploadedFile =
-          await uploadFile(selectedFile);
-
-        console.log(
-          "DOSYA YÜKLENDİ:",
-          uploadedFile
+        setIsLoading(
+          true
         );
 
-        const {
-          data: signedUrlData,
-          error: signedUrlError,
-        } = await supabase.storage
-          .from("files")
-          .createSignedUrl(
-            uploadedFile,
-            60 * 60
-          );
-
-        if (signedUrlError) {
-          throw signedUrlError;
-        }
-
-        attachmentUrl =
-          signedUrlData.signedUrl;
-
-        setIsUploading(false);
-      } catch (err) {
-        console.error(err);
-
-        alert(
-          "Dosya yüklenemedi."
-        );
-
-        setIsUploading(false);
-
-        return;
-      }
-    }
-
-    //----------------------------------
-    // USER MESAJI
-    //----------------------------------
-
-    const updatedMessages = [
-      ...messages,
-      {
-        sender: "user" as const,
-
-        text: userMessage,
-
-        attachment: attachmentUrl
-          ? {
-              name:
-                fileName || "Dosya",
-
-              url:
-                attachmentUrl,
-
-              type: fileType,
-            }
-          : null,
-      },
-    ];
-
-    setMessages(updatedMessages);
-
-    setInput("");
-
-    //----------------------------------
-    // USER MESAJINI DATABASE'E KAYDET
-    //----------------------------------
-
-    const { error: userError } =
-      await supabase
-        .from("messages")
-        .insert({
-          chat_id: chatId,
-
-          role: "user",
-
-          content: userMessage,
-
-          attachment_path:
-            uploadedFile,
-
-          attachment_name:
-            selectedFile
-              ? selectedFile.name
-              : null,
-
-          attachment_type:
-            selectedFile
-              ? selectedFile.type
-              : null,
-        });
-
-    if (userError) {
-      console.error(userError);
-      return;
-    }
-
-    //----------------------------------
-    // DOSYA VARSA
-    // /api/chat KULLAN
-    //----------------------------------
-
-    if (uploadedFile) {
-      setIsLoading(true);
-
-      try {
-        const response =
-          await fetch(
-            "/api/chat",
-            {
-              method: "POST",
-
-              headers: {
-                "Content-Type":
-                  "application/json",
-              },
-
-              body: JSON.stringify({
-                messages:
-                  updatedMessages.map(
-                    (m) => ({
-                      role:
-                        m.sender ===
-                        "syraven"
-                          ? "assistant"
-                          : "user",
-
-                      content:
-                        m.text,
-                    })
-                  ),
-
-                file: uploadedFile,
-              }),
-            }
-          );
-
-        const data =
-          await response.json();
-
-        if (!response.ok) {
-          throw new Error(
-            data.reply ||
-              "Dosya işlenemedi."
-          );
-        }
-
-        const assistantMessage = {
-          sender:
-            "syraven" as const,
-
-          text: data.reply,
-
-          attachment: null,
-        };
-
-        setMessages((prev) => [
-          ...prev,
-          assistantMessage,
-        ]);
-
-        //----------------------------------
-        // AI MESAJINI KAYDET
-        //----------------------------------
-
-        const {
-          error: aiError,
-        } = await supabase
-          .from("messages")
-          .insert({
-            chat_id: chatId,
-
-            role: "assistant",
-
-            content: data.reply,
-          });
-
-        if (aiError) {
-          console.error(aiError);
-        }
-
-        //----------------------------------
-        // İLK MESAJDA BAŞLIK
-        //----------------------------------
-
-        if (
-          updatedMessages.length === 1
-        ) {
-          try {
-            const title =
-              await generateChatTitle(
-                userMessage ||
-                  "Dosya analizi"
-              );
-
+        try {
+          const {
+            data,
+            error,
+          } =
             await supabase
-              .from("chats")
-              .update({
-                title,
-              })
+              .from(
+                "messages"
+              )
+              .select(
+                "*"
+              )
               .eq(
-                "id",
+                "chat_id",
                 chatId
+              )
+              .order(
+                "created_at",
+                {
+                  ascending:
+                    true,
+                }
               );
-          } catch (err) {
-            console.error(err);
-          }
-        }
-      } catch (error) {
-        console.error(
-          "Dosya işleme hatası:",
-          error
-        );
 
-        setMessages((prev) => [
-          ...prev,
-          {
-            sender: "syraven",
-
-            text:
-              "Dosya işlenirken bir hata oluştu. Lütfen tekrar deneyin.",
-
-            attachment: null,
-          },
-        ]);
-      } finally {
-        setIsLoading(false);
-
-        setSelectedFile(null);
-      }
-
-      return;
-    }
-
-    //----------------------------------
-    // NORMAL METİN MESAJI
-    // STREAMING
-    //----------------------------------
-
-    const {
-      data: memories,
-      error: memoryError,
-    } = await supabase
-      .from("memories")
-      .select("content")
-      .eq(
-        "user_id",
-        user.id
-      )
-      .order(
-        "created_at",
-        {
-          ascending: false,
-        }
-      )
-      .limit(20);
-
-    if (memoryError) {
-      console.error(
-        "MEMORY YÜKLENEMEDİ:",
-        memoryError
-      );
-    }
-
-    const controller =
-      new AbortController();
-
-    abortControllerRef.current =
-      controller;
-
-    setIsStreaming(true);
-
-    setIsLoading(true);
-
-    const assistantMessage = {
-      sender:
-        "syraven" as const,
-
-      text: "",
-
-      attachment: null,
-    };
-
-    let fullAssistantText = "";
-
-    setMessages((prev) => [
-      ...prev,
-      assistantMessage,
-    ]);
-
-    let pendingText = "";
-
-    let frameId: number | null =
-      null;
-
-    const flushStream = () => {
-      if (!pendingText) {
-        frameId = null;
-
-        return;
-      }
-
-      const textToAdd =
-        pendingText;
-
-      pendingText = "";
-
-      setMessages((prev) => {
-        const updated = [...prev];
-
-        const lastIndex =
-          updated.length - 1;
-
-        if (lastIndex < 0) {
-          return prev;
-        }
-
-        updated[lastIndex] = {
-          ...updated[lastIndex],
-
-          text:
-            updated[lastIndex].text +
-            textToAdd,
-        };
-
-        return updated;
-      });
-
-      frameId = null;
-    };
-
-    try {
-      await streamChat(
-        [
-          ...(memories || []).map(
-            (memory) => ({
-              role:
-                "system" as const,
-
-              content:
-                `Kullanıcı hakkında kayıtlı bilgi: ${memory.content}`,
-            })
-          ),
-
-          ...updatedMessages.map(
-            (m) => ({
-              role:
-                m.sender ===
-                "syraven"
-                  ? ("assistant" as const)
-                  : ("user" as const),
-
-              content: m.text,
-            })
-          ),
-        ],
-
-        (chunk) => {
-          fullAssistantText +=
-            chunk;
-
-          pendingText +=
-            chunk;
-
-          if (
-            frameId === null
-          ) {
-            frameId =
-              requestAnimationFrame(
-                flushStream
-              );
-          }
-        },
-
-        controller.signal
-      );
-    } catch (error) {
-      if (
-        error instanceof DOMException &&
-        error.name === "AbortError"
-      ) {
-        console.log(
-          " SYRAVEN üretimi kullanıcı tarafından durduruldu."
-        );
-      } else {
-        console.error(
-          "Streaming hatası:",
-          error
-        );
-
-        setMessages((prev) => [
-          ...prev,
-          {
-            sender: "syraven",
-
-            text:
-              "Üzgünüm, cevap oluşturulurken bir hata oluştu. Lütfen tekrar deneyin.",
-
-            attachment: null,
-          },
-        ]);
-      }
-    } finally {
-      if (
-        frameId !== null
-      ) {
-        cancelAnimationFrame(
-          frameId
-        );
-
-        frameId = null;
-      }
-
-      if (pendingText) {
-        const remainingText =
-          pendingText;
-
-        pendingText = "";
-
-        setMessages((prev) => {
-          const updated = [
-            ...prev,
-          ];
-
-          const lastIndex =
-            updated.length - 1;
-
-          if (lastIndex < 0) {
-            return prev;
+          if (error) {
+            throw error;
           }
 
-          updated[lastIndex] = {
-            ...updated[lastIndex],
+          const formattedMessages:
+            ChatMessage[] =
+            (
+              data ??
+              []
+            ).map(
+              (
+                message: DatabaseMessage
+              ) => {
+                const hasAttachment =
+                  Boolean(
+                    message.attachment_name &&
+                    message.attachment_url &&
+                    message.attachment_type
+                  );
 
-            text:
-              updated[lastIndex].text +
-              remainingText,
-          };
+                return {
+                  id:
+                    message.id,
 
-          return updated;
-        });
-      }
+                  sender:
+                    message.sender ===
+                    "user"
+                      ? "user"
+                      : "syraven",
 
-      setIsLoading(false);
+                  text:
+                    message.text ??
+                    "",
 
-      setIsStreaming(false);
+                  attachment:
+                    hasAttachment
+                      ? {
+                          name:
+                            message.attachment_name ??
+                            "Dosya",
+
+                          url:
+                            message.attachment_url ??
+                            "",
+
+                          type:
+                            message.attachment_type ??
+                            "application/octet-stream",
+                        }
+                      : null,
+                };
+              }
+            );
+
+          setMessages(
+            formattedMessages
+          );
+
+          hasGeneratedTitleRef.current =
+            formattedMessages.some(
+              (
+                message
+              ) =>
+                message.sender ===
+                "user"
+            );
+        } catch (error) {
+          console.error(
+            "Mesajlar yüklenemedi:",
+            error
+          );
+        } finally {
+          setIsLoading(
+            false
+          );
+        }
+      },
+      [
+        chatId,
+      ]
+    );
+
+  useEffect(() => {
+    void loadMessages();
+  }, [
+    loadMessages,
+  ]);
+
+  /* ==================================================
+   * STOP STREAMING
+   * ================================================== */
+
+  const stopStreaming =
+    useCallback(() => {
+      abortControllerRef.current?.abort();
 
       abortControllerRef.current =
         null;
-    }
 
-    //----------------------------------
-    // STREAMING AI MESAJINI KAYDET
-    //----------------------------------
+      setIsStreaming(
+        false
+      );
+    }, []);
 
-    if (fullAssistantText) {
-      const {
-        error: aiError,
-      } = await supabase
-        .from("messages")
-        .insert({
-          chat_id: chatId,
+  /* ==================================================
+   * CLEANUP
+   * ================================================== */
 
-          role: "assistant",
+  useEffect(() => {
+    return () => {
+      abortControllerRef.current?.abort();
+    };
+  }, []);
 
-          content:
-            fullAssistantText,
-        });
+  /* ==================================================
+   * SAVE MESSAGE
+   * ================================================== */
 
-      if (aiError) {
-        console.error(aiError);
-      }
-    }
+  const saveMessage =
+    useCallback(
+      async (
+        message: ChatMessage
+      ) => {
+        if (!chatId) {
+          return null;
+        }
 
-    //----------------------------------
-    // İLK MESAJDA BAŞLIK
-    //----------------------------------
+        const {
+          data,
+          error,
+        } =
+          await supabase
+            .from(
+              "messages"
+            )
+            .insert({
+              chat_id:
+                chatId,
 
-    if (
-      updatedMessages.length === 1
-    ) {
-      try {
-        const title =
-          await generateChatTitle(
-            userMessage
+              sender:
+                message.sender,
+
+              text:
+                message.text,
+
+              attachment_name:
+                message.attachment?.name ??
+                null,
+
+              attachment_url:
+                message.attachment?.url ??
+                null,
+
+              attachment_type:
+                message.attachment?.type ??
+                null,
+            })
+            .select()
+            .single();
+
+        if (error) {
+          throw error;
+        }
+
+        return data;
+      },
+      [
+        chatId,
+      ]
+    );
+
+  /* ==================================================
+   * UPLOAD SELECTED FILE
+   * ================================================== */
+
+  const uploadSelectedFile =
+    useCallback(
+      async () => {
+        if (!selectedFile) {
+          return null;
+        }
+
+        setIsUploading(
+          true
+        );
+
+        try {
+          const filePath =
+            await uploadFile(
+              selectedFile
+            );
+
+          const {
+            data,
+          } =
+            supabase.storage
+              .from(
+                "files"
+              )
+              .getPublicUrl(
+                filePath
+              );
+
+          const fileUrl =
+            data.publicUrl;
+
+          if (!fileUrl) {
+            throw new Error(
+              "Dosya URL'si oluşturulamadı."
+            );
+          }
+
+          const attachment:
+            Attachment = {
+              name:
+                selectedFile.name,
+
+              url:
+                fileUrl,
+
+              type:
+                selectedFile.type ||
+                "application/octet-stream",
+            };
+
+          return {
+            filePath,
+            attachment,
+          };
+        } finally {
+          setIsUploading(
+            false
+          );
+        }
+      },
+      [
+        selectedFile,
+      ]
+    );
+
+  /* ==================================================
+   * GENERATE CHAT TITLE
+   * ================================================== */
+
+  const generateTitleIfNeeded =
+    useCallback(
+      async (
+        firstMessage: string
+      ) => {
+        if (
+          hasGeneratedTitleRef.current ||
+          !chatId ||
+          !firstMessage.trim()
+        ) {
+          return;
+        }
+
+        hasGeneratedTitleRef.current =
+          true;
+
+        try {
+          const title =
+            await generateChatTitle(
+              firstMessage
+            );
+
+          if (
+            title &&
+            title.trim()
+          ) {
+            await renameChat(
+              chatId,
+              title.trim()
+            );
+          }
+        } catch (error) {
+          console.error(
+            "Başlık oluşturulamadı:",
+            error
+          );
+        }
+      },
+      [
+        chatId,
+      ]
+    );
+
+  /* ==================================================
+   * HANDLE ACTION
+   * ================================================== */
+
+  const handleAction =
+    useCallback(
+      (
+        action: ActionRequest
+      ) => {
+        if (
+          action.type ===
+          "none"
+        ) {
+          return;
+        }
+
+        setPendingAction(
+          action
+        );
+
+        if (
+          action.requiresConfirmation
+        ) {
+          const actionMessage:
+            ChatMessage = {
+              id:
+                crypto.randomUUID(),
+
+              sender:
+                "syraven",
+
+              text:
+                "⚡ Bir işlem isteği algıladım. İşlemi gerçekleştirmeden önce senden onay almam gerekiyor.",
+
+              attachment:
+                null,
+            };
+
+          setMessages(
+            (
+              previous
+            ) => [
+              ...previous,
+              actionMessage,
+            ]
           );
 
-        await supabase
-          .from("chats")
-          .update({
-            title,
-          })
-          .eq(
-            "id",
-            chatId
+          void saveMessage(
+            actionMessage
+          ).catch(
+            (
+              error
+            ) => {
+              console.error(
+                "Action mesajı kaydedilemedi:",
+                error
+              );
+            }
           );
-      } catch (err) {
-        console.error(err);
+        }
+      },
+      [
+        saveMessage,
+      ]
+    );
+
+  /* ==================================================
+   * SEND MESSAGE
+   * ================================================== */
+
+  const sendMessage =
+    useCallback(
+      async () => {
+        const cleanInput =
+          input.trim();
+
+        if (
+          !cleanInput &&
+          !selectedFile
+        ) {
+          return;
+        }
+
+        if (
+          isStreaming ||
+          isUploading ||
+          !chatId
+        ) {
+          return;
+        }
+
+        let uploadedAttachment:
+          Attachment | null =
+          null;
+
+        const selectedFileName =
+          selectedFile?.name ??
+          "";
+
+        try {
+          /* ==============================
+           * UPLOAD FILE
+           * ============================== */
+
+          if (selectedFile) {
+            const uploadResult =
+              await uploadSelectedFile();
+
+            if (uploadResult) {
+              uploadedAttachment =
+                uploadResult.attachment;
+            }
+          }
+
+          /* ==============================
+           * USER MESSAGE
+           * ============================== */
+
+          const userMessage:
+            ChatMessage = {
+              id:
+                crypto.randomUUID(),
+
+              sender:
+                "user",
+
+              text:
+                cleanInput,
+
+              attachment:
+                uploadedAttachment,
+            };
+
+          /* ==============================
+           * UPDATE UI
+           * ============================== */
+
+          setMessages(
+            (
+              previous
+            ) => [
+              ...previous,
+              userMessage,
+            ]
+          );
+
+          setInput(
+            ""
+          );
+
+          setSelectedFile(
+            null
+          );
+
+          /* ==============================
+           * SAVE USER MESSAGE
+           * ============================== */
+
+          try {
+            await saveMessage(
+              userMessage
+            );
+          } catch (error) {
+            console.error(
+              "Kullanıcı mesajı kaydedilemedi:",
+              error
+            );
+          }
+
+          /* ==============================
+           * GENERATE TITLE
+           * ============================== */
+
+          void generateTitleIfNeeded(
+            cleanInput ||
+              selectedFileName ||
+              "Yeni Sohbet"
+          );
+
+          /* ==============================
+           * BUILD CONVERSATION
+           * ============================== */
+
+          const conversationMessages:
+            StreamMessage[] = [
+              ...messages,
+            ]
+              .filter(
+                (
+                  message
+                ) =>
+                  Boolean(
+                    message.text.trim()
+                  )
+              )
+              .map(
+                (
+                  message
+                ): StreamMessage => ({
+                  role:
+                    message.sender ===
+                    "user"
+                      ? "user"
+                      : "assistant",
+
+                  content:
+                    message.text,
+                })
+              );
+
+          /* ==============================
+           * CURRENT USER CONTENT
+           * ============================== */
+
+          let currentUserContent =
+            cleanInput;
+
+          if (
+            uploadedAttachment
+          ) {
+            const fileInformation =
+              `
+YÜKLENEN DOSYA:
+Dosya adı: ${uploadedAttachment.name}
+Dosya türü: ${uploadedAttachment.type}
+Dosya URL: ${uploadedAttachment.url}
+
+Kullanıcının yüklediği dosyayı dikkate al.
+Eğer dosyanın içeriğine erişemiyorsan bunu açıkça belirt.
+Dosya hakkında tahmin yürütme.
+              `.trim();
+
+            currentUserContent =
+              currentUserContent
+                ? `${currentUserContent}\n\n${fileInformation}`
+                : fileInformation;
+          }
+
+          if (
+            currentUserContent.trim()
+          ) {
+            conversationMessages.push(
+              {
+                role:
+                  "user",
+
+                content:
+                  currentUserContent.trim(),
+              }
+            );
+          }
+
+          /* ==============================
+           * AI PLACEHOLDER
+           * ============================== */
+
+          const assistantMessageId =
+            crypto.randomUUID();
+
+          setMessages(
+            (
+              previous
+            ) => [
+              ...previous,
+              {
+                id:
+                  assistantMessageId,
+
+                sender:
+                  "syraven",
+
+                text:
+                  "",
+
+                attachment:
+                  null,
+              },
+            ]
+          );
+
+          /* ==============================
+           * STREAM START
+           * ============================== */
+
+          const controller =
+            new AbortController();
+
+          abortControllerRef.current =
+            controller;
+
+          setIsStreaming(
+            true
+          );
+
+          let fullReply =
+            "";
+
+          await streamChat(
+            conversationMessages,
+
+            (
+              chunk: string
+            ) => {
+              fullReply +=
+                chunk;
+
+              setMessages(
+                (
+                  previous
+                ) =>
+                  previous.map(
+                    (
+                      message
+                    ) => {
+                      if (
+                        message.id !==
+                        assistantMessageId
+                      ) {
+                        return message;
+                      }
+
+                      return {
+                        ...message,
+
+                        text:
+                          fullReply,
+                      };
+                    }
+                  )
+              );
+            },
+
+            controller.signal,
+
+            (
+              action:
+                ActionRequest
+            ) => {
+              handleAction(
+                action
+              );
+            }
+          );
+
+          /* ==============================
+           * SAVE AI MESSAGE
+           * ============================== */
+
+          if (
+            fullReply.trim()
+          ) {
+            const assistantMessage:
+              ChatMessage = {
+                id:
+                  assistantMessageId,
+
+                sender:
+                  "syraven",
+
+                text:
+                  fullReply,
+
+                attachment:
+                  null,
+              };
+
+            try {
+              await saveMessage(
+                assistantMessage
+              );
+            } catch (error) {
+              console.error(
+                "AI mesajı kaydedilemedi:",
+                error
+              );
+            }
+          } else {
+            setMessages(
+              (
+                previous
+              ) =>
+                previous.filter(
+                  (
+                    message
+                  ) =>
+                    message.id !==
+                    assistantMessageId
+                )
+            );
+          }
+        } catch (error) {
+          /* ==============================
+           * ABORT
+           * ============================== */
+
+          if (
+            error instanceof
+              DOMException &&
+            error.name ===
+              "AbortError"
+          ) {
+            return;
+          }
+
+          console.error(
+            "Mesaj gönderme hatası:",
+            error
+          );
+
+          const errorMessage =
+            error instanceof Error
+              ? error.message
+              : "Bir hata oluştu.";
+
+          const errorReply:
+            ChatMessage = {
+              id:
+                crypto.randomUUID(),
+
+              sender:
+                "syraven",
+
+              text:
+                `⚠️ ${errorMessage}`,
+
+              attachment:
+                null,
+            };
+
+          setMessages(
+            (
+              previous
+            ) => [
+              ...previous,
+              errorReply,
+            ]
+          );
+        } finally {
+          abortControllerRef.current =
+            null;
+
+          setIsStreaming(
+            false
+          );
+
+          setIsUploading(
+            false
+          );
+        }
+      },
+      [
+        chatId,
+        generateTitleIfNeeded,
+        handleAction,
+        input,
+        isStreaming,
+        isUploading,
+        messages,
+        saveMessage,
+        selectedFile,
+        uploadSelectedFile,
+      ]
+    );
+
+  /* ==================================================
+   * ACTION CONFIRMATION
+   * ================================================== */
+
+  const confirmAction =
+    useCallback(() => {
+      if (!pendingAction) {
+        return;
       }
-    }
 
-    //----------------------------------
-    // TEMİZLE
-    //----------------------------------
+      const confirmationMessage:
+        ChatMessage = {
+          id:
+            crypto.randomUUID(),
 
-    setSelectedFile(null);
-  }
+          sender:
+            "syraven",
+
+          text:
+            "✅ İşlem onaylandı. Action execution sistemi bağlandığında işlem burada gerçekleştirilecek.",
+
+          attachment:
+            null,
+        };
+
+      setMessages(
+        (
+          previous
+        ) => [
+          ...previous,
+          confirmationMessage,
+        ]
+      );
+
+      void saveMessage(
+        confirmationMessage
+      ).catch(
+        (
+          error
+        ) => {
+          console.error(
+            "Onay mesajı kaydedilemedi:",
+            error
+          );
+        }
+      );
+
+      setPendingAction(
+        null
+      );
+    },
+    [
+      pendingAction,
+      saveMessage,
+    ]
+  );
+
+  const cancelAction =
+    useCallback(() => {
+      if (!pendingAction) {
+        return;
+      }
+
+      setPendingAction(
+        null
+      );
+
+      const cancelMessage:
+        ChatMessage = {
+          id:
+            crypto.randomUUID(),
+
+          sender:
+            "syraven",
+
+          text:
+            "❌ İşlem iptal edildi.",
+
+          attachment:
+            null,
+        };
+
+      setMessages(
+        (
+          previous
+        ) => [
+          ...previous,
+          cancelMessage,
+        ]
+      );
+
+      void saveMessage(
+        cancelMessage
+      ).catch(
+        (
+          error
+        ) => {
+          console.error(
+            "İptal mesajı kaydedilemedi:",
+            error
+          );
+        }
+      );
+    },
+    [
+      pendingAction,
+      saveMessage,
+    ]
+  );
+
+  /* ==================================================
+   * RENDER
+   * ================================================== */
 
   return (
-    <div className="fixed inset-0 flex min-h-0 overflow-hidden bg-black text-white">
-
-      {/* SIDEBAR */}
+    <div
+      className="
+        flex
+        h-dvh
+        min-h-0
+        w-full
+        overflow-hidden
+        bg-zinc-950
+        text-white
+      "
+    >
       <Sidebar
-        open={sidebarOpen}
+        open={menuOpen}
         onClose={() =>
-          setSidebarOpen(false)
+          setMenuOpen(
+            false
+          )
         }
       />
 
-      <main className="flex min-w-0 flex-1 min-h-0 flex-col overflow-hidden">
+      <main
+        className="
+          flex
+          min-h-0
+          min-w-0
+          flex-1
+          flex-col
+          overflow-hidden
+        "
+      >
+        {/* ==============================
+         * MOBILE HEADER
+         * ============================== */}
 
-        {/* MOBİL ÜST BAR */}
-        <div className="flex shrink-0 items-center gap-4 border-b border-zinc-800 bg-zinc-950 p-4 md:hidden">
+        <header
+          className="
+            flex
+            h-14
+            shrink-0
+            items-center
+            border-b
+            border-white/[0.06]
+            bg-zinc-950/90
+            px-3
+            backdrop-blur-xl
+            md:hidden
+          "
+        >
           <button
             type="button"
             onClick={() =>
-              setSidebarOpen(true)
+              setMenuOpen(
+                true
+              )
             }
-            className="rounded-lg p-2 text-zinc-300 transition hover:bg-zinc-900 hover:text-white"
+            className="
+              flex
+              h-10
+              w-10
+              items-center
+              justify-center
+              rounded-xl
+              text-zinc-400
+              transition
+              hover:bg-white/[0.06]
+              hover:text-white
+            "
             aria-label="Menüyü aç"
           >
-            <Menu size={24} />
+            <Menu size={21} />
           </button>
 
-          <h1 className="text-lg font-bold text-white">
-             SYRAVEN Chat
-          </h1>
-        </div>
+          <div className="ml-2">
+            <p className="text-sm font-semibold tracking-tight text-white">
+              SYRAVEN
+            </p>
 
-        {/* DESKTOP BAŞLIK */}
-        <div className="hidden shrink-0 p-8 md:block">
-          <h1 className="text-4xl font-bold">
-            SYRAVEN Chat
-          </h1>
-        </div>
+            <p className="text-[10px] text-zinc-500">
+              Artificial Intelligence
+            </p>
+          </div>
+        </header>
 
-        {/* CHAT ALANI */}
-        <ChatWindow
-          messages={messages}
-          isLoading={isLoading}
-          isStreaming={isStreaming}
-        />
+        {/* ==============================
+         * CHAT AREA
+         * ============================== */}
 
-        {/* MESAJ GİRİŞ ALANI */}
-        <div className="shrink-0 px-4 pb-4 pt-2 md:px-8 md:pb-8 md:pt-4">
-          <ChatInput
-            input={input}
-            setInput={setInput}
-            sendMessage={sendMessage}
-            selectedFile={selectedFile}
-            setSelectedFile={
-              setSelectedFile
-            }
-            isUploading={isUploading}
+        <div
+          className="
+            flex
+            min-h-0
+            flex-1
+            flex-col
+            overflow-hidden
+          "
+        >
+          <ChatWindow
+            messages={messages}
+            isLoading={isLoading}
             isStreaming={isStreaming}
-            stopStreaming={() => {
-              abortControllerRef.current?.abort();
-            }}
           />
-        </div>
 
+          {/* ==============================
+           * ACTION CONFIRMATION
+           * ============================== */}
+
+          {pendingAction &&
+            pendingAction.type !==
+              "none" &&
+            pendingAction.requiresConfirmation ===
+              true && (
+              <div
+                className="
+                  shrink-0
+                  px-3
+                  pb-3
+                  sm:px-5
+                "
+              >
+                <div
+                  className="
+                    mx-auto
+                    max-w-4xl
+                    rounded-2xl
+                    border
+                    border-yellow-500/20
+                    bg-yellow-500/[0.06]
+                    p-4
+                    backdrop-blur-xl
+                  "
+                >
+                  <p className="mb-2 text-sm font-semibold text-yellow-200">
+                    ⚡ İşlem Onayı Gerekli
+                  </p>
+
+                  <p className="mb-4 text-sm leading-6 text-zinc-400">
+                    SYRAVEN bir işlem gerçekleştirmek istiyor.
+                    Devam etmek istiyor musun?
+                  </p>
+
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={
+                        confirmAction
+                      }
+                      className="
+                        rounded-xl
+                        bg-white
+                        px-4
+                        py-2
+                        text-sm
+                        font-medium
+                        text-black
+                        transition
+                        hover:bg-zinc-200
+                      "
+                    >
+                      Onayla
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={
+                        cancelAction
+                      }
+                      className="
+                        rounded-xl
+                        border
+                        border-white/10
+                        bg-white/[0.03]
+                        px-4
+                        py-2
+                        text-sm
+                        font-medium
+                        text-zinc-300
+                        transition
+                        hover:bg-white/[0.07]
+                        hover:text-white
+                      "
+                    >
+                      İptal
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+          {/* ==============================
+           * CHAT INPUT
+           * ============================== */}
+
+          <div
+            className="
+              shrink-0
+              border-t
+              border-white/[0.06]
+              bg-zinc-950/90
+              px-3
+              py-3
+              backdrop-blur-xl
+              sm:px-5
+              sm:py-4
+            "
+          >
+            <ChatInput
+              input={input}
+              setInput={setInput}
+              sendMessage={sendMessage}
+              selectedFile={selectedFile}
+              setSelectedFile={
+                setSelectedFile
+              }
+              isUploading={isUploading}
+              isStreaming={isStreaming}
+              stopStreaming={
+                stopStreaming
+              }
+            />
+          </div>
+        </div>
       </main>
     </div>
   );
