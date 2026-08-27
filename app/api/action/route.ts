@@ -12,93 +12,208 @@ import type {
   ActionRequest,
 } from "@/services/action-types";
 
+/* ==================================================
+ * RUNTIME
+ * ================================================== */
+
 export const runtime = "nodejs";
+
+export const dynamic = "force-dynamic";
+
+/* ==================================================
+ * CONFIG
+ * ================================================== */
 
 const MAX_MESSAGE_LENGTH = 12000;
 
-type ActionRequestBody = {
+const JSON_HEADERS = {
+  "Content-Type": "application/json; charset=utf-8",
+  "Cache-Control": "no-store",
+};
+
+/* ==================================================
+ * TYPES
+ * ================================================== */
+
+type ActionApiRequestBody = {
   message?: unknown;
   action?: unknown;
   execute?: unknown;
 };
 
+type ApiErrorResponse = {
+  success: false;
+  error: string;
+  code: string;
+  requestId: string;
+};
+
+type ApiSuccessResponse<T> = {
+  success: true;
+  data: T;
+  requestId: string;
+};
+
+/* ==================================================
+ * REQUEST ID
+ * ================================================== */
+
+function createRequestId(): string {
+  return crypto.randomUUID();
+}
+
+/* ==================================================
+ * JSON RESPONSE HELPERS
+ * ================================================== */
+
+function successResponse<T>(
+  data: T,
+  requestId: string,
+  status = 200
+) {
+  const response: ApiSuccessResponse<T> = {
+    success: true,
+    data,
+    requestId,
+  };
+
+  return NextResponse.json(
+    response,
+    {
+      status,
+      headers: JSON_HEADERS,
+    }
+  );
+}
+
+function errorResponse(
+  error: string,
+  code: string,
+  requestId: string,
+  status = 400
+) {
+  const response: ApiErrorResponse = {
+    success: false,
+    error,
+    code,
+    requestId,
+  };
+
+  return NextResponse.json(
+    response,
+    {
+      status,
+      headers: JSON_HEADERS,
+    }
+  );
+}
+
+/* ==================================================
+ * ERROR NORMALIZATION
+ * ================================================== */
+
+function getErrorMessage(
+  error: unknown
+): string {
+  if (
+    error instanceof Error &&
+    error.message
+  ) {
+    return error.message;
+  }
+
+  if (
+    typeof error === "string" &&
+    error.trim()
+  ) {
+    return error;
+  }
+
+  return "Bilinmeyen bir hata oluştu.";
+}
+
+/* ==================================================
+ * BODY VALIDATION
+ * ================================================== */
+
+function isRecord(
+  value: unknown
+): value is Record<string, unknown> {
+  return Boolean(
+    value &&
+      typeof value === "object" &&
+      !Array.isArray(value)
+  );
+}
+
+/* ==================================================
+ * ACTION VALIDATION
+ * ================================================== */
+
 function isActionRequest(
   value: unknown
 ): value is ActionRequest {
-  if (
-    !value ||
-    typeof value !== "object"
-  ) {
+  if (!isRecord(value)) {
     return false;
   }
 
-  const action =
-    value as Record<string, unknown>;
-
   return (
-    typeof action.type === "string" &&
-    typeof action.requiresConfirmation ===
+    typeof value.type === "string" &&
+    value.type.trim().length > 0 &&
+    typeof value.requiresConfirmation ===
       "boolean" &&
-    typeof action.confidence === "number" &&
-    typeof action.data === "object" &&
-    action.data !== null &&
-    !Array.isArray(action.data)
+    typeof value.confidence === "number" &&
+    Number.isFinite(value.confidence) &&
+    value.confidence >= 0 &&
+    value.confidence <= 1 &&
+    isRecord(value.data)
   );
 }
+
+/* ==================================================
+ * POST
+ * ================================================== */
 
 export async function POST(
   request: Request
 ) {
+  const requestId =
+    createRequestId();
+
   try {
+    /* ==============================================
+     * PARSE JSON
+     * ============================================== */
+
     let body: unknown;
 
     try {
-      body = await request.json();
+      body =
+        await request.json();
     } catch {
-      return NextResponse.json(
-        {
-          error:
-            "Geçersiz JSON isteği.",
-        },
-        {
-          status: 400,
-        }
+      return errorResponse(
+        "Geçersiz JSON isteği.",
+        "INVALID_JSON",
+        requestId,
+        400
       );
     }
 
-    if (
-      !body ||
-      typeof body !== "object"
-    ) {
-      return NextResponse.json(
-        {
-          error:
-            "Geçersiz istek gövdesi.",
-        },
-        {
-          status: 400,
-        }
+    if (!isRecord(body)) {
+      return errorResponse(
+        "Geçersiz istek gövdesi.",
+        "INVALID_REQUEST_BODY",
+        requestId,
+        400
       );
     }
 
     const requestBody =
-      body as ActionRequestBody;
+      body as ActionApiRequestBody;
 
-    /*
-     * ===============================================
-     * ACTION EXECUTE
-     * ===============================================
-     *
-     * Frontend önce action'ı analiz eder.
-     * Kullanıcı onayladıktan sonra:
-     *
-     * {
-     *   action: {...},
-     *   execute: true
-     * }
-     *
-     * gönderir.
-     */
+    /* ==============================================
+     * EXECUTE ACTION
+     * ============================================== */
 
     if (
       requestBody.execute === true
@@ -108,47 +223,74 @@ export async function POST(
           requestBody.action
         )
       ) {
-        return NextResponse.json(
-          {
-            error:
-              "Geçerli bir action bulunamadı.",
-          },
-          {
-            status: 400,
-          }
+        return errorResponse(
+          "Geçerli bir işlem isteği bulunamadı.",
+          "INVALID_ACTION",
+          requestId,
+          400
         );
       }
 
+      const action =
+        requestBody.action;
+
+      /*
+       * ============================================
+       * SECURITY GATE
+       * ============================================
+       *
+       * Confirmation gerektiren işlemler frontend
+       * tarafından onaylandıktan sonra execute=true
+       * ile gelir.
+       *
+       * İleride burada:
+       *
+       * - Supabase auth
+       * - userId
+       * - workspaceId
+       * - organizationId
+       * - plan kontrolü
+       * - permission kontrolü
+       * - enterprise policy
+       * - audit logging
+       * - rate limiting
+       *
+       * eklenecek.
+       *
+       * Route sözleşmesi buna hazırdır.
+       */
+
       const result =
         await executeAction(
-          requestBody.action
+          action
         );
 
-      return NextResponse.json(
+      return successResponse(
         {
-          success:
-            result.success,
-
+          executed: result.success,
           message:
             result.message,
-
-          data:
-            result.data,
+          result:
+            result.data ?? null,
+          action: {
+            type:
+              action.type,
+            confidence:
+              action.confidence,
+            requiresConfirmation:
+              action.requiresConfirmation,
+          },
         },
-        {
-          status:
-            result.success
-              ? 200
-              : 400,
-        }
+        requestId,
+        result.success
+          ? 200
+          : 400
       );
     }
 
-    /*
-     * ===============================================
-     * ACTION ANALYZE
-     * ===============================================
-     */
+    /* ==============================================
+     * ANALYZE ACTION
+     * ============================================== */
 
     const userMessage =
       typeof requestBody.message ===
@@ -157,14 +299,11 @@ export async function POST(
         : "";
 
     if (!userMessage) {
-      return NextResponse.json(
-        {
-          error:
-            "Geçerli bir mesaj gönderilmedi.",
-        },
-        {
-          status: 400,
-        }
+      return errorResponse(
+        "Geçerli bir mesaj gönderilmedi.",
+        "EMPTY_MESSAGE",
+        requestId,
+        400
       );
     }
 
@@ -172,44 +311,105 @@ export async function POST(
       userMessage.length >
       MAX_MESSAGE_LENGTH
     ) {
-      return NextResponse.json(
-        {
-          error:
-            `Mesaj çok uzun. En fazla ${MAX_MESSAGE_LENGTH} karakter gönderilebilir.`,
-        },
-        {
-          status: 413,
-        }
+      return errorResponse(
+        `Mesaj çok uzun. En fazla ${MAX_MESSAGE_LENGTH} karakter gönderilebilir.`,
+        "MESSAGE_TOO_LONG",
+        requestId,
+        413
       );
     }
+
+    /*
+     * ============================================
+     * ACTION PARSE
+     * ============================================
+     *
+     * parseAction gelecekte:
+     *
+     * Chat
+     * Agent
+     * Workspace
+     * Automation
+     * Connected Apps
+     * Coding Studio
+     * Knowledge
+     *
+     * tarafından ortak kullanılabilir.
+     */
 
     const action =
       await parseAction(
         userMessage
       );
 
-    return NextResponse.json(
+    /*
+     * Parser hiçbir işlem bulamazsa bile
+     * API başarılı şekilde response dönebilir.
+     *
+     * Bunun için ActionRequest.type = "none"
+     * kullanılabilir.
+     */
+
+    if (
+      !isActionRequest(
+        action
+      )
+    ) {
+      return errorResponse(
+        "Action parser geçerli bir işlem çıktısı üretmedi.",
+        "INVALID_ACTION_RESPONSE",
+        requestId,
+        500
+      );
+    }
+
+    return successResponse(
       {
         action,
+        executable:
+          action.type !== "none",
+        requiresConfirmation:
+          action.requiresConfirmation,
       },
-      {
-        status: 200,
-      }
+      requestId,
+      200
     );
   } catch (error) {
-    console.error(
-      "ACTION API HATASI:",
-      error
-    );
+    /*
+     * ==============================================
+     * SERVER ERROR
+     * ==============================================
+     */
 
-    return NextResponse.json(
+    console.error(
+      "SYRAVEN ACTION API ERROR",
       {
-        error:
-          "Action işlemi sırasında bir hata oluştu.",
-      },
-      {
-        status: 500,
+        requestId,
+        error,
       }
     );
+
+    return errorResponse(
+      getErrorMessage(error),
+      "ACTION_API_ERROR",
+      requestId,
+      500
+    );
   }
+}
+
+/* ==================================================
+ * METHOD NOT ALLOWED
+ * ================================================== */
+
+export async function GET() {
+  const requestId =
+    createRequestId();
+
+  return errorResponse(
+    "Bu endpoint yalnızca POST isteklerini destekler.",
+    "METHOD_NOT_ALLOWED",
+    requestId,
+    405
+  );
 }

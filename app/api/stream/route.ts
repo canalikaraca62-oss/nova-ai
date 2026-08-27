@@ -60,25 +60,18 @@ if (!groqApiKey) {
 
 const ESTIMATED_CHARS_PER_TOKEN = 3;
 
-// Input için ayrılan yaklaşık token bütçesi
 const MAX_INPUT_TOKEN_BUDGET = 5000;
 
-// Son mesaj uzun ise bağlamı koruyarak kısaltılır
 const MAX_LATEST_MESSAGE_CHARS = 16000;
 
-// Önceki mesajların maksimum karakter uzunluğu
 const MAX_OLD_MESSAGE_CHARS = 2200;
 
-// Kaç önceki mesaj bağlama alınacak
 const MAX_PREVIOUS_MESSAGES = 6;
 
-// Modelin üretebileceği maksimum cevap token sayısı
 const MAX_RESPONSE_TOKENS = 6000;
 
-// Çok düşük cevap limiti oluşmasını engeller
 const MIN_RESPONSE_TOKENS = 800;
 
-// Input + output için güvenli toplam token bütçesi
 const SAFE_TOTAL_TOKEN_LIMIT = 12000;
 
 // ==================================================
@@ -741,8 +734,6 @@ function calculateResponseTokens(
     SAFE_TOTAL_TOKEN_LIMIT -
     estimatedInputTokens;
 
-  // Input beklenenden büyük olsa bile
-  // model için minimum cevap alanı bırak.
   if (
     safeRemaining <=
     MIN_RESPONSE_TOKENS

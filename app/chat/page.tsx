@@ -2,33 +2,43 @@
 
 import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+
 import { supabase } from "@/lib/supabase";
 
 export default function ChatPage() {
   const router = useRouter();
 
-  const hasCreatedChat = useRef(false);
+  const hasCreatedConversation =
+    useRef(false);
 
   useEffect(() => {
-    async function createChat() {
-      if (hasCreatedChat.current) {
+    async function createConversation() {
+      if (
+        hasCreatedConversation.current
+      ) {
         return;
       }
 
-      hasCreatedChat.current = true;
+      hasCreatedConversation.current =
+        true;
 
       const {
         data: { user },
         error: userError,
-      } = await supabase.auth.getUser();
+      } =
+        await supabase.auth.getUser();
 
       if (userError || !user) {
         router.replace("/login");
+
         return;
       }
 
-      const { data, error } = await supabase
-        .from("chats")
+      const {
+        data,
+        error,
+      } = await supabase
+        .from("conversations")
         .insert({
           title: "Yeni Sohbet",
           user_id: user.id,
@@ -42,15 +52,18 @@ export default function ChatPage() {
           error
         );
 
-        hasCreatedChat.current = false;
+        hasCreatedConversation.current =
+          false;
 
         return;
       }
 
-      router.replace(`/chat/${data.id}`);
+      router.replace(
+        `/chat/${data.id}`
+      );
     }
 
-    createChat();
+    createConversation();
   }, [router]);
 
   return (

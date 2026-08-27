@@ -19,9 +19,7 @@ import {
 import { supabase } from "@/lib/supabase";
 
 import Sidebar from "@/app/components/Menu";
-
 import ChatWindow from "@/app/components/ChatWindow";
-
 import ChatInput from "@/app/components/ChatInput";
 
 import {
@@ -52,7 +50,7 @@ type Attachment = {
 };
 
 type ChatMessage = {
-  id?: string;
+  id: string;
   sender: "user" | "syraven";
   text: string;
   attachment?: Attachment | null;
@@ -60,12 +58,15 @@ type ChatMessage = {
 
 type DatabaseMessage = {
   id: string;
-  sender: string;
-  text: string;
+  user_id: string;
+  chat_id: string;
+  role: "user" | "assistant";
+  content: string;
+  attachment_path?: string | null;
   attachment_name?: string | null;
-  attachment_url?: string | null;
   attachment_type?: string | null;
-  created_at?: string;
+  attachment?: unknown;
+  created_at: string;
 };
 
 /* ==================================================
@@ -73,44 +74,70 @@ type DatabaseMessage = {
  * ================================================== */
 
 async function uploadFile(
-  file: File
-): Promise<string> {
+  file: File,
+  userId: string
+): Promise<Attachment> {
   const extension =
     file.name
       .split(".")
       .pop();
 
   const safeExtension =
-    extension &&
-    extension.trim()
+    extension && extension.trim()
       ? `.${extension}`
       : "";
 
-  const fileName =
-    `${crypto.randomUUID()}${safeExtension}`;
+  const filePath =
+    `${userId}/${crypto.randomUUID()}${safeExtension}`;
 
   const {
-    data,
     error,
   } =
     await supabase.storage
       .from("files")
       .upload(
-        fileName,
-        file
+        filePath,
+        file,
+        {
+          upsert: false,
+        }
       );
 
   if (error) {
+    console.error(
+      "DOSYA YÜKLEME HATASI:",
+      error
+    );
+
     throw error;
   }
 
-  if (!data) {
+  const {
+    data,
+  } =
+    supabase.storage
+      .from("files")
+      .getPublicUrl(
+        filePath
+      );
+
+  if (!data.publicUrl) {
     throw new Error(
-      "Dosya yüklenemedi."
+      "Dosya URL'si oluşturulamadı."
     );
   }
 
-  return fileName;
+  return {
+    name:
+      file.name,
+
+    url:
+      data.publicUrl,
+
+    type:
+      file.type ||
+      "application/octet-stream",
+  };
 }
 
 /* ==================================================
@@ -132,6 +159,20 @@ export default function ChatDetailPage() {
   /* ==================================================
    * STATE
    * ================================================== */
+
+  const [
+    userId,
+    setUserId,
+  ] =
+    useState<string | null>(
+      null
+    );
+
+  const [
+    authLoading,
+    setAuthLoading,
+  ] =
+    useState(true);
 
   const [
     messages,
@@ -215,13 +256,90 @@ export default function ChatDetailPage() {
   ]);
 
   /* ==================================================
+   * AUTH
+   * ================================================== */
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadUser =
+      async () => {
+        setAuthLoading(
+          true
+        );
+
+        try {
+          const {
+            data,
+            error,
+          } =
+            await supabase.auth.getUser();
+
+          if (error) {
+            throw error;
+          }
+
+          if (
+            !data.user
+          ) {
+            if (mounted) {
+              setUserId(
+                null
+              );
+
+              router.replace(
+                "/login"
+              );
+            }
+
+            return;
+          }
+
+          if (mounted) {
+            setUserId(
+              data.user.id
+            );
+          }
+        } catch (error) {
+          console.error(
+            "KULLANICI YÜKLEME HATASI:",
+            error
+          );
+
+          if (mounted) {
+            setUserId(
+              null
+            );
+          }
+        } finally {
+          if (mounted) {
+            setAuthLoading(
+              false
+            );
+          }
+        }
+      };
+
+    void loadUser();
+
+    return () => {
+      mounted = false;
+    };
+  }, [
+    router,
+  ]);
+
+  /* ==================================================
    * LOAD MESSAGES
    * ================================================== */
 
   const loadMessages =
     useCallback(
       async () => {
-        if (!chatId) {
+        if (
+          !chatId ||
+          !userId
+        ) {
           return;
         }
 
@@ -235,74 +353,114 @@ export default function ChatDetailPage() {
             error,
           } =
             await supabase
-              .from(
-                "messages"
-              )
-              .select(
-                "*"
-              )
+              .from("messages")
+              .select(`
+                id,
+                user_id,
+                chat_id,
+                role,
+                content,
+                attachment_path,
+                attachment_name,
+                attachment_type,
+                attachment,
+                created_at
+              `)
               .eq(
                 "chat_id",
                 chatId
               )
+              .eq(
+                "user_id",
+                userId
+              )
               .order(
                 "created_at",
                 {
-                  ascending:
-                    true,
+                  ascending: true,
                 }
               );
 
           if (error) {
+            console.error(
+              "SUPABASE MESAJ HATASI:",
+              error
+            );
+
             throw error;
           }
 
-          const formattedMessages:
-            ChatMessage[] =
+          const formattedMessages =
             (
-              data ??
-              []
+              (data ??
+                []) as DatabaseMessage[]
             ).map(
               (
-                message: DatabaseMessage
-              ) => {
-                const hasAttachment =
-                  Boolean(
-                    message.attachment_name &&
-                    message.attachment_url &&
-                    message.attachment_type
-                  );
+                message
+              ): ChatMessage => {
+                let attachment:
+                  Attachment | null =
+                  null;
+
+                if (
+                  message.attachment &&
+                  typeof message.attachment ===
+                    "object"
+                ) {
+                  const rawAttachment =
+                    message.attachment as Partial<Attachment>;
+
+                  if (
+                    rawAttachment.name &&
+                    rawAttachment.url &&
+                    rawAttachment.type
+                  ) {
+                    attachment = {
+                      name:
+                        rawAttachment.name,
+
+                      url:
+                        rawAttachment.url,
+
+                      type:
+                        rawAttachment.type,
+                    };
+                  }
+                }
+
+                if (
+                  !attachment &&
+                  message.attachment_path
+                ) {
+                  attachment = {
+                    name:
+                      message.attachment_name ||
+                      "Dosya",
+
+                    url:
+                      message.attachment_path,
+
+                    type:
+                      message.attachment_type ||
+                      "application/octet-stream",
+                  };
+                }
 
                 return {
                   id:
                     message.id,
 
                   sender:
-                    message.sender ===
+                    message.role ===
                     "user"
                       ? "user"
                       : "syraven",
 
                   text:
-                    message.text ??
+                    message.content ??
                     "",
 
-                  attachment:
-                    hasAttachment
-                      ? {
-                          name:
-                            message.attachment_name ??
-                            "Dosya",
-
-                          url:
-                            message.attachment_url ??
-                            "",
-
-                          type:
-                            message.attachment_type ??
-                            "application/octet-stream",
-                        }
-                      : null,
+                  attachment,
                 };
               }
             );
@@ -321,7 +479,7 @@ export default function ChatDetailPage() {
             );
         } catch (error) {
           console.error(
-            "Mesajlar yüklenemedi:",
+            "MESAJ YÜKLEME HATASI:",
             error
           );
         } finally {
@@ -332,12 +490,31 @@ export default function ChatDetailPage() {
       },
       [
         chatId,
+        userId,
       ]
     );
 
   useEffect(() => {
+    if (
+      authLoading
+    ) {
+      return;
+    }
+
+    if (
+      !userId
+    ) {
+      setIsLoading(
+        false
+      );
+
+      return;
+    }
+
     void loadMessages();
   }, [
+    authLoading,
+    userId,
     loadMessages,
   ]);
 
@@ -376,8 +553,13 @@ export default function ChatDetailPage() {
       async (
         message: ChatMessage
       ) => {
-        if (!chatId) {
-          return null;
+        if (
+          !chatId ||
+          !userId
+        ) {
+          throw new Error(
+            "Kullanıcı veya sohbet bulunamadı."
+          );
         }
 
         const {
@@ -385,35 +567,58 @@ export default function ChatDetailPage() {
           error,
         } =
           await supabase
-            .from(
-              "messages"
-            )
+            .from("messages")
             .insert({
+              user_id:
+                userId,
+
               chat_id:
                 chatId,
 
-              sender:
-                message.sender,
+              role:
+                message.sender ===
+                "user"
+                  ? "user"
+                  : "assistant",
 
-              text:
+              content:
                 message.text,
+
+              attachment_path:
+                message.attachment?.url ??
+                null,
 
               attachment_name:
                 message.attachment?.name ??
                 null,
 
-              attachment_url:
-                message.attachment?.url ??
-                null,
-
               attachment_type:
                 message.attachment?.type ??
                 null,
+
+              attachment:
+                message.attachment
+                  ? {
+                      name:
+                        message.attachment.name,
+
+                      url:
+                        message.attachment.url,
+
+                      type:
+                        message.attachment.type,
+                    }
+                  : null,
             })
             .select()
             .single();
 
         if (error) {
+          console.error(
+            "MESAJ KAYDETME HATASI:",
+            error
+          );
+
           throw error;
         }
 
@@ -421,17 +626,21 @@ export default function ChatDetailPage() {
       },
       [
         chatId,
+        userId,
       ]
     );
 
   /* ==================================================
-   * UPLOAD SELECTED FILE
+   * UPLOAD FILE
    * ================================================== */
 
   const uploadSelectedFile =
     useCallback(
       async () => {
-        if (!selectedFile) {
+        if (
+          !selectedFile ||
+          !userId
+        ) {
           return null;
         }
 
@@ -440,48 +649,10 @@ export default function ChatDetailPage() {
         );
 
         try {
-          const filePath =
-            await uploadFile(
-              selectedFile
-            );
-
-          const {
-            data,
-          } =
-            supabase.storage
-              .from(
-                "files"
-              )
-              .getPublicUrl(
-                filePath
-              );
-
-          const fileUrl =
-            data.publicUrl;
-
-          if (!fileUrl) {
-            throw new Error(
-              "Dosya URL'si oluşturulamadı."
-            );
-          }
-
-          const attachment:
-            Attachment = {
-              name:
-                selectedFile.name,
-
-              url:
-                fileUrl,
-
-              type:
-                selectedFile.type ||
-                "application/octet-stream",
-            };
-
-          return {
-            filePath,
-            attachment,
-          };
+          return await uploadFile(
+            selectedFile,
+            userId
+          );
         } finally {
           setIsUploading(
             false
@@ -490,6 +661,7 @@ export default function ChatDetailPage() {
       },
       [
         selectedFile,
+        userId,
       ]
     );
 
@@ -530,7 +702,7 @@ export default function ChatDetailPage() {
           }
         } catch (error) {
           console.error(
-            "Başlık oluşturulamadı:",
+            "BAŞLIK OLUŞTURMA HATASI:",
             error
           );
         }
@@ -594,7 +766,7 @@ export default function ChatDetailPage() {
               error
             ) => {
               console.error(
-                "Action mesajı kaydedilemedi:",
+                "ACTION MESAJI KAYDETME HATASI:",
                 error
               );
             }
@@ -626,7 +798,8 @@ export default function ChatDetailPage() {
         if (
           isStreaming ||
           isUploading ||
-          !chatId
+          !chatId ||
+          !userId
         ) {
           return;
         }
@@ -640,23 +813,10 @@ export default function ChatDetailPage() {
           "";
 
         try {
-          /* ==============================
-           * UPLOAD FILE
-           * ============================== */
-
           if (selectedFile) {
-            const uploadResult =
+            uploadedAttachment =
               await uploadSelectedFile();
-
-            if (uploadResult) {
-              uploadedAttachment =
-                uploadResult.attachment;
-            }
           }
-
-          /* ==============================
-           * USER MESSAGE
-           * ============================== */
 
           const userMessage:
             ChatMessage = {
@@ -672,10 +832,6 @@ export default function ChatDetailPage() {
               attachment:
                 uploadedAttachment,
             };
-
-          /* ==============================
-           * UPDATE UI
-           * ============================== */
 
           setMessages(
             (
@@ -694,24 +850,17 @@ export default function ChatDetailPage() {
             null
           );
 
-          /* ==============================
-           * SAVE USER MESSAGE
-           * ============================== */
+          /*
+           * ÖNCE KAYDET
+           */
 
-          try {
-            await saveMessage(
-              userMessage
-            );
-          } catch (error) {
-            console.error(
-              "Kullanıcı mesajı kaydedilemedi:",
-              error
-            );
-          }
+          await saveMessage(
+            userMessage
+          );
 
-          /* ==============================
-           * GENERATE TITLE
-           * ============================== */
+          /*
+           * SONRA BAŞLIK ÜRET
+           */
 
           void generateTitleIfNeeded(
             cleanInput ||
@@ -719,13 +868,15 @@ export default function ChatDetailPage() {
               "Yeni Sohbet"
           );
 
-          /* ==============================
-           * BUILD CONVERSATION
-           * ============================== */
+          /*
+           * GEÇMİŞ MESAJLARI OLUŞTUR
+           */
 
           const conversationMessages:
-            StreamMessage[] = [
+            StreamMessage[] =
+            [
               ...messages,
+              userMessage,
             ]
               .filter(
                 (
@@ -750,52 +901,6 @@ export default function ChatDetailPage() {
                 })
               );
 
-          /* ==============================
-           * CURRENT USER CONTENT
-           * ============================== */
-
-          let currentUserContent =
-            cleanInput;
-
-          if (
-            uploadedAttachment
-          ) {
-            const fileInformation =
-              `
-YÜKLENEN DOSYA:
-Dosya adı: ${uploadedAttachment.name}
-Dosya türü: ${uploadedAttachment.type}
-Dosya URL: ${uploadedAttachment.url}
-
-Kullanıcının yüklediği dosyayı dikkate al.
-Eğer dosyanın içeriğine erişemiyorsan bunu açıkça belirt.
-Dosya hakkında tahmin yürütme.
-              `.trim();
-
-            currentUserContent =
-              currentUserContent
-                ? `${currentUserContent}\n\n${fileInformation}`
-                : fileInformation;
-          }
-
-          if (
-            currentUserContent.trim()
-          ) {
-            conversationMessages.push(
-              {
-                role:
-                  "user",
-
-                content:
-                  currentUserContent.trim(),
-              }
-            );
-          }
-
-          /* ==============================
-           * AI PLACEHOLDER
-           * ============================== */
-
           const assistantMessageId =
             crypto.randomUUID();
 
@@ -819,10 +924,6 @@ Dosya hakkında tahmin yürütme.
               },
             ]
           );
-
-          /* ==============================
-           * STREAM START
-           * ============================== */
 
           const controller =
             new AbortController();
@@ -884,10 +985,6 @@ Dosya hakkında tahmin yürütme.
             }
           );
 
-          /* ==============================
-           * SAVE AI MESSAGE
-           * ============================== */
-
           if (
             fullReply.trim()
           ) {
@@ -906,16 +1003,9 @@ Dosya hakkında tahmin yürütme.
                   null,
               };
 
-            try {
-              await saveMessage(
-                assistantMessage
-              );
-            } catch (error) {
-              console.error(
-                "AI mesajı kaydedilemedi:",
-                error
-              );
-            }
+            await saveMessage(
+              assistantMessage
+            );
           } else {
             setMessages(
               (
@@ -931,10 +1021,6 @@ Dosya hakkında tahmin yürütme.
             );
           }
         } catch (error) {
-          /* ==============================
-           * ABORT
-           * ============================== */
-
           if (
             error instanceof
               DOMException &&
@@ -945,36 +1031,33 @@ Dosya hakkında tahmin yürütme.
           }
 
           console.error(
-            "Mesaj gönderme hatası:",
+            "MESAJ GÖNDERME HATASI:",
             error
           );
 
           const errorMessage =
             error instanceof Error
               ? error.message
-              : "Bir hata oluştu.";
-
-          const errorReply:
-            ChatMessage = {
-              id:
-                crypto.randomUUID(),
-
-              sender:
-                "syraven",
-
-              text:
-                `⚠️ ${errorMessage}`,
-
-              attachment:
-                null,
-            };
+              : "Mesaj gönderilirken bir hata oluştu.";
 
           setMessages(
             (
               previous
             ) => [
               ...previous,
-              errorReply,
+              {
+                id:
+                  crypto.randomUUID(),
+
+                sender:
+                  "syraven",
+
+                text:
+                  `⚠️ ${errorMessage}`,
+
+                attachment:
+                  null,
+              },
             ]
           );
         } finally {
@@ -1001,11 +1084,12 @@ Dosya hakkında tahmin yürütme.
         saveMessage,
         selectedFile,
         uploadSelectedFile,
+        userId,
       ]
     );
 
   /* ==================================================
-   * ACTION CONFIRMATION
+   * CONFIRM ACTION
    * ================================================== */
 
   const confirmAction =
@@ -1045,7 +1129,7 @@ Dosya hakkında tahmin yürütme.
           error
         ) => {
           console.error(
-            "Onay mesajı kaydedilemedi:",
+            "ONAY MESAJI KAYDEDİLEMEDİ:",
             error
           );
         }
@@ -1060,6 +1144,10 @@ Dosya hakkında tahmin yürütme.
       saveMessage,
     ]
   );
+
+  /* ==================================================
+   * CANCEL ACTION
+   * ================================================== */
 
   const cancelAction =
     useCallback(() => {
@@ -1102,7 +1190,7 @@ Dosya hakkında tahmin yürütme.
           error
         ) => {
           console.error(
-            "İptal mesajı kaydedilemedi:",
+            "İPTAL MESAJI KAYDEDİLEMEDİ:",
             error
           );
         }
@@ -1126,7 +1214,7 @@ Dosya hakkında tahmin yürütme.
         min-h-0
         w-full
         overflow-hidden
-        bg-zinc-950
+        bg-[#09090b]
         text-white
       "
     >
@@ -1149,9 +1237,7 @@ Dosya hakkında tahmin yürütme.
           overflow-hidden
         "
       >
-        {/* ==============================
-         * MOBILE HEADER
-         * ============================== */}
+        {/* MOBILE HEADER */}
 
         <header
           className="
@@ -1161,7 +1247,7 @@ Dosya hakkında tahmin yürütme.
             items-center
             border-b
             border-white/[0.06]
-            bg-zinc-950/90
+            bg-[#09090b]/90
             px-3
             backdrop-blur-xl
             md:hidden
@@ -1202,10 +1288,6 @@ Dosya hakkında tahmin yürütme.
           </div>
         </header>
 
-        {/* ==============================
-         * CHAT AREA
-         * ============================== */}
-
         <div
           className="
             flex
@@ -1217,19 +1299,17 @@ Dosya hakkında tahmin yürütme.
         >
           <ChatWindow
             messages={messages}
-            isLoading={isLoading}
+            isLoading={
+              isLoading ||
+              authLoading
+            }
             isStreaming={isStreaming}
           />
-
-          {/* ==============================
-           * ACTION CONFIRMATION
-           * ============================== */}
 
           {pendingAction &&
             pendingAction.type !==
               "none" &&
-            pendingAction.requiresConfirmation ===
-              true && (
+            pendingAction.requiresConfirmation && (
               <div
                 className="
                   shrink-0
@@ -1307,16 +1387,12 @@ Dosya hakkında tahmin yürütme.
               </div>
             )}
 
-          {/* ==============================
-           * CHAT INPUT
-           * ============================== */}
-
           <div
             className="
               shrink-0
               border-t
               border-white/[0.06]
-              bg-zinc-950/90
+              bg-[#09090b]/90
               px-3
               py-3
               backdrop-blur-xl
