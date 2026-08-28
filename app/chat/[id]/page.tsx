@@ -1,1422 +1,1004 @@
 "use client";
 
 import {
-  useCallback,
+  FormEvent,
+  KeyboardEvent,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
-
 import {
   useParams,
   useRouter,
 } from "next/navigation";
 
-import {
-  Menu,
-} from "lucide-react";
-
-import { supabase } from "@/lib/supabase";
-
-import Sidebar from "@/app/components/Menu";
-import ChatWindow from "@/app/components/ChatWindow";
-import ChatInput from "@/app/components/ChatInput";
-
-import {
-  streamChat,
-  type StreamMessage,
-} from "@/app/hooks/chat-stream";
-
-import {
-  generateChatTitle,
-} from "@/services/ai";
-
-import {
-  renameChat,
-} from "@/services/chats";
-
-import type {
-  ActionRequest,
-} from "@/services/action-types";
-
-/* ==================================================
- * TYPES
- * ================================================== */
-
-type Attachment = {
-  name: string;
-  url: string;
-  type: string;
-};
+type MessageRole =
+  | "system"
+  | "user"
+  | "assistant";
 
 type ChatMessage = {
   id: string;
-  sender: "user" | "syraven";
-  text: string;
-  attachment?: Attachment | null;
-};
-
-type DatabaseMessage = {
-  id: string;
-  user_id: string;
-  chat_id: string;
-  role: "user" | "assistant";
+  role: MessageRole;
   content: string;
-  attachment_path?: string | null;
-  attachment_name?: string | null;
-  attachment_type?: string | null;
-  attachment?: unknown;
-  created_at: string;
+  createdAt: string;
 };
 
-/* ==================================================
- * FILE UPLOAD
- * ================================================== */
+type ApiMessage = {
+  role?: string;
+  content?: string;
+};
 
-async function uploadFile(
-  file: File,
-  userId: string
-): Promise<Attachment> {
-  const extension =
-    file.name
-      .split(".")
-      .pop();
+type ChatApiResponse = {
+  message?: ApiMessage;
+  response?: string;
+  content?: string;
+  error?: string;
+};
 
-  const safeExtension =
-    extension && extension.trim()
-      ? `.${extension}`
-      : "";
+type StoredConversation = {
+  id: string;
+  title: string;
+  messages: ChatMessage[];
+  updatedAt: string;
+};
 
-  const filePath =
-    `${userId}/${crypto.randomUUID()}${safeExtension}`;
+const STORAGE_PREFIX =
+  "syraven-chat:";
 
-  const {
-    error,
-  } =
-    await supabase.storage
-      .from("files")
-      .upload(
-        filePath,
-        file,
-        {
-          upsert: false,
-        }
-      );
-
-  if (error) {
-    console.error(
-      "DOSYA YÜKLEME HATASI:",
-      error
-    );
-
-    throw error;
-  }
-
-  const {
-    data,
-  } =
-    supabase.storage
-      .from("files")
-      .getPublicUrl(
-        filePath
-      );
-
-  if (!data.publicUrl) {
-    throw new Error(
-      "Dosya URL'si oluşturulamadı."
-    );
-  }
-
+function createMessage(
+  role: MessageRole,
+  content: string
+): ChatMessage {
   return {
-    name:
-      file.name,
-
-    url:
-      data.publicUrl,
-
-    type:
-      file.type ||
-      "application/octet-stream",
+    id:
+      typeof crypto !== "undefined" &&
+      typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random()
+            .toString(36)
+            .slice(2)}`,
+    role,
+    content,
+    createdAt: new Date().toISOString(),
   };
 }
 
-/* ==================================================
- * PAGE
- * ================================================== */
+function getResponseContent(
+  data: ChatApiResponse
+): string {
+  if (
+    typeof data.message?.content === "string" &&
+    data.message.content.trim()
+  ) {
+    return data.message.content.trim();
+  }
 
-export default function ChatDetailPage() {
-  const params =
-    useParams();
+  if (
+    typeof data.response === "string" &&
+    data.response.trim()
+  ) {
+    return data.response.trim();
+  }
 
-  const router =
-    useRouter();
+  if (
+    typeof data.content === "string" &&
+    data.content.trim()
+  ) {
+    return data.content.trim();
+  }
 
-  const chatId =
-    typeof params?.id === "string"
-      ? params.id
-      : "";
+  return "";
+}
 
-  /* ==================================================
-   * STATE
-   * ================================================== */
-
-  const [
-    userId,
-    setUserId,
-  ] =
-    useState<string | null>(
-      null
+function createTitle(
+  messages: ChatMessage[]
+): string {
+  const firstUserMessage =
+    messages.find(
+      (message) =>
+        message.role === "user"
     );
 
-  const [
-    authLoading,
-    setAuthLoading,
-  ] =
-    useState(true);
+  if (!firstUserMessage) {
+    return "Yeni sohbet";
+  }
 
-  const [
-    messages,
-    setMessages,
-  ] =
-    useState<ChatMessage[]>(
-      []
+  const value =
+    firstUserMessage.content
+      .replace(/\s+/g, " ")
+      .trim();
+
+  if (value.length <= 48) {
+    return value;
+  }
+
+  return `${value.slice(0, 48)}...`;
+}
+
+function formatTime(
+  value: string
+): string {
+  try {
+    return new Intl.DateTimeFormat(
+      "tr-TR",
+      {
+        hour: "2-digit",
+        minute: "2-digit",
+      }
+    ).format(
+      new Date(value)
     );
+  } catch {
+    return "";
+  }
+}
 
-  const [
-    input,
-    setInput,
-  ] =
-    useState("");
+function getStorageKey(
+  conversationId: string
+) {
+  return `${STORAGE_PREFIX}${conversationId}`;
+}
 
-  const [
-    selectedFile,
-    setSelectedFile,
-  ] =
-    useState<File | null>(
-      null
-    );
-
-  const [
-    isUploading,
-    setIsUploading,
-  ] =
-    useState(false);
-
-  const [
-    isLoading,
-    setIsLoading,
-  ] =
-    useState(true);
-
-  const [
-    isStreaming,
-    setIsStreaming,
-  ] =
-    useState(false);
-
-  const [
-    menuOpen,
-    setMenuOpen,
-  ] =
-    useState(false);
-
-  const [
-    pendingAction,
-    setPendingAction,
-  ] =
-    useState<ActionRequest | null>(
-      null
-    );
-
-  /* ==================================================
-   * REFS
-   * ================================================== */
-
-  const abortControllerRef =
-    useRef<AbortController | null>(
-      null
-    );
-
-  const hasGeneratedTitleRef =
-    useRef(false);
-
-  /* ==================================================
-   * CHAT ID CONTROL
-   * ================================================== */
-
-  useEffect(() => {
-    if (!chatId) {
-      router.replace(
-        "/chat"
+function loadConversation(
+  conversationId: string
+): StoredConversation | null {
+  try {
+    const raw =
+      window.localStorage.getItem(
+        getStorageKey(conversationId)
       );
+
+    if (!raw) {
+      return null;
     }
-  }, [
-    chatId,
-    router,
-  ]);
 
-  /* ==================================================
-   * AUTH
-   * ================================================== */
+    const parsed =
+      JSON.parse(raw) as StoredConversation;
 
-  useEffect(() => {
-    let mounted = true;
+    if (
+      !parsed ||
+      !Array.isArray(parsed.messages)
+    ) {
+      return null;
+    }
 
-    const loadUser =
-      async () => {
-        setAuthLoading(
-          true
-        );
+    return {
+      id: conversationId,
+      title:
+        typeof parsed.title === "string" &&
+        parsed.title.trim()
+          ? parsed.title
+          : createTitle(
+              parsed.messages
+            ),
+      messages:
+        parsed.messages.filter(
+          (
+            message
+          ): message is ChatMessage =>
+            Boolean(
+              message &&
+                typeof message.id === "string" &&
+                typeof message.role === "string" &&
+                typeof message.content ===
+                  "string" &&
+                typeof message.createdAt ===
+                  "string"
+            )
+        ),
+      updatedAt:
+        typeof parsed.updatedAt === "string"
+          ? parsed.updatedAt
+          : new Date().toISOString(),
+    };
+  } catch {
+    return null;
+  }
+}
 
-        try {
-          const {
-            data,
-            error,
-          } =
-            await supabase.auth.getUser();
-
-          if (error) {
-            throw error;
-          }
-
-          if (
-            !data.user
-          ) {
-            if (mounted) {
-              setUserId(
-                null
-              );
-
-              router.replace(
-                "/login"
-              );
-            }
-
-            return;
-          }
-
-          if (mounted) {
-            setUserId(
-              data.user.id
-            );
-          }
-        } catch (error) {
-          console.error(
-            "KULLANICI YÜKLEME HATASI:",
-            error
-          );
-
-          if (mounted) {
-            setUserId(
-              null
-            );
-          }
-        } finally {
-          if (mounted) {
-            setAuthLoading(
-              false
-            );
-          }
-        }
+function saveConversation(
+  conversationId: string,
+  messages: ChatMessage[]
+) {
+  try {
+    const conversation: StoredConversation =
+      {
+        id: conversationId,
+        title:
+          createTitle(messages),
+        messages,
+        updatedAt:
+          new Date().toISOString(),
       };
 
-    void loadUser();
-
-    return () => {
-      mounted = false;
-    };
-  }, [
-    router,
-  ]);
-
-  /* ==================================================
-   * LOAD MESSAGES
-   * ================================================== */
-
-  const loadMessages =
-    useCallback(
-      async () => {
-        if (
-          !chatId ||
-          !userId
-        ) {
-          return;
-        }
-
-        setIsLoading(
-          true
-        );
-
-        try {
-          const {
-            data,
-            error,
-          } =
-            await supabase
-              .from("messages")
-              .select(`
-                id,
-                user_id,
-                chat_id,
-                role,
-                content,
-                attachment_path,
-                attachment_name,
-                attachment_type,
-                attachment,
-                created_at
-              `)
-              .eq(
-                "chat_id",
-                chatId
-              )
-              .eq(
-                "user_id",
-                userId
-              )
-              .order(
-                "created_at",
-                {
-                  ascending: true,
-                }
-              );
-
-          if (error) {
-            console.error(
-              "SUPABASE MESAJ HATASI:",
-              error
-            );
-
-            throw error;
-          }
-
-          const formattedMessages =
-            (
-              (data ??
-                []) as DatabaseMessage[]
-            ).map(
-              (
-                message
-              ): ChatMessage => {
-                let attachment:
-                  Attachment | null =
-                  null;
-
-                if (
-                  message.attachment &&
-                  typeof message.attachment ===
-                    "object"
-                ) {
-                  const rawAttachment =
-                    message.attachment as Partial<Attachment>;
-
-                  if (
-                    rawAttachment.name &&
-                    rawAttachment.url &&
-                    rawAttachment.type
-                  ) {
-                    attachment = {
-                      name:
-                        rawAttachment.name,
-
-                      url:
-                        rawAttachment.url,
-
-                      type:
-                        rawAttachment.type,
-                    };
-                  }
-                }
-
-                if (
-                  !attachment &&
-                  message.attachment_path
-                ) {
-                  attachment = {
-                    name:
-                      message.attachment_name ||
-                      "Dosya",
-
-                    url:
-                      message.attachment_path,
-
-                    type:
-                      message.attachment_type ||
-                      "application/octet-stream",
-                  };
-                }
-
-                return {
-                  id:
-                    message.id,
-
-                  sender:
-                    message.role ===
-                    "user"
-                      ? "user"
-                      : "syraven",
-
-                  text:
-                    message.content ??
-                    "",
-
-                  attachment,
-                };
-              }
-            );
-
-          setMessages(
-            formattedMessages
-          );
-
-          hasGeneratedTitleRef.current =
-            formattedMessages.some(
-              (
-                message
-              ) =>
-                message.sender ===
-                "user"
-            );
-        } catch (error) {
-          console.error(
-            "MESAJ YÜKLEME HATASI:",
-            error
-          );
-        } finally {
-          setIsLoading(
-            false
-          );
-        }
-      },
-      [
-        chatId,
-        userId,
-      ]
+    window.localStorage.setItem(
+      getStorageKey(conversationId),
+      JSON.stringify(conversation)
     );
+  } catch {
+    /*
+      localStorage erişimi başarısız olursa
+      sohbet yine aktif oturum boyunca çalışmaya devam eder.
+    */
+  }
+}
+
+function copyText(
+  value: string
+): Promise<void> {
+  if (
+    typeof navigator !== "undefined" &&
+    navigator.clipboard
+  ) {
+    return navigator.clipboard
+      .writeText(value)
+      .then(() => undefined);
+  }
+
+  return Promise.resolve();
+}
+
+export default function ChatConversationPage() {
+  const router = useRouter();
+
+  const params = useParams<{
+    id?: string | string[];
+  }>();
+
+  const rawId = params?.id;
+
+  const conversationId =
+    Array.isArray(rawId)
+      ? rawId[0] ?? ""
+      : rawId ?? "";
+
+  const [messages, setMessages] =
+    useState<ChatMessage[]>([]);
+
+  const [input, setInput] =
+    useState("");
+
+  const [title, setTitle] =
+    useState("Yeni sohbet");
+
+  const [isLoadingConversation, setIsLoadingConversation] =
+    useState(true);
+
+  const [isSending, setIsSending] =
+    useState(false);
+
+  const [error, setError] =
+    useState<string | null>(null);
+
+  const [copiedMessageId, setCopiedMessageId] =
+    useState<string | null>(null);
+
+  const textareaRef =
+    useRef<HTMLTextAreaElement | null>(
+      null
+    );
+
+  const bottomRef =
+    useRef<HTMLDivElement | null>(
+      null
+    );
+
+  const lastUserMessageRef =
+    useRef<string | null>(null);
+
+  const apiMessages = useMemo(
+    () =>
+      messages.map((message) => ({
+        role: message.role,
+        content: message.content,
+      })),
+    [messages]
+  );
+
+  useEffect(() => {
+    if (!conversationId) {
+      setIsLoadingConversation(false);
+      return;
+    }
+
+    setIsLoadingConversation(true);
+    setError(null);
+
+    const conversation =
+      loadConversation(conversationId);
+
+    if (conversation) {
+      setMessages(
+        conversation.messages
+      );
+
+      setTitle(
+        conversation.title
+      );
+    } else {
+      setMessages([]);
+      setTitle("Yeni sohbet");
+    }
+
+    setIsLoadingConversation(false);
+  }, [conversationId]);
 
   useEffect(() => {
     if (
-      authLoading
+      isLoadingConversation ||
+      !conversationId
     ) {
       return;
     }
 
-    if (
-      !userId
-    ) {
-      setIsLoading(
-        false
-      );
+    saveConversation(
+      conversationId,
+      messages
+    );
 
+    setTitle(
+      createTitle(messages)
+    );
+  }, [
+    conversationId,
+    isLoadingConversation,
+    messages,
+  ]);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "end",
+    });
+  }, [
+    messages,
+    isSending,
+  ]);
+
+  useEffect(() => {
+    const textarea =
+      textareaRef.current;
+
+    if (!textarea) {
       return;
     }
 
-    void loadMessages();
-  }, [
-    authLoading,
-    userId,
-    loadMessages,
-  ]);
+    textarea.style.height = "auto";
 
-  /* ==================================================
-   * STOP STREAMING
-   * ================================================== */
-
-  const stopStreaming =
-    useCallback(() => {
-      abortControllerRef.current?.abort();
-
-      abortControllerRef.current =
-        null;
-
-      setIsStreaming(
-        false
-      );
-    }, []);
-
-  /* ==================================================
-   * CLEANUP
-   * ================================================== */
+    textarea.style.height =
+      `${Math.min(
+        textarea.scrollHeight,
+        240
+      )}px`;
+  }, [input]);
 
   useEffect(() => {
-    return () => {
-      abortControllerRef.current?.abort();
-    };
-  }, []);
+    if (!isLoadingConversation) {
+      requestAnimationFrame(() => {
+        textareaRef.current?.focus();
+      });
+    }
+  }, [
+    isLoadingConversation,
+  ]);
 
-  /* ==================================================
-   * SAVE MESSAGE
-   * ================================================== */
-
-  const saveMessage =
-    useCallback(
-      async (
-        message: ChatMessage
-      ) => {
-        if (
-          !chatId ||
-          !userId
-        ) {
-          throw new Error(
-            "Kullanıcı veya sohbet bulunamadı."
-          );
-        }
-
-        const {
-          data,
-          error,
-        } =
-          await supabase
-            .from("messages")
-            .insert({
-              user_id:
-                userId,
-
-              chat_id:
-                chatId,
-
-              role:
-                message.sender ===
-                "user"
-                  ? "user"
-                  : "assistant",
-
-              content:
-                message.text,
-
-              attachment_path:
-                message.attachment?.url ??
-                null,
-
-              attachment_name:
-                message.attachment?.name ??
-                null,
-
-              attachment_type:
-                message.attachment?.type ??
-                null,
-
-              attachment:
-                message.attachment
-                  ? {
-                      name:
-                        message.attachment.name,
-
-                      url:
-                        message.attachment.url,
-
-                      type:
-                        message.attachment.type,
-                    }
-                  : null,
-            })
-            .select()
-            .single();
-
-        if (error) {
-          console.error(
-            "MESAJ KAYDETME HATASI:",
-            error
-          );
-
-          throw error;
-        }
-
-        return data;
-      },
-      [
-        chatId,
-        userId,
-      ]
-    );
-
-  /* ==================================================
-   * UPLOAD FILE
-   * ================================================== */
-
-  const uploadSelectedFile =
-    useCallback(
-      async () => {
-        if (
-          !selectedFile ||
-          !userId
-        ) {
-          return null;
-        }
-
-        setIsUploading(
-          true
-        );
-
-        try {
-          return await uploadFile(
-            selectedFile,
-            userId
-          );
-        } finally {
-          setIsUploading(
-            false
-          );
-        }
-      },
-      [
-        selectedFile,
-        userId,
-      ]
-    );
-
-  /* ==================================================
-   * GENERATE CHAT TITLE
-   * ================================================== */
-
-  const generateTitleIfNeeded =
-    useCallback(
-      async (
-        firstMessage: string
-      ) => {
-        if (
-          hasGeneratedTitleRef.current ||
-          !chatId ||
-          !firstMessage.trim()
-        ) {
-          return;
-        }
-
-        hasGeneratedTitleRef.current =
-          true;
-
-        try {
-          const title =
-            await generateChatTitle(
-              firstMessage
-            );
-
-          if (
-            title &&
-            title.trim()
-          ) {
-            await renameChat(
-              chatId,
-              title.trim()
-            );
-          }
-        } catch (error) {
-          console.error(
-            "BAŞLIK OLUŞTURMA HATASI:",
-            error
-          );
-        }
-      },
-      [
-        chatId,
-      ]
-    );
-
-  /* ==================================================
-   * HANDLE ACTION
-   * ================================================== */
-
-  const handleAction =
-    useCallback(
+  async function sendMessage(
+    contentOverride?: string
+  ) {
+    const content =
       (
-        action: ActionRequest
-      ) => {
-        if (
-          action.type ===
-          "none"
-        ) {
-          return;
-        }
+        contentOverride ??
+        input
+      ).trim();
 
-        setPendingAction(
-          action
+    if (
+      !content ||
+      isSending ||
+      !conversationId
+    ) {
+      return;
+    }
+
+    setError(null);
+
+    const userMessage =
+      createMessage(
+        "user",
+        content
+      );
+
+    lastUserMessageRef.current =
+      content;
+
+    const requestMessages = [
+      ...apiMessages,
+      {
+        role: "user",
+        content,
+      },
+    ];
+
+    setMessages(
+      (current) => [
+        ...current,
+        userMessage,
+      ]
+    );
+
+    setInput("");
+    setIsSending(true);
+
+    try {
+      const response =
+        await fetch(
+          "/api/chat",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
+            body: JSON.stringify({
+              conversationId,
+              chatId:
+                conversationId,
+              message:
+                content,
+              messages:
+                requestMessages,
+            }),
+          }
         );
 
-        if (
-          action.requiresConfirmation
-        ) {
-          const actionMessage:
-            ChatMessage = {
-              id:
-                crypto.randomUUID(),
+      const rawText =
+        await response.text();
 
-              sender:
-                "syraven",
+      let data: ChatApiResponse = {};
 
-              text:
-                "⚡ Bir işlem isteği algıladım. İşlemi gerçekleştirmeden önce senden onay almam gerekiyor.",
-
-              attachment:
-                null,
-            };
-
-          setMessages(
-            (
-              previous
-            ) => [
-              ...previous,
-              actionMessage,
-            ]
-          );
-
-          void saveMessage(
-            actionMessage
-          ).catch(
-            (
-              error
-            ) => {
-              console.error(
-                "ACTION MESAJI KAYDETME HATASI:",
-                error
-              );
-            }
+      try {
+        data =
+          rawText
+            ? JSON.parse(rawText)
+            : {};
+      } catch {
+        if (!response.ok) {
+          throw new Error(
+            rawText ||
+              "SYRAVEN AI isteği işleyemedi."
           );
         }
-      },
-      [
-        saveMessage,
-      ]
-    );
 
-  /* ==================================================
-   * SEND MESSAGE
-   * ================================================== */
-
-  const sendMessage =
-    useCallback(
-      async () => {
-        const cleanInput =
-          input.trim();
-
-        if (
-          !cleanInput &&
-          !selectedFile
-        ) {
-          return;
-        }
-
-        if (
-          isStreaming ||
-          isUploading ||
-          !chatId ||
-          !userId
-        ) {
-          return;
-        }
-
-        let uploadedAttachment:
-          Attachment | null =
-          null;
-
-        const selectedFileName =
-          selectedFile?.name ??
-          "";
-
-        try {
-          if (selectedFile) {
-            uploadedAttachment =
-              await uploadSelectedFile();
-          }
-
-          const userMessage:
-            ChatMessage = {
-              id:
-                crypto.randomUUID(),
-
-              sender:
-                "user",
-
-              text:
-                cleanInput,
-
-              attachment:
-                uploadedAttachment,
-            };
-
-          setMessages(
-            (
-              previous
-            ) => [
-              ...previous,
-              userMessage,
-            ]
-          );
-
-          setInput(
-            ""
-          );
-
-          setSelectedFile(
-            null
-          );
-
-          /*
-           * ÖNCE KAYDET
-           */
-
-          await saveMessage(
-            userMessage
-          );
-
-          /*
-           * SONRA BAŞLIK ÜRET
-           */
-
-          void generateTitleIfNeeded(
-            cleanInput ||
-              selectedFileName ||
-              "Yeni Sohbet"
-          );
-
-          /*
-           * GEÇMİŞ MESAJLARI OLUŞTUR
-           */
-
-          const conversationMessages:
-            StreamMessage[] =
-            [
-              ...messages,
-              userMessage,
-            ]
-              .filter(
-                (
-                  message
-                ) =>
-                  Boolean(
-                    message.text.trim()
-                  )
-              )
-              .map(
-                (
-                  message
-                ): StreamMessage => ({
-                  role:
-                    message.sender ===
-                    "user"
-                      ? "user"
-                      : "assistant",
-
-                  content:
-                    message.text,
-                })
-              );
-
-          const assistantMessageId =
-            crypto.randomUUID();
-
-          setMessages(
-            (
-              previous
-            ) => [
-              ...previous,
-              {
-                id:
-                  assistantMessageId,
-
-                sender:
-                  "syraven",
-
-                text:
-                  "",
-
-                attachment:
-                  null,
-              },
-            ]
-          );
-
-          const controller =
-            new AbortController();
-
-          abortControllerRef.current =
-            controller;
-
-          setIsStreaming(
-            true
-          );
-
-          let fullReply =
-            "";
-
-          await streamChat(
-            conversationMessages,
-
-            (
-              chunk: string
-            ) => {
-              fullReply +=
-                chunk;
-
-              setMessages(
-                (
-                  previous
-                ) =>
-                  previous.map(
-                    (
-                      message
-                    ) => {
-                      if (
-                        message.id !==
-                        assistantMessageId
-                      ) {
-                        return message;
-                      }
-
-                      return {
-                        ...message,
-
-                        text:
-                          fullReply,
-                      };
-                    }
-                  )
-              );
-            },
-
-            controller.signal,
-
-            (
-              action:
-                ActionRequest
-            ) => {
-              handleAction(
-                action
-              );
-            }
-          );
-
-          if (
-            fullReply.trim()
-          ) {
-            const assistantMessage:
-              ChatMessage = {
-                id:
-                  assistantMessageId,
-
-                sender:
-                  "syraven",
-
-                text:
-                  fullReply,
-
-                attachment:
-                  null,
-              };
-
-            await saveMessage(
-              assistantMessage
-            );
-          } else {
-            setMessages(
-              (
-                previous
-              ) =>
-                previous.filter(
-                  (
-                    message
-                  ) =>
-                    message.id !==
-                    assistantMessageId
-                )
-            );
-          }
-        } catch (error) {
-          if (
-            error instanceof
-              DOMException &&
-            error.name ===
-              "AbortError"
-          ) {
-            return;
-          }
-
-          console.error(
-            "MESAJ GÖNDERME HATASI:",
-            error
-          );
-
-          const errorMessage =
-            error instanceof Error
-              ? error.message
-              : "Mesaj gönderilirken bir hata oluştu.";
-
-          setMessages(
-            (
-              previous
-            ) => [
-              ...previous,
-              {
-                id:
-                  crypto.randomUUID(),
-
-                sender:
-                  "syraven",
-
-                text:
-                  `⚠️ ${errorMessage}`,
-
-                attachment:
-                  null,
-              },
-            ]
-          );
-        } finally {
-          abortControllerRef.current =
-            null;
-
-          setIsStreaming(
-            false
-          );
-
-          setIsUploading(
-            false
-          );
-        }
-      },
-      [
-        chatId,
-        generateTitleIfNeeded,
-        handleAction,
-        input,
-        isStreaming,
-        isUploading,
-        messages,
-        saveMessage,
-        selectedFile,
-        uploadSelectedFile,
-        userId,
-      ]
-    );
-
-  /* ==================================================
-   * CONFIRM ACTION
-   * ================================================== */
-
-  const confirmAction =
-    useCallback(() => {
-      if (!pendingAction) {
-        return;
+        data = {
+          content: rawText,
+        };
       }
 
-      const confirmationMessage:
-        ChatMessage = {
-          id:
-            crypto.randomUUID(),
-
-          sender:
-            "syraven",
-
-          text:
-            "✅ İşlem onaylandı. Action execution sistemi bağlandığında işlem burada gerçekleştirilecek.",
-
-          attachment:
-            null,
-        };
-
-      setMessages(
-        (
-          previous
-        ) => [
-          ...previous,
-          confirmationMessage,
-        ]
-      );
-
-      void saveMessage(
-        confirmationMessage
-      ).catch(
-        (
-          error
-        ) => {
-          console.error(
-            "ONAY MESAJI KAYDEDİLEMEDİ:",
-            error
-          );
-        }
-      );
-
-      setPendingAction(
-        null
-      );
-    },
-    [
-      pendingAction,
-      saveMessage,
-    ]
-  );
-
-  /* ==================================================
-   * CANCEL ACTION
-   * ================================================== */
-
-  const cancelAction =
-    useCallback(() => {
-      if (!pendingAction) {
-        return;
+      if (!response.ok) {
+        throw new Error(
+          data.error ||
+            "Mesaj gönderilirken bir hata oluştu."
+        );
       }
 
-      setPendingAction(
-        null
-      );
+      const assistantContent =
+        getResponseContent(data);
 
-      const cancelMessage:
-        ChatMessage = {
-          id:
-            crypto.randomUUID(),
-
-          sender:
-            "syraven",
-
-          text:
-            "❌ İşlem iptal edildi.",
-
-          attachment:
-            null,
-        };
+      if (!assistantContent) {
+        throw new Error(
+          "AI tarafından geçerli bir yanıt alınamadı."
+        );
+      }
 
       setMessages(
-        (
-          previous
-        ) => [
-          ...previous,
-          cancelMessage,
+        (current) => [
+          ...current,
+          createMessage(
+            "assistant",
+            assistantContent
+          ),
         ]
       );
+    } catch (
+      caughtError
+    ) {
+      const message =
+        caughtError instanceof Error
+          ? caughtError.message
+          : "Beklenmeyen bir hata oluştu.";
 
-      void saveMessage(
-        cancelMessage
-      ).catch(
-        (
-          error
-        ) => {
-          console.error(
-            "İPTAL MESAJI KAYDEDİLEMEDİ:",
-            error
-          );
-        }
+      setError(message);
+    } finally {
+      setIsSending(false);
+    }
+  }
+
+  function handleSubmit(
+    event: FormEvent<HTMLFormElement>
+  ) {
+    event.preventDefault();
+
+    void sendMessage();
+  }
+
+  function handleKeyDown(
+    event: KeyboardEvent<HTMLTextAreaElement>
+  ) {
+    if (
+      event.key === "Enter" &&
+      !event.shiftKey
+    ) {
+      event.preventDefault();
+
+      void sendMessage();
+    }
+  }
+
+  function handleRetry() {
+    const message =
+      lastUserMessageRef.current;
+
+    if (!message || isSending) {
+      return;
+    }
+
+    void sendMessage(message);
+  }
+
+  async function handleCopy(
+    message: ChatMessage
+  ) {
+    try {
+      await copyText(
+        message.content
       );
-    },
-    [
-      pendingAction,
-      saveMessage,
-    ]
-  );
 
-  /* ==================================================
-   * RENDER
-   * ================================================== */
+      setCopiedMessageId(
+        message.id
+      );
 
-  return (
-    <div
-      className="
-        flex
-        h-dvh
-        min-h-0
-        w-full
-        overflow-hidden
-        bg-[#09090b]
-        text-white
-      "
-    >
-      <Sidebar
-        open={menuOpen}
-        onClose={() =>
-          setMenuOpen(
-            false
-          )
-        }
-      />
+      window.setTimeout(() => {
+        setCopiedMessageId(null);
+      }, 1600);
+    } catch {
+      setError(
+        "Mesaj panoya kopyalanamadı."
+      );
+    }
+  }
 
-      <main
-        className="
-          flex
-          min-h-0
-          min-w-0
-          flex-1
-          flex-col
-          overflow-hidden
-        "
-      >
-        {/* MOBILE HEADER */}
+  function handleNewChat() {
+    router.push("/chat");
+  }
 
-        <header
-          className="
-            flex
-            h-14
-            shrink-0
-            items-center
-            border-b
-            border-white/[0.06]
-            bg-[#09090b]/90
-            px-3
-            backdrop-blur-xl
-            md:hidden
-          "
-        >
+  function handleClearConversation() {
+    if (!conversationId) {
+      return;
+    }
+
+    try {
+      window.localStorage.removeItem(
+        getStorageKey(conversationId)
+      );
+    } catch {
+      /* no-op */
+    }
+
+    setMessages([]);
+    setInput("");
+    setError(null);
+    setTitle("Yeni sohbet");
+
+    requestAnimationFrame(() => {
+      textareaRef.current?.focus();
+    });
+  }
+
+  if (!conversationId) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-[#07090d] px-6 text-white">
+        <div className="max-w-md text-center">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-red-400/20 bg-red-400/[0.08]">
+            <svg
+              viewBox="0 0 24 24"
+              className="h-6 w-6 text-red-300"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+            >
+              <circle
+                cx="12"
+                cy="12"
+                r="9"
+              />
+              <path d="M12 8v5" />
+              <path d="M12 16h.01" />
+            </svg>
+          </div>
+
+          <h1 className="mt-5 text-xl font-semibold">
+            Geçersiz sohbet
+          </h1>
+
+          <p className="mt-2 text-sm leading-6 text-white/45">
+            Bu sohbet kimliği
+            kullanılamıyor.
+          </p>
+
           <button
             type="button"
             onClick={() =>
-              setMenuOpen(
-                true
-              )
+              router.push("/chat")
             }
-            className="
-              flex
-              h-10
-              w-10
-              items-center
-              justify-center
-              rounded-xl
-              text-zinc-400
-              transition
-              hover:bg-white/[0.06]
-              hover:text-white
-            "
-            aria-label="Menüyü aç"
+            className="mt-6 rounded-xl border border-white/[0.09] bg-white/[0.04] px-4 py-2.5 text-sm text-white/80 transition hover:bg-white/[0.08]"
           >
-            <Menu size={21} />
+            Sohbetlere dön
           </button>
+        </div>
+      </main>
+    );
+  }
 
-          <div className="ml-2">
-            <p className="text-sm font-semibold tracking-tight text-white">
-              SYRAVEN
-            </p>
+  return (
+    <main className="min-h-screen bg-[#07090d] text-white">
+      <div className="mx-auto flex min-h-screen w-full max-w-[1600px] flex-col">
+        <header className="sticky top-0 z-30 border-b border-white/[0.07] bg-[#07090d]/95 backdrop-blur-xl">
+          <div className="flex h-16 items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
+            <div className="flex min-w-0 items-center gap-3">
+              <button
+                type="button"
+                onClick={() =>
+                  router.push("/chat")
+                }
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.03] text-white/55 transition hover:bg-white/[0.07] hover:text-white"
+                aria-label="Sohbetlere dön"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  className="h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                >
+                  <path d="m15 18-6-6 6-6" />
+                </svg>
+              </button>
 
-            <p className="text-[10px] text-zinc-500">
-              Artificial Intelligence
-            </p>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400" />
+
+                  <span className="truncate text-sm font-semibold text-white/90">
+                    {title}
+                  </span>
+                </div>
+
+                <p className="mt-0.5 truncate text-[10px] tracking-[0.12em] text-white/30">
+                  SYRAVEN AI CONVERSATION
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={
+                  handleClearConversation
+                }
+                className="hidden h-9 items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 text-xs text-white/55 transition hover:border-red-400/20 hover:bg-red-400/[0.06] hover:text-red-200 sm:inline-flex"
+              >
+                Temizle
+              </button>
+
+              <button
+                type="button"
+                onClick={handleNewChat}
+                className="inline-flex h-9 items-center gap-2 rounded-xl border border-cyan-400/20 bg-cyan-400/[0.08] px-3 text-xs font-medium text-cyan-200 transition hover:bg-cyan-400/[0.13]"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  className="h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                >
+                  <path d="M12 5v14" />
+                  <path d="M5 12h14" />
+                </svg>
+
+                <span className="hidden sm:inline">
+                  Yeni sohbet
+                </span>
+              </button>
+            </div>
           </div>
         </header>
 
-        <div
-          className="
-            flex
-            min-h-0
-            flex-1
-            flex-col
-            overflow-hidden
-          "
-        >
-          <ChatWindow
-            messages={messages}
-            isLoading={
-              isLoading ||
-              authLoading
-            }
-            isStreaming={isStreaming}
-          />
+        <section className="flex flex-1">
+          <div className="mx-auto flex w-full max-w-5xl flex-col px-4 pb-6 pt-6 sm:px-6 lg:px-8">
+            {isLoadingConversation ? (
+              <div className="flex flex-1 items-center justify-center py-20">
+                <div className="flex items-center gap-3 text-sm text-white/40">
+                  <span className="h-5 w-5 animate-spin rounded-full border-2 border-cyan-300/20 border-t-cyan-300" />
+                  Sohbet yükleniyor...
+                </div>
+              </div>
+            ) : (
+              <>
+                {messages.length === 0 && (
+                  <div className="flex flex-1 flex-col items-center justify-center py-12 text-center sm:py-20">
+                    <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-cyan-400/20 bg-cyan-400/[0.07]">
+                      <span className="text-lg font-bold text-cyan-200">
+                        S
+                      </span>
+                    </div>
 
-          {pendingAction &&
-            pendingAction.type !==
-              "none" &&
-            pendingAction.requiresConfirmation && (
-              <div
-                className="
-                  shrink-0
-                  px-3
-                  pb-3
-                  sm:px-5
-                "
-              >
-                <div
-                  className="
-                    mx-auto
-                    max-w-4xl
-                    rounded-2xl
-                    border
-                    border-yellow-500/20
-                    bg-yellow-500/[0.06]
-                    p-4
-                    backdrop-blur-xl
-                  "
-                >
-                  <p className="mb-2 text-sm font-semibold text-yellow-200">
-                    ⚡ İşlem Onayı Gerekli
-                  </p>
+                    <h1 className="mt-6 text-2xl font-semibold tracking-tight sm:text-4xl">
+                      Sohbete başlayalım.
+                    </h1>
 
-                  <p className="mb-4 text-sm leading-6 text-zinc-400">
-                    SYRAVEN bir işlem gerçekleştirmek istiyor.
-                    Devam etmek istiyor musun?
-                  </p>
-
-                  <div className="flex items-center gap-3">
-                    <button
-                      type="button"
-                      onClick={
-                        confirmAction
-                      }
-                      className="
-                        rounded-xl
-                        bg-white
-                        px-4
-                        py-2
-                        text-sm
-                        font-medium
-                        text-black
-                        transition
-                        hover:bg-zinc-200
-                      "
-                    >
-                      Onayla
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={
-                        cancelAction
-                      }
-                      className="
-                        rounded-xl
-                        border
-                        border-white/10
-                        bg-white/[0.03]
-                        px-4
-                        py-2
-                        text-sm
-                        font-medium
-                        text-zinc-300
-                        transition
-                        hover:bg-white/[0.07]
-                        hover:text-white
-                      "
-                    >
-                      İptal
-                    </button>
+                    <p className="mt-3 max-w-xl text-sm leading-7 text-white/40">
+                      SYRAVEN AI ile araştır,
+                      analiz et, üret ve
+                      projeni ileri taşı.
+                    </p>
                   </div>
+                )}
+
+                <div className="flex flex-1 flex-col gap-6 py-2">
+                  {messages.map(
+                    (message) => {
+                      const isUser =
+                        message.role ===
+                        "user";
+
+                      return (
+                        <article
+                          key={message.id}
+                          className={`flex gap-3 sm:gap-4 ${
+                            isUser
+                              ? "justify-end"
+                              : "justify-start"
+                          }`}
+                        >
+                          {!isUser && (
+                            <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-cyan-400/20 bg-cyan-400/[0.08]">
+                              <span className="text-[10px] font-bold tracking-wider text-cyan-200">
+                                S
+                              </span>
+                            </div>
+                          )}
+
+                          <div
+                            className={`group max-w-[88%] sm:max-w-[78%] ${
+                              isUser
+                                ? "items-end"
+                                : "items-start"
+                            }`}
+                          >
+                            <div
+                              className={`rounded-2xl px-4 py-3.5 text-sm leading-7 ${
+                                isUser
+                                  ? "rounded-tr-md border border-cyan-400/15 bg-cyan-400/[0.10] text-white/90"
+                                  : "rounded-tl-md border border-white/[0.07] bg-white/[0.035] text-white/80"
+                              }`}
+                            >
+                              <div className="whitespace-pre-wrap break-words">
+                                {
+                                  message.content
+                                }
+                              </div>
+                            </div>
+
+                            <div
+                              className={`mt-1.5 flex items-center gap-2 px-1 text-[10px] text-white/25 ${
+                                isUser
+                                  ? "justify-end"
+                                  : "justify-start"
+                              }`}
+                            >
+                              <span>
+                                {formatTime(
+                                  message.createdAt
+                                )}
+                              </span>
+
+                              {!isUser && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    void handleCopy(
+                                      message
+                                    )
+                                  }
+                                  className="opacity-0 transition hover:text-cyan-200 group-hover:opacity-100 focus:opacity-100"
+                                >
+                                  {copiedMessageId ===
+                                  message.id
+                                    ? "Kopyalandı"
+                                    : "Kopyala"}
+                                </button>
+                              )}
+                            </div>
+                          </div>
+
+                          {isUser && (
+                            <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-white/[0.09] bg-white/[0.06]">
+                              <svg
+                                viewBox="0 0 24 24"
+                                className="h-4 w-4 text-white/65"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="1.8"
+                              >
+                                <circle
+                                  cx="12"
+                                  cy="8"
+                                  r="3"
+                                />
+                                <path d="M5 21c1.2-4 3.5-6 7-6s5.8 2 7 6" />
+                              </svg>
+                            </div>
+                          )}
+                        </article>
+                      );
+                    }
+                  )}
+
+                  {isSending && (
+                    <article className="flex gap-3 sm:gap-4">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-cyan-400/20 bg-cyan-400/[0.08]">
+                        <span className="text-[10px] font-bold tracking-wider text-cyan-200">
+                          S
+                        </span>
+                      </div>
+
+                      <div className="rounded-2xl rounded-tl-md border border-white/[0.07] bg-white/[0.035] px-4 py-4">
+                        <div className="flex items-center gap-1.5">
+                          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-cyan-300 [animation-delay:-0.3s]" />
+                          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-cyan-300 [animation-delay:-0.15s]" />
+                          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-cyan-300" />
+                        </div>
+                      </div>
+                    </article>
+                  )}
+
+                  <div ref={bottomRef} />
+                </div>
+              </>
+            )}
+
+            {error && (
+              <div className="mb-3 flex flex-col gap-3 rounded-xl border border-red-400/20 bg-red-400/[0.06] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-xs leading-5 text-red-200">
+                  {error}
+                </p>
+
+                <div className="flex shrink-0 items-center gap-3">
+                  {lastUserMessageRef.current && (
+                    <button
+                      type="button"
+                      onClick={
+                        handleRetry
+                      }
+                      disabled={isSending}
+                      className="text-xs text-cyan-200 transition hover:text-cyan-100 disabled:opacity-40"
+                    >
+                      Tekrar dene
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setError(null)
+                    }
+                    className="text-xs text-red-200/60 transition hover:text-red-100"
+                  >
+                    Kapat
+                  </button>
                 </div>
               </div>
             )}
 
-          <div
-            className="
-              shrink-0
-              border-t
-              border-white/[0.06]
-              bg-[#09090b]/90
-              px-3
-              py-3
-              backdrop-blur-xl
-              sm:px-5
-              sm:py-4
-            "
-          >
-            <ChatInput
-              input={input}
-              setInput={setInput}
-              sendMessage={sendMessage}
-              selectedFile={selectedFile}
-              setSelectedFile={
-                setSelectedFile
-              }
-              isUploading={isUploading}
-              isStreaming={isStreaming}
-              stopStreaming={
-                stopStreaming
-              }
-            />
+            <form
+              onSubmit={handleSubmit}
+              className="sticky bottom-0 mt-4 bg-[#07090d] pb-2 pt-3"
+            >
+              <div className="rounded-2xl border border-white/[0.09] bg-white/[0.035] p-2 shadow-2xl shadow-black/20 transition focus-within:border-cyan-400/25 focus-within:bg-white/[0.045]">
+                <textarea
+                  ref={textareaRef}
+                  value={input}
+                  onChange={(event) =>
+                    setInput(
+                      event.target.value
+                    )
+                  }
+                  onKeyDown={
+                    handleKeyDown
+                  }
+                  disabled={
+                    isSending ||
+                    isLoadingConversation
+                  }
+                  rows={1}
+                  placeholder="Mesaj yaz..."
+                  className="max-h-60 min-h-[52px] w-full resize-none bg-transparent px-3 py-3 text-sm leading-6 text-white outline-none placeholder:text-white/25 disabled:cursor-not-allowed disabled:opacity-50"
+                />
+
+                <div className="flex items-center justify-between gap-3 px-1 pb-1">
+                  <div className="hidden items-center gap-2 text-[10px] text-white/25 sm:flex">
+                    <kbd className="rounded border border-white/[0.08] px-1.5 py-0.5">
+                      Enter
+                    </kbd>
+
+                    <span>gönder</span>
+
+                    <span className="text-white/10">
+                      ·
+                    </span>
+
+                    <kbd className="rounded border border-white/[0.08] px-1.5 py-0.5">
+                      Shift + Enter
+                    </kbd>
+
+                    <span>yeni satır</span>
+                  </div>
+
+                  <div className="ml-auto flex items-center gap-2">
+                    <span className="hidden text-[10px] text-white/20 sm:block">
+                      {input.length} karakter
+                    </span>
+
+                    <button
+                      type="submit"
+                      disabled={
+                        !input.trim() ||
+                        isSending ||
+                        isLoadingConversation
+                      }
+                      className="flex h-9 w-9 items-center justify-center rounded-xl bg-cyan-300 text-[#061014] transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-30"
+                      aria-label="Mesaj gönder"
+                    >
+                      {isSending ? (
+                        <svg
+                          viewBox="0 0 24 24"
+                          className="h-4 w-4 animate-spin"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                        >
+                          <path
+                            d="M21 12a9 9 0 1 1-6.2-8.55"
+                            strokeLinecap="round"
+                          />
+                        </svg>
+                      ) : (
+                        <svg
+                          viewBox="0 0 24 24"
+                          className="h-4 w-4"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                        >
+                          <path d="m5 12 14-7-7 14-2-7-5-2Z" />
+                        </svg>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <p className="mt-2 text-center text-[10px] text-white/20">
+                SYRAVEN AI yanıtları hata
+                içerebilir. Kritik bilgileri
+                doğrulayın.
+              </p>
+            </form>
           </div>
-        </div>
-      </main>
-    </div>
+        </section>
+      </div>
+    </main>
   );
 }
