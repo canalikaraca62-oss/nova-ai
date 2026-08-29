@@ -1,599 +1,483 @@
 "use client";
 
-import {
-  useCallback,
+import React, {
   useEffect,
+  useId,
+  useRef,
   useState,
 } from "react";
 
-import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+export interface MenuItem {
+  id?: string;
+  label: React.ReactNode;
 
-import {
-  Brain,
-  ChevronRight,
-  Clock3,
-  Menu as MenuIcon,
-  MessageSquarePlus,
-  Settings,
-  Sparkles,
-  X,
-} from "lucide-react";
+  description?: React.ReactNode;
+  icon?: React.ReactNode;
+  shortcut?: string;
 
-import { supabase } from "@/lib/supabase";
+  href?: string;
+  external?: boolean;
 
-type MenuProps = {
-  open: boolean;
-  onClose: () => void;
-};
+  disabled?: boolean;
+  danger?: boolean;
 
-type Conversation = {
-  id: string;
-  title: string | null;
-  created_at: string;
-};
+  onClick?: () => void;
 
-export default function Menu({
-  open,
-  onClose,
-}: MenuProps) {
-  const router = useRouter();
+  divider?: boolean;
+}
 
-  const params = useParams();
+export interface MenuProps {
+  trigger: React.ReactNode;
 
-  const currentConversationId =
-    typeof params?.id === "string"
-      ? params.id
-      : "";
+  items: MenuItem[];
 
-  const [
-    conversations,
-    setConversations,
-  ] = useState<Conversation[]>([]);
+  align?: "left" | "right";
+  side?: "top" | "bottom";
 
-  const [
-    isLoading,
-    setIsLoading,
-  ] = useState(true);
+  width?: "sm" | "md" | "lg";
 
-  const loadConversations =
-    useCallback(
-      async () => {
-        setIsLoading(true);
+  disabled?: boolean;
 
-        try {
-          const {
-            data: {
-              user,
-            },
-            error: userError,
-          } =
-            await supabase.auth.getUser();
+  closeOnSelect?: boolean;
 
-          if (
-            userError ||
-            !user
-          ) {
-            setConversations([]);
-            return;
-          }
+  className?: string;
+  menuClassName?: string;
 
-          const {
-            data,
-            error,
-          } =
-            await supabase
-              .from("conversations")
-              .select(
-                `
-                  id,
-                  title,
-                  created_at
-                `
-              )
-              .eq(
-                "user_id",
-                user.id
-              )
-              .order(
-                "created_at",
-                {
-                  ascending: false,
-                }
-              )
-              .limit(50);
+  onOpenChange?: (open: boolean) => void;
+}
 
-          if (error) {
-            console.error(
-              "SOHBETLER YÜKLENEMEDİ:",
-              error
-            );
+function cn(
+  ...classes: Array<string | false | null | undefined>
+): string {
+  return classes.filter(Boolean).join(" ");
+}
 
-            return;
-          }
+const widthClasses = {
+  sm: "w-48",
+  md: "w-64",
+  lg: "w-80",
+} as const;
 
-          setConversations(
-            (data ??
-              []) as Conversation[]
-          );
-        } catch (error) {
-          console.error(
-            "MENÜ SOHBET HATASI:",
-            error
-          );
-        } finally {
-          setIsLoading(false);
-        }
-      },
-      []
-    );
-
-  useEffect(() => {
-    void loadConversations();
-  }, [
-    loadConversations,
-  ]);
-
-  const handleNewChat =
-    useCallback(() => {
-      onClose();
-
-      router.push("/chat");
-    }, [
-      onClose,
-      router,
-    ]);
-
-  const handleConversationClick =
-    useCallback(
-      (
-        conversationId: string
-      ) => {
-        onClose();
-
-        router.push(
-          `/chat/${conversationId}`
-        );
-      },
-      [
-        onClose,
-        router,
-      ]
-    );
-
-  const formatTitle =
-    (
-      title: string | null
-    ) => {
-      if (
-        !title ||
-        !title.trim()
-      ) {
-        return "Yeni Sohbet";
-      }
-
-      return title.trim();
-    };
-
+function MenuItemContent({
+  item,
+}: {
+  item: MenuItem;
+}) {
   return (
     <>
-      {/* =========================================
-          MOBILE BACKDROP
-      ========================================== */}
-
-      {open && (
-        <button
-          type="button"
-          aria-label="Menüyü kapat"
-          onClick={onClose}
-          className="
-            fixed
-            inset-0
-            z-40
-            bg-black/70
-            backdrop-blur-sm
-            md:hidden
-          "
-        />
-      )}
-
-      {/* =========================================
-          SIDEBAR
-      ========================================== */}
-
-      <aside
-        className={`
-          fixed
-          inset-y-0
-          left-0
-          z-50
-          flex
-          w-[300px]
-          flex-col
-          border-r
-          border-white/[0.07]
-          bg-zinc-950
-          shadow-2xl
-          transition-transform
-          duration-300
-          ease-out
-
-          ${
-            open
-              ? "translate-x-0"
-              : "-translate-x-full"
-          }
-
-          md:static
-          md:z-auto
-          md:translate-x-0
-          md:shadow-none
-        `}
-      >
-        {/* =========================================
-            HEADER
-        ========================================== */}
-
-        <div
-          className="
-            flex
-            shrink-0
-            items-center
-            justify-between
-            border-b
-            border-white/[0.07]
-            px-4
-            py-4
-          "
+      {item.icon ? (
+        <span
+          className="flex h-5 w-5 shrink-0 items-center justify-center text-muted-foreground"
+          aria-hidden="true"
         >
-          <div className="flex items-center gap-3">
-            <div
-              className="
-                flex
-                h-10
-                w-10
-                items-center
-                justify-center
-                rounded-xl
-                border
-                border-white/[0.08]
-                bg-white/[0.04]
-              "
-            >
-              <Sparkles
-                size={19}
-                className="text-white"
-              />
-            </div>
+          {item.icon}
+        </span>
+      ) : null}
 
-            <div>
-              <h2
-                className="
-                  text-sm
-                  font-bold
-                  tracking-[0.12em]
-                  text-white
-                "
-              >
-                SYRAVEN
-              </h2>
+      <span className="flex min-w-0 flex-1 flex-col text-left">
+        <span className="truncate">
+          {item.label}
+        </span>
 
-              <p className="mt-0.5 text-[10px] text-zinc-500">
-                Artificial Intelligence
-              </p>
-            </div>
-          </div>
+        {item.description ? (
+          <span className="mt-0.5 text-xs font-normal text-muted-foreground">
+            {item.description}
+          </span>
+        ) : null}
+      </span>
 
-          <button
-            type="button"
-            onClick={onClose}
-            className="
-              flex
-              h-9
-              w-9
-              items-center
-              justify-center
-              rounded-xl
-              text-zinc-500
-              transition
-              hover:bg-white/[0.06]
-              hover:text-white
-              md:hidden
-            "
-            aria-label="Menüyü kapat"
-          >
-            <X size={19} />
-          </button>
-        </div>
-
-        {/* =========================================
-            NEW CHAT
-        ========================================== */}
-
-        <div className="shrink-0 p-3">
-          <button
-            type="button"
-            onClick={handleNewChat}
-            className="
-              flex
-              w-full
-              items-center
-              justify-center
-              gap-2
-              rounded-xl
-              border
-              border-white/[0.10]
-              bg-white
-              px-4
-              py-3
-              text-sm
-              font-semibold
-              text-black
-              transition
-              hover:bg-zinc-200
-            "
-          >
-            <MessageSquarePlus
-              size={18}
-            />
-
-            Yeni Sohbet
-          </button>
-        </div>
-
-        {/* =========================================
-            CONVERSATIONS TITLE
-        ========================================== */}
-
-        <div
-          className="
-            flex
-            shrink-0
-            items-center
-            gap-2
-            px-4
-            pb-2
-            pt-1
-          "
-        >
-          <Clock3
-            size={14}
-            className="text-zinc-500"
-          />
-
-          <p
-            className="
-              text-[11px]
-              font-semibold
-              uppercase
-              tracking-[0.12em]
-              text-zinc-500
-            "
-          >
-            Sohbet Geçmişi
-          </p>
-        </div>
-
-        {/* =========================================
-            CONVERSATIONS
-        ========================================== */}
-
-        <div
-          className="
-            min-h-0
-            flex-1
-            overflow-y-auto
-            px-2
-            pb-3
-          "
-        >
-          {isLoading ? (
-            <div className="space-y-2 px-2 pt-1">
-              {[1, 2, 3, 4].map(
-                (item) => (
-                  <div
-                    key={item}
-                    className="
-                      h-11
-                      animate-pulse
-                      rounded-xl
-                      bg-white/[0.04]
-                    "
-                  />
-                )
-              )}
-            </div>
-          ) : conversations.length ===
-            0 ? (
-            <div
-              className="
-                px-4
-                py-8
-                text-center
-              "
-            >
-              <MenuIcon
-                size={24}
-                className="
-                  mx-auto
-                  mb-3
-                  text-zinc-700
-                "
-              />
-
-              <p className="text-sm text-zinc-500">
-                Henüz sohbet yok.
-              </p>
-
-              <p className="mt-1 text-xs text-zinc-600">
-                Yeni bir sohbet başlat.
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-1">
-              {conversations.map(
-                (
-                  conversation
-                ) => {
-                  const isActive =
-                    conversation.id ===
-                    currentConversationId;
-
-                  return (
-                    <button
-                      key={
-                        conversation.id
-                      }
-                      type="button"
-                      onClick={() =>
-                        handleConversationClick(
-                          conversation.id
-                        )
-                      }
-                      className={`
-                        flex
-                        w-full
-                        items-center
-                        gap-3
-                        rounded-xl
-                        px-3
-                        py-3
-                        text-left
-                        transition
-
-                        ${
-                          isActive
-                            ? `
-                              bg-white/[0.09]
-                              text-white
-                            `
-                            : `
-                              text-zinc-400
-                              hover:bg-white/[0.05]
-                              hover:text-white
-                            `
-                        }
-                      `}
-                    >
-                      <div
-                        className={`
-                          flex
-                          h-8
-                          w-8
-                          shrink-0
-                          items-center
-                          justify-center
-                          rounded-lg
-
-                          ${
-                            isActive
-                              ? "bg-white/[0.10]"
-                              : "bg-white/[0.04]"
-                          }
-                        `}
-                      >
-                        <Clock3
-                          size={15}
-                        />
-                      </div>
-
-                      <span
-                        className="
-                          min-w-0
-                          flex-1
-                          truncate
-                          text-sm
-                        "
-                      >
-                        {formatTitle(
-                          conversation.title
-                        )}
-                      </span>
-                    </button>
-                  );
-                }
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* =========================================
-            BOTTOM MENU
-        ========================================== */}
-
-        <div
-          className="
-            shrink-0
-            border-t
-            border-white/[0.07]
-            p-3
-          "
-        >
-          {/* MEMORIES */}
-
-          <Link
-            href="/memories"
-            onClick={onClose}
-            className="
-              flex
-              items-center
-              justify-between
-              rounded-xl
-              px-3
-              py-3
-              text-zinc-400
-              transition
-              hover:bg-white/[0.05]
-              hover:text-white
-            "
-          >
-            <div className="flex items-center gap-3">
-              <Brain size={18} />
-
-              <span className="text-sm">
-                Memories
-              </span>
-            </div>
-
-            <ChevronRight
-              size={16}
-              className="text-zinc-600"
-            />
-          </Link>
-
-          {/* SETTINGS */}
-
-          <Link
-            href="/settings"
-            onClick={onClose}
-            className="
-              flex
-              items-center
-              justify-between
-              rounded-xl
-              px-3
-              py-3
-              text-zinc-400
-              transition
-              hover:bg-white/[0.05]
-              hover:text-white
-            "
-          >
-            <div className="flex items-center gap-3">
-              <Settings size={18} />
-
-              <span className="text-sm">
-                Ayarlar
-              </span>
-            </div>
-
-            <ChevronRight
-              size={16}
-              className="text-zinc-600"
-            />
-          </Link>
-        </div>
-      </aside>
+      {item.shortcut ? (
+        <kbd className="ml-3 shrink-0 rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+          {item.shortcut}
+        </kbd>
+      ) : null}
     </>
+  );
+}
+
+export default function Menu({
+  trigger,
+  items,
+  align = "right",
+  side = "bottom",
+  width = "md",
+  disabled = false,
+  closeOnSelect = true,
+  className,
+  menuClassName,
+  onOpenChange,
+}: MenuProps) {
+  const [open, setOpen] = useState(false);
+
+  const menuId = useId();
+
+  const containerRef =
+    useRef<HTMLDivElement | null>(null);
+
+  const menuRef =
+    useRef<HTMLDivElement | null>(null);
+
+  const triggerRef =
+    useRef<HTMLButtonElement | null>(null);
+
+  const setMenuOpen = (
+    nextOpen: boolean
+  ): void => {
+    setOpen(nextOpen);
+    onOpenChange?.(nextOpen);
+  };
+
+  const closeMenu = (): void => {
+    setMenuOpen(false);
+  };
+
+  const focusFirstItem = (): void => {
+    const firstItem =
+      menuRef.current?.querySelector<HTMLElement>(
+        '[role="menuitem"]:not([aria-disabled="true"])'
+      );
+
+    firstItem?.focus();
+  };
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    const handlePointerDown = (
+      event: MouseEvent
+    ): void => {
+      const target = event.target;
+
+      if (!(target instanceof Node)) {
+        return;
+      }
+
+      if (
+        !containerRef.current?.contains(target)
+      ) {
+        closeMenu();
+      }
+    };
+
+    const handleKeyDown = (
+      event: KeyboardEvent
+    ): void => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeMenu();
+        triggerRef.current?.focus();
+      }
+
+      if (event.key === "Tab") {
+        closeMenu();
+      }
+    };
+
+    document.addEventListener(
+      "mousedown",
+      handlePointerDown
+    );
+
+    document.addEventListener(
+      "keydown",
+      handleKeyDown
+    );
+
+    return () => {
+      document.removeEventListener(
+        "mousedown",
+        handlePointerDown
+      );
+
+      document.removeEventListener(
+        "keydown",
+        handleKeyDown
+      );
+    };
+  }, [open]);
+
+  const handleTriggerClick = (): void => {
+    if (disabled) {
+      return;
+    }
+
+    setMenuOpen(!open);
+  };
+
+  const handleTriggerKeyDown = (
+    event: React.KeyboardEvent<HTMLButtonElement>
+  ): void => {
+    if (disabled) {
+      return;
+    }
+
+    if (
+      event.key === "ArrowDown" ||
+      event.key === "Enter" ||
+      event.key === " "
+    ) {
+      event.preventDefault();
+
+      if (!open) {
+        setMenuOpen(true);
+
+        window.setTimeout(() => {
+          focusFirstItem();
+        }, 0);
+      }
+    }
+  };
+
+  const handleItemClick = (
+    item: MenuItem
+  ): void => {
+    if (item.disabled) {
+      return;
+    }
+
+    item.onClick?.();
+
+    if (closeOnSelect) {
+      closeMenu();
+
+      window.setTimeout(() => {
+        triggerRef.current?.focus();
+      }, 0);
+    }
+  };
+
+  const handleItemKeyDown = (
+    event: React.KeyboardEvent<HTMLElement>,
+    item: MenuItem
+  ): void => {
+    if (item.disabled) {
+      return;
+    }
+
+    if (
+      event.key === "Enter" ||
+      event.key === " "
+    ) {
+      event.preventDefault();
+
+      handleItemClick(item);
+    }
+
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+
+      const nextElement =
+        event.currentTarget.nextElementSibling;
+
+      if (nextElement instanceof HTMLElement) {
+        const nextMenuItem =
+          nextElement.matches(
+            '[role="menuitem"]:not([aria-disabled="true"])'
+          )
+            ? nextElement
+            : nextElement.querySelector<HTMLElement>(
+                '[role="menuitem"]:not([aria-disabled="true"])'
+              );
+
+        nextMenuItem?.focus();
+      }
+    }
+
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+
+      const previousElement =
+        event.currentTarget.previousElementSibling;
+
+      if (previousElement instanceof HTMLElement) {
+        const previousMenuItem =
+          previousElement.matches(
+            '[role="menuitem"]:not([aria-disabled="true"])'
+          )
+            ? previousElement
+            : previousElement.querySelector<HTMLElement>(
+                '[role="menuitem"]:not([aria-disabled="true"])'
+              );
+
+        previousMenuItem?.focus();
+      }
+    }
+  };
+
+  const positionClassName =
+    side === "bottom"
+      ? "top-full mt-2"
+      : "bottom-full mb-2";
+
+  const alignClassName =
+    align === "right"
+      ? "right-0"
+      : "left-0";
+
+  return (
+    <div
+      ref={containerRef}
+      className={cn(
+        "relative inline-flex",
+        className
+      )}
+    >
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={handleTriggerClick}
+        onKeyDown={handleTriggerKeyDown}
+        disabled={disabled}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-controls={open ? menuId : undefined}
+        className={cn(
+          "inline-flex items-center justify-center",
+          "focus-visible:outline-none",
+          "focus-visible:ring-2",
+          "focus-visible:ring-primary/30",
+          "focus-visible:ring-offset-2",
+          "focus-visible:ring-offset-background",
+          disabled &&
+            "cursor-not-allowed opacity-50"
+        )}
+      >
+        {trigger}
+      </button>
+
+      {open ? (
+        <div
+          ref={menuRef}
+          id={menuId}
+          role="menu"
+          aria-orientation="vertical"
+          className={cn(
+            "absolute z-50 overflow-hidden rounded-xl",
+            "border border-border bg-popover text-popover-foreground",
+            "p-1 shadow-lg",
+            "animate-in fade-in-0 zoom-in-95",
+            "duration-150",
+            widthClasses[width],
+            positionClassName,
+            alignClassName,
+            menuClassName
+          )}
+        >
+          {items.map((item, index) => {
+            const itemKey =
+              item.id ??
+              `${String(item.label)}-${index}`;
+
+            const itemClassName = cn(
+              "flex w-full items-center gap-3 rounded-lg px-3 py-2.5",
+              "text-sm font-medium transition-colors",
+              "focus:outline-none",
+              item.disabled
+                ? "cursor-not-allowed opacity-50"
+                : item.danger
+                  ? "text-destructive hover:bg-destructive/10 focus:bg-destructive/10"
+                  : "hover:bg-muted focus:bg-muted"
+            );
+
+            const content = (
+              <MenuItemContent item={item} />
+            );
+
+            return (
+              <React.Fragment key={itemKey}>
+                {item.divider && index > 0 ? (
+                  <div
+                    role="separator"
+                    className="my-1 h-px bg-border"
+                  />
+                ) : null}
+
+                {item.href && !item.disabled ? (
+                  <a
+                    href={item.href}
+                    target={
+                      item.external
+                        ? "_blank"
+                        : undefined
+                    }
+                    rel={
+                      item.external
+                        ? "noopener noreferrer"
+                        : undefined
+                    }
+                    role="menuitem"
+                    tabIndex={0}
+                    className={itemClassName}
+                    onClick={() =>
+                      handleItemClick(item)
+                    }
+                    onKeyDown={(event) =>
+                      handleItemKeyDown(
+                        event,
+                        item
+                      )
+                    }
+                  >
+                    {content}
+                  </a>
+                ) : (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    disabled={item.disabled}
+                    aria-disabled={item.disabled}
+                    tabIndex={
+                      item.disabled ? -1 : 0
+                    }
+                    className={itemClassName}
+                    onClick={() =>
+                      handleItemClick(item)
+                    }
+                    onKeyDown={(event) =>
+                      handleItemKeyDown(
+                        event,
+                        item
+                      )
+                    }
+                  >
+                    {content}
+                  </button>
+                )}
+              </React.Fragment>
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+export function MenuDivider() {
+  return (
+    <div
+      role="separator"
+      className="my-1 h-px bg-border"
+    />
+  );
+}
+
+export function MenuLabel({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        "px-3 py-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground",
+        className
+      )}
+    >
+      {children}
+    </div>
   );
 }

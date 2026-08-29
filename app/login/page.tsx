@@ -1,198 +1,356 @@
 "use client";
 
-import { useState } from "react";
-import { supabase } from "@/lib/supabase";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
+import {
+  useCallback,
+  useState,
+  type FormEvent,
+} from "react";
+
+import {
+  ArrowRight,
+  Eye,
+  EyeOff,
+  Loader2,
+  LockKeyhole,
+  Mail,
+  Sparkles,
+} from "lucide-react";
+
+interface LoginFormData {
+  email: string;
+  password: string;
+}
+
+interface LoginResponse {
+  success: boolean;
+  error?: string;
+}
+
+const INITIAL_FORM: LoginFormData = {
+  email: "",
+  password: "",
+};
 
 export default function LoginPage() {
   const router = useRouter();
 
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [resetLoading, setResetLoading] = useState(false);
+  const [form, setForm] =
+    useState<LoginFormData>(INITIAL_FORM);
 
-  async function handleLogin() {
-    setLoading(true);
+  const [showPassword, setShowPassword] =
+    useState(false);
 
-    const { data, error } =
-      await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+  const [isLoading, setIsLoading] =
+    useState(false);
 
-    if (error) {
-      setLoading(false);
-      alert(error.message);
-      return;
-    }
+  const [error, setError] =
+    useState<string | null>(null);
 
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
+  const updateField = useCallback(
+    (
+      field: keyof LoginFormData,
+      value: string
+    ) => {
+      setForm((current) => ({
+        ...current,
+        [field]: value,
+      }));
 
-    setLoading(false);
+      setError(null);
+    },
+    []
+  );
 
-    if (!session) {
-      alert(
-        "Giriş başarılı görünüyor ama oturum oluşturulamadı."
-      );
-      return;
-    }
+  const handleSubmit = useCallback(
+    async (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
 
-    router.replace("/chat");
-    router.refresh();
-  }
+      const email = form.email.trim();
 
-  async function handleForgotPassword() {
-    if (!email) {
-      alert("Önce e-posta adresinizi girin.");
-      return;
-    }
+      if (!email || !form.password) {
+        setError(
+          "Please enter your email and password."
+        );
+        return;
+      }
 
-    setResetLoading(true);
+      if (!email.includes("@")) {
+        setError(
+          "Please enter a valid email address."
+        );
+        return;
+      }
 
-    const { error } =
-      await supabase.auth.resetPasswordForEmail(
-        email,
-        {
-          redirectTo: `${window.location.origin}/reset-password`,
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        const response = await fetch(
+          "/api/auth/login",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
+            body: JSON.stringify({
+              email,
+              password: form.password,
+            }),
+          }
+        );
+
+        let result: LoginResponse | null =
+          null;
+
+        try {
+          result =
+            (await response.json()) as LoginResponse;
+        } catch {
+          result = null;
         }
-      );
 
-    setResetLoading(false);
+        if (!response.ok || !result?.success) {
+          setError(
+            result?.error ||
+              "Unable to sign in. Please try again."
+          );
+          return;
+        }
 
-    if (error) {
-      alert(error.message);
-      return;
-    }
+        router.push("/dashboard");
+        router.refresh();
+      } catch (requestError) {
+        const message =
+          requestError instanceof Error
+            ? requestError.message
+            : "An unexpected error occurred.";
 
-    alert(
-      "Şifre sıfırlama bağlantısı e-posta adresinize gönderildi."
-    );
-  }
+        setError(message);
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [form.email, form.password, router]
+  );
 
   return (
-    <main className="min-h-screen bg-black text-white flex items-center justify-center px-4 py-8 sm:px-6">
-
-      {/* Glow */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute -top-32 -left-32 h-64 w-64 sm:h-96 sm:w-96 rounded-full bg-blue-600/10 blur-3xl" />
-        <div className="absolute -bottom-32 -right-32 h-64 w-64 sm:h-96 sm:w-96 rounded-full bg-purple-600/10 blur-3xl" />
+    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background px-4 py-10">
+      <div className="pointer-events-none absolute inset-0">
+        <div className="absolute left-1/2 top-0 h-[420px] w-[420px] -translate-x-1/2 rounded-full bg-primary/10 blur-3xl" />
       </div>
 
-      <div className="relative w-full max-w-md">
+      <div className="relative grid w-full max-w-5xl overflow-hidden rounded-3xl border border-border bg-card shadow-2xl lg:grid-cols-2">
+        <section className="hidden min-h-[620px] flex-col justify-between border-r border-border bg-muted/30 p-10 lg:flex">
+          <div>
+            <Link
+              href="/"
+              className="inline-flex items-center gap-2 text-lg font-semibold text-foreground"
+            >
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+                <Sparkles className="h-5 w-5" />
+              </div>
 
-        {/* Logo */}
-        <div className="text-center mb-6 sm:mb-8">
-          <a
-            href="/"
-            className="text-2xl sm:text-3xl font-bold tracking-[0.2em]"
-          >
-            SYRAVEN
-          </a>
+              NOVA
+            </Link>
+          </div>
 
-          <p className="text-zinc-500 text-sm mt-2">
-            AI workspace
-          </p>
-        </div>
+          <div className="max-w-md">
+            <div className="mb-6 inline-flex rounded-xl bg-primary/10 p-3 text-primary">
+              <Sparkles className="h-7 w-7" />
+            </div>
 
-        {/* Card */}
-        <div className="w-full rounded-2xl sm:rounded-3xl border border-white/10 bg-zinc-900/80 backdrop-blur-xl p-5 sm:p-8 shadow-2xl">
-
-          <div className="mb-6 sm:mb-8">
-            <h1 className="text-2xl sm:text-3xl font-bold">
-              Hoş geldin
+            <h1 className="text-4xl font-semibold tracking-tight text-foreground">
+              Build the future with intelligent systems.
             </h1>
 
-            <p className="text-zinc-400 text-sm mt-2">
-              SYRAVEN hesabına giriş yap.
+            <p className="mt-5 text-base leading-7 text-muted-foreground">
+              Access your workspace, knowledge, AI agents
+              and powerful tools from one unified platform.
             </p>
           </div>
 
-          <div className="space-y-4">
+          <div className="text-sm text-muted-foreground">
+            Secure intelligence infrastructure for the next
+            generation of builders.
+          </div>
+        </section>
 
-            <div>
-              <label className="block text-sm text-zinc-400 mb-2">
-                E-posta
-              </label>
+        <section className="flex min-h-[620px] items-center px-6 py-10 sm:px-10 lg:px-12">
+          <div className="mx-auto w-full max-w-md">
+            <div className="lg:hidden">
+              <Link
+                href="/"
+                className="inline-flex items-center gap-2 text-lg font-semibold text-foreground"
+              >
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+                  <Sparkles className="h-5 w-5" />
+                </div>
 
-              <input
-                type="email"
-                placeholder="ornek@email.com"
-                value={email}
-                onChange={(e) =>
-                  setEmail(e.target.value)
-                }
-                className="w-full min-w-0 h-12 px-4 rounded-xl bg-zinc-800/80 border border-zinc-700 text-white placeholder:text-zinc-500 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 transition"
-              />
+                NOVA
+              </Link>
             </div>
 
-            <div>
-              <label className="block text-sm text-zinc-400 mb-2">
-                Şifre
-              </label>
+            <div className="mt-10 lg:mt-0">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                <LockKeyhole className="h-6 w-6" />
+              </div>
 
-              <input
-                type="password"
-                placeholder="Şifren"
-                value={password}
-                onChange={(e) =>
-                  setPassword(e.target.value)
-                }
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    handleLogin();
-                  }
-                }}
-                className="w-full min-w-0 h-12 px-4 rounded-xl bg-zinc-800/80 border border-zinc-700 text-white placeholder:text-zinc-500 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 transition"
-              />
+              <h2 className="mt-6 text-3xl font-semibold tracking-tight text-foreground">
+                Welcome back
+              </h2>
+
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                Sign in to continue to your NOVA workspace.
+              </p>
             </div>
 
-            <button
-              type="button"
-              onClick={handleForgotPassword}
-              disabled={resetLoading}
-              className="block ml-auto text-sm text-zinc-400 hover:text-blue-400 transition"
+            <form
+              onSubmit={handleSubmit}
+              className="mt-8 space-y-5"
             >
-              {resetLoading
-                ? "Gönderiliyor..."
-                : "Şifreni mi unuttun?"}
-            </button>
+              <div>
+                <label
+                  htmlFor="email"
+                  className="mb-2 block text-sm font-medium text-foreground"
+                >
+                  Email address
+                </label>
 
-            <button
-              type="button"
-              onClick={handleLogin}
-              disabled={loading}
-              className="w-full h-12 rounded-xl bg-white text-black font-semibold hover:bg-zinc-200 active:scale-[0.99] disabled:opacity-50 transition"
-            >
-              {loading
-                ? "Giriş yapılıyor..."
-                : "Giriş Yap"}
-            </button>
+                <div className="relative">
+                  <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+
+                  <input
+                    id="email"
+                    type="email"
+                    autoComplete="email"
+                    value={form.email}
+                    onChange={(event) =>
+                      updateField(
+                        "email",
+                        event.target.value
+                      )
+                    }
+                    placeholder="you@example.com"
+                    disabled={isLoading}
+                    className="h-12 w-full rounded-xl border border-border bg-background pl-10 pr-4 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-primary disabled:cursor-not-allowed disabled:opacity-60"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <div className="mb-2 flex items-center justify-between gap-4">
+                  <label
+                    htmlFor="password"
+                    className="text-sm font-medium text-foreground"
+                  >
+                    Password
+                  </label>
+
+                  <Link
+                    href="/forgot-password"
+                    className="text-xs font-medium text-primary hover:underline"
+                  >
+                    Forgot password?
+                  </Link>
+                </div>
+
+                <div className="relative">
+                  <LockKeyhole className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+
+                  <input
+                    id="password"
+                    type={
+                      showPassword
+                        ? "text"
+                        : "password"
+                    }
+                    autoComplete="current-password"
+                    value={form.password}
+                    onChange={(event) =>
+                      updateField(
+                        "password",
+                        event.target.value
+                      )
+                    }
+                    placeholder="Enter your password"
+                    disabled={isLoading}
+                    className="h-12 w-full rounded-xl border border-border bg-background pl-10 pr-12 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-primary disabled:cursor-not-allowed disabled:opacity-60"
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setShowPassword(
+                        (current) => !current
+                      )
+                    }
+                    aria-label={
+                      showPassword
+                        ? "Hide password"
+                        : "Show password"
+                    }
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground"
+                  >
+                    {showPassword ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {error && (
+                <div
+                  role="alert"
+                  className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+                >
+                  {error}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Signing in...
+                  </>
+                ) : (
+                  <>
+                    Sign in
+                    <ArrowRight className="h-4 w-4" />
+                  </>
+                )}
+              </button>
+            </form>
+
+            <p className="mt-8 text-center text-sm text-muted-foreground">
+              New to NOVA?{" "}
+              <Link
+                href="/signup"
+                className="font-medium text-primary hover:underline"
+              >
+                Create an account
+              </Link>
+            </p>
+
+            <div className="mt-8 border-t border-border pt-6 text-center">
+              <Link
+                href="/"
+                className="text-xs text-muted-foreground transition-colors hover:text-foreground"
+              >
+                ← Return to homepage
+              </Link>
+            </div>
           </div>
-
-          <div className="relative my-7">
-            <div className="border-t border-zinc-800" />
-          </div>
-
-          <p className="text-center text-sm text-zinc-500">
-            Henüz hesabın yok mu?
-          </p>
-
-          <a
-            href="/register"
-            className="block text-center mt-2 text-blue-400 hover:text-blue-300 font-medium transition"
-          >
-            Ücretsiz hesap oluştur
-          </a>
-
-        </div>
-
-        <p className="text-center text-xs text-zinc-600 mt-5">
-          SYRAVEN ile daha akıllı çalış.
-        </p>
-
+        </section>
       </div>
     </main>
   );

@@ -1,416 +1,517 @@
-import { supabase } from "@/lib/supabase";
+export type ChatStreamEventType =
+  | "start"
+  | "delta"
+  | "message"
+  | "done"
+  | "error"
+  | "metadata";
 
-import type {
-  ActionRequest,
-} from "@/services/action-types";
+export interface ChatStreamEvent<T = unknown> {
+  type: ChatStreamEventType;
+  data?: T;
+  id?: string;
+}
 
-/* ==================================================
- * TYPES
- * ================================================== */
+export interface ChatStreamOptions {
+  signal?: AbortSignal;
 
-export type StreamAttachment = {
-  name: string;
-  url: string;
-  type: string;
-};
+  onStart?: () => void;
 
-export type StreamMessage = {
-  role: "user" | "assistant";
+  onDelta?: (
+    delta: string,
+    fullContent: string
+  ) => void;
+
+  onMessage?: (data: unknown) => void;
+
+  onMetadata?: (data: unknown) => void;
+
+  onDone?: () => void;
+
+  onError?: (error: Error) => void;
+}
+
+export interface ChatStreamResult {
   content: string;
-  attachment?: StreamAttachment | null;
-};
+  completed: boolean;
+}
 
-type GroqStreamChunk = {
-  choices?: Array<{
-    delta?: {
-      content?: string;
-    };
-  }>;
-};
+function createAbortError(): Error {
+  const error = new Error(
+    "The chat stream was aborted."
+  );
 
-type StreamCallbacks = {
-  onChunk: (
-    chunk: string
-  ) => void;
+  error.name = "AbortError";
 
-  onAction?: (
-    action: ActionRequest
-  ) => void;
-};
+  return error;
+}
 
-/* ==================================================
- * ACTION VALIDATION
- * ================================================== */
-
-function isActionRequest(
-  value: unknown
-): value is ActionRequest {
-  if (
-    !value ||
-    typeof value !== "object"
-  ) {
-    return false;
+function normalizeError(
+  error: unknown
+): Error {
+  if (error instanceof Error) {
+    return error;
   }
 
-  const action =
-    value as Record<string, unknown>;
+  if (typeof error === "string") {
+    return new Error(error);
+  }
 
-  return (
-    typeof action.type === "string" &&
-    typeof action.requiresConfirmation ===
-      "boolean" &&
-    typeof action.confidence === "number" &&
-    typeof action.data === "object" &&
-    action.data !== null &&
-    !Array.isArray(
-      action.data
-    )
+  return new Error(
+    "An unknown chat stream error occurred."
   );
 }
 
-/* ==================================================
- * SSE EVENT PROCESSING
- * ================================================== */
+function parseEventData(
+  value: string
+): unknown {
+  const trimmed = value.trim();
 
-function processSSEEvent(
-  event: string,
-  callbacks: StreamCallbacks
-): boolean {
-  const lines =
-    event.split(
-      /\r?\n/
-    );
+  if (!trimmed) {
+    return "";
+  }
 
-  let eventType = "";
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    return trimmed;
+  }
+}
 
-  const dataLines: string[] =
-    [];
-
-  for (
-    const line of lines
-  ) {
-    if (
-      line.startsWith(
-        "event:"
-      )
-    ) {
-      eventType =
-        line
-          .slice(6)
-          .trim();
-
-      continue;
-    }
-
-    if (
-      !line.startsWith(
-        "data:"
-      )
-    ) {
-      continue;
-    }
-
-    dataLines.push(
-      line
-        .slice(5)
-        .trimStart()
-    );
+function extractText(
+  data: unknown
+): string {
+  if (typeof data === "string") {
+    return data;
   }
 
   if (
-    dataLines.length === 0
+    typeof data === "object" &&
+    data !== null
   ) {
-    return false;
+    const value =
+      data as Record<string, unknown>;
+
+    const possibleKeys = [
+      "content",
+      "text",
+      "delta",
+      "token",
+      "message",
+    ];
+
+    for (const key of possibleKeys) {
+      const candidate = value[key];
+
+      if (typeof candidate === "string") {
+        return candidate;
+      }
+
+      if (
+        typeof candidate === "object" &&
+        candidate !== null
+      ) {
+        const nested =
+          candidate as Record<
+            string,
+            unknown
+          >;
+
+        if (
+          typeof nested.content ===
+          "string"
+        ) {
+          return nested.content;
+        }
+
+        if (
+          typeof nested.text === "string"
+        ) {
+          return nested.text;
+        }
+      }
+    }
+  }
+
+  return "";
+}
+
+function parseSSEBlock(
+  block: string
+): ChatStreamEvent | null {
+  const lines = block
+    .split("\n")
+    .map((line) => line.trimEnd());
+
+  let eventType = "message";
+
+  const dataLines: string[] = [];
+
+  let id: string | undefined;
+
+  for (const line of lines) {
+    if (
+      !line ||
+      line.startsWith(":")
+    ) {
+      continue;
+    }
+
+    if (line.startsWith("event:")) {
+      eventType = line
+        .slice(6)
+        .trim();
+
+      continue;
+    }
+
+    if (line.startsWith("data:")) {
+      dataLines.push(
+        line.slice(5).trimStart()
+      );
+
+      continue;
+    }
+
+    if (line.startsWith("id:")) {
+      id = line.slice(3).trim();
+    }
+  }
+
+  if (dataLines.length === 0) {
+    return null;
+  }
+
+  const rawData =
+    dataLines.join("\n");
+
+  if (rawData === "[DONE]") {
+    return {
+      type: "done",
+      id,
+    };
   }
 
   const data =
-    dataLines
-      .join("\n")
-      .trim();
+    parseEventData(rawData);
 
-  if (!data) {
-    return false;
-  }
+  const validTypes: ChatStreamEventType[] =
+    [
+      "start",
+      "delta",
+      "message",
+      "done",
+      "error",
+      "metadata",
+    ];
 
-  if (
-    data === "[DONE]"
-  ) {
-    return true;
-  }
+  const type = validTypes.includes(
+    eventType as ChatStreamEventType
+  )
+    ? (eventType as ChatStreamEventType)
+    : "message";
 
-  try {
-    const json =
-      JSON.parse(data);
-
-    /* ==============================================
-     * CUSTOM ACTION EVENT
-     * ============================================== */
-
-    if (
-      eventType === "action" &&
-      isActionRequest(json)
-    ) {
-      callbacks.onAction?.(
-        json
-      );
-
-      return false;
-    }
-
-    if (
-      isActionRequest(
-        json?.action
-      )
-    ) {
-      callbacks.onAction?.(
-        json.action
-      );
-
-      return false;
-    }
-
-    /* ==============================================
-     * GROQ CONTENT CHUNK
-     * ============================================== */
-
-    const chunk =
-      json as GroqStreamChunk;
-
-    const content =
-      chunk
-        .choices?.[0]
-        ?.delta
-        ?.content;
-
-    if (
-      typeof content ===
-        "string" &&
-      content.length > 0
-    ) {
-      callbacks.onChunk(
-        content
-      );
-    }
-  } catch (error) {
-    console.error(
-      "SSE JSON parse hatası:",
-      error,
-      data
-    );
-  }
-
-  return false;
+  return {
+    type,
+    data,
+    id,
+  };
 }
 
-/* ==================================================
- * STREAM CHAT
- * ================================================== */
-
-export async function streamChat(
-  messages: StreamMessage[],
-
-  onChunk: (
-    chunk: string
-  ) => void,
-
-  signal?: AbortSignal,
-
-  onAction?: (
-    action: ActionRequest
-  ) => void
-): Promise<void> {
-  /* ================================================
-   * SESSION
-   * ================================================ */
-
+export async function consumeChatStream(
+  response: Response,
+  options: ChatStreamOptions = {}
+): Promise<ChatStreamResult> {
   const {
-    data: {
-      session,
-    },
-
-    error: sessionError,
-  } =
-    await supabase.auth
-      .getSession();
-
-  if (
-    sessionError ||
-    !session?.access_token
-  ) {
-    throw new Error(
-      "Oturum bulunamadı."
-    );
-  }
-
-  /* ================================================
-   * REQUEST
-   * ================================================ */
-
-  const response =
-    await fetch(
-      "/api/stream",
-      {
-        method: "POST",
-
-        signal,
-
-        headers: {
-          "Content-Type":
-            "application/json",
-
-          Authorization:
-            `Bearer ${session.access_token}`,
-        },
-
-        body:
-          JSON.stringify({
-            messages,
-          }),
-      }
-    );
-
-  /* ================================================
-   * ERROR RESPONSE
-   * ================================================ */
+    signal,
+    onStart,
+    onDelta,
+    onMessage,
+    onMetadata,
+    onDone,
+    onError,
+  } = options;
 
   if (!response.ok) {
-    let message =
-      "AI yanıtı alınamadı.";
-
-    try {
-      const errorData =
-        await response.json();
-
-      if (
-        typeof errorData?.error ===
-          "string" &&
-        errorData.error.trim()
-      ) {
-        message =
-          errorData.error;
-      }
-    } catch {
-      // JSON olmayan hata cevabı
-    }
-
-    throw new Error(
-      message
+    const error = new Error(
+      `Chat stream failed with status ${response.status}.`
     );
+
+    onError?.(error);
+
+    throw error;
   }
 
   if (!response.body) {
-    throw new Error(
-      "AI stream body bulunamadı."
+    const error = new Error(
+      "Chat stream response has no readable body."
     );
+
+    onError?.(error);
+
+    throw error;
   }
 
-  /* ================================================
-   * STREAM READER
-   * ================================================ */
-
   const reader =
-    response.body
-      .getReader();
+    response.body.getReader();
 
   const decoder =
-    new TextDecoder(
-      "utf-8"
-    );
-
-  const callbacks:
-    StreamCallbacks = {
-      onChunk,
-      onAction,
-    };
+    new TextDecoder();
 
   let buffer = "";
 
-  let streamFinished =
-    false;
+  let content = "";
+
+  let completed = false;
+
+  let started = false;
+
+  const emitStart = () => {
+    if (!started) {
+      started = true;
+
+      onStart?.();
+    }
+  };
 
   try {
+    emitStart();
+
     while (true) {
+      if (signal?.aborted) {
+        throw createAbortError();
+      }
+
       const {
-        value,
         done,
-      } =
-        await reader.read();
+        value,
+      } = await reader.read();
 
       if (done) {
         break;
       }
 
-      if (!value) {
-        continue;
-      }
+      buffer += decoder.decode(
+        value,
+        {
+          stream: true,
+        }
+      );
 
-      buffer +=
-        decoder.decode(
-          value,
-          {
-            stream: true,
+      buffer = buffer.replace(
+        /\r\n/g,
+        "\n"
+      );
+
+      let separatorIndex =
+        buffer.indexOf("\n\n");
+
+      while (separatorIndex !== -1) {
+        const block = buffer.slice(
+          0,
+          separatorIndex
+        );
+
+        buffer = buffer.slice(
+          separatorIndex + 2
+        );
+
+        const event =
+          parseSSEBlock(block);
+
+        if (event) {
+          if (event.type === "start") {
+            emitStart();
           }
-        );
 
-      const events =
-        buffer.split(
-          /\r?\n\r?\n/
-        );
+          if (event.type === "delta") {
+            emitStart();
 
-      buffer =
-        events.pop() ?? "";
+            const text =
+              extractText(event.data);
 
-      for (
-        const event of events
-      ) {
-        if (
-          !event.trim()
-        ) {
-          continue;
+            if (text) {
+              content += text;
+
+              onDelta?.(
+                text,
+                content
+              );
+            }
+          }
+
+          if (event.type === "message") {
+            emitStart();
+
+            const text =
+              extractText(event.data);
+
+            if (text) {
+              content += text;
+            }
+
+            onMessage?.(
+              event.data
+            );
+          }
+
+          if (
+            event.type ===
+            "metadata"
+          ) {
+            onMetadata?.(
+              event.data
+            );
+          }
+
+          if (
+            event.type === "error"
+          ) {
+            const message =
+              extractText(event.data) ||
+              "The chat stream returned an error.";
+
+            throw new Error(
+              message
+            );
+          }
+
+          if (
+            event.type === "done"
+          ) {
+            completed = true;
+
+            onDone?.();
+
+            await reader.cancel();
+
+            return {
+              content,
+              completed,
+            };
+          }
         }
 
-        const isDone =
-          processSSEEvent(
-            event,
-            callbacks
+        separatorIndex =
+          buffer.indexOf("\n\n");
+      }
+    }
+
+    buffer += decoder.decode();
+
+    if (buffer.trim()) {
+      const event =
+        parseSSEBlock(buffer);
+
+      if (
+        event?.type === "delta"
+      ) {
+        const text =
+          extractText(event.data);
+
+        if (text) {
+          content += text;
+
+          onDelta?.(
+            text,
+            content
           );
-
-        if (isDone) {
-          streamFinished =
-            true;
-
-          break;
         }
       }
 
       if (
-        streamFinished
+        event?.type === "message"
       ) {
-        break;
+        const text =
+          extractText(event.data);
+
+        if (text) {
+          content += text;
+        }
+
+        onMessage?.(
+          event.data
+        );
+      }
+
+      if (
+        event?.type === "metadata"
+      ) {
+        onMetadata?.(
+          event.data
+        );
+      }
+
+      if (
+        event?.type === "error"
+      ) {
+        const message =
+          extractText(event.data) ||
+          "The chat stream returned an error.";
+
+        throw new Error(
+          message
+        );
+      }
+
+      if (
+        event?.type === "done"
+      ) {
+        completed = true;
       }
     }
 
-    /* ==============================================
-     * FINAL DECODER BUFFER
-     * ============================================== */
+    completed = true;
 
-    buffer +=
-      decoder.decode();
+    onDone?.();
 
-    if (
-      !streamFinished &&
-      buffer.trim()
-    ) {
-      processSSEEvent(
-        buffer,
-        callbacks
-      );
-    }
+    return {
+      content,
+      completed,
+    };
+  } catch (error) {
+    const normalizedError =
+      normalizeError(error);
+
+    onError?.(
+      normalizedError
+    );
+
+    throw normalizedError;
   } finally {
     try {
       reader.releaseLock();
     } catch {
-      // Stream zaten kapanmış olabilir.
+      // Reader may already be closed or cancelled.
     }
   }
+}
+
+export async function streamChat(
+  input: RequestInfo | URL,
+  init: RequestInit = {},
+  options: ChatStreamOptions = {}
+): Promise<ChatStreamResult> {
+  const response = await fetch(
+    input,
+    {
+      ...init,
+
+      signal:
+        options.signal ??
+        init.signal,
+
+      headers: {
+        Accept:
+          "text/event-stream",
+
+        ...init.headers,
+      },
+    }
+  );
+
+  return consumeChatStream(
+    response,
+    options
+  );
 }

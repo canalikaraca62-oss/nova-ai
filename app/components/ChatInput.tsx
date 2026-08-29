@@ -1,369 +1,441 @@
 "use client";
 
-import {
-  ChangeEvent,
-  KeyboardEvent,
+import React, {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
   useRef,
+  useState,
 } from "react";
 
-import {
-  Paperclip,
-  Send,
-  Square,
-  X,
-} from "lucide-react";
+export interface ChatInputAttachment {
+  id: string;
+  name: string;
+  size?: number;
+  type?: string;
+  file?: File;
+}
 
-type ChatInputProps = {
-  input: string;
-  setInput: (value: string) => void;
-  sendMessage: () => void;
+export interface ChatInputRef {
+  focus: () => void;
+  clear: () => void;
+  getValue: () => string;
+  setValue: (value: string) => void;
+}
 
-  selectedFile: File | null;
-  setSelectedFile: (
-    file: File | null
-  ) => void;
+export interface ChatInputProps {
+  value?: string;
+  defaultValue?: string;
 
-  isUploading: boolean;
+  placeholder?: string;
 
-  isStreaming: boolean;
-  stopStreaming: () => void;
-};
+  disabled?: boolean;
+  loading?: boolean;
 
-export default function ChatInput({
-  input,
-  setInput,
-  sendMessage,
-  selectedFile,
-  setSelectedFile,
-  isUploading,
-  isStreaming,
-  stopStreaming,
-}: ChatInputProps) {
-  const fileInputRef =
-    useRef<HTMLInputElement>(null);
+  autoFocus?: boolean;
 
-  function handleFileChange(
-    event: ChangeEvent<HTMLInputElement>
-  ) {
-    const file =
-      event.target.files?.[0] ?? null;
+  maxLength?: number;
+  minRows?: number;
+  maxRows?: number;
 
-    setSelectedFile(file);
+  showCharacterCount?: boolean;
 
-    event.target.value = "";
+  attachments?: ChatInputAttachment[];
+
+  onChange?: (value: string) => void;
+  onSubmit?: (
+    value: string,
+    attachments: ChatInputAttachment[]
+  ) => void | Promise<void>;
+
+  onAttachmentAdd?: (files: File[]) => void;
+  onAttachmentRemove?: (attachmentId: string) => void;
+
+  leftActions?: React.ReactNode;
+  rightActions?: React.ReactNode;
+
+  className?: string;
+  textareaClassName?: string;
+}
+
+function cn(
+  ...classes: Array<string | false | null | undefined>
+): string {
+  return classes.filter(Boolean).join(" ");
+}
+
+function formatFileSize(bytes?: number): string {
+  if (!bytes || bytes <= 0) {
+    return "";
   }
 
-  function handleKeyDown(
-    event: KeyboardEvent<HTMLTextAreaElement>
+  const units = ["B", "KB", "MB", "GB"];
+  const index = Math.min(
+    Math.floor(Math.log(bytes) / Math.log(1024)),
+    units.length - 1
+  );
+
+  const value = bytes / Math.pow(1024, index);
+
+  return `${value.toFixed(index === 0 ? 0 : 1)} ${units[index]}`;
+}
+
+export const ChatInput = forwardRef<ChatInputRef, ChatInputProps>(
+  function ChatInput(
+    {
+      value,
+      defaultValue = "",
+      placeholder = "Message...",
+      disabled = false,
+      loading = false,
+      autoFocus = false,
+      maxLength,
+      minRows = 1,
+      maxRows = 6,
+      showCharacterCount = false,
+      attachments = [],
+      onChange,
+      onSubmit,
+      onAttachmentAdd,
+      onAttachmentRemove,
+      leftActions,
+      rightActions,
+      className,
+      textareaClassName,
+    },
+    ref
   ) {
-    if (
-      event.key === "Enter" &&
-      !event.shiftKey
-    ) {
-      event.preventDefault();
+    const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+    const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+    const [internalValue, setInternalValue] =
+      useState<string>(defaultValue);
+
+    const [submitting, setSubmitting] =
+      useState<boolean>(false);
+
+    const isControlled = value !== undefined;
+
+    const currentValue = isControlled
+      ? value
+      : internalValue;
+
+    const isBusy =
+      disabled || loading || submitting;
+
+    const setCurrentValue = (nextValue: string): void => {
+      if (!isControlled) {
+        setInternalValue(nextValue);
+      }
+
+      onChange?.(nextValue);
+    };
+
+    const resizeTextarea = (): void => {
+      const textarea = textareaRef.current;
+
+      if (!textarea) {
+        return;
+      }
+
+      textarea.style.height = "auto";
+
+      const computedStyle =
+        window.getComputedStyle(textarea);
+
+      const lineHeight =
+        Number.parseFloat(computedStyle.lineHeight) || 24;
+
+      const maxHeight =
+        lineHeight * Math.max(maxRows, minRows);
+
+      const nextHeight = Math.min(
+        textarea.scrollHeight,
+        maxHeight
+      );
+
+      textarea.style.height = `${nextHeight}px`;
+      textarea.style.overflowY =
+        textarea.scrollHeight > maxHeight
+          ? "auto"
+          : "hidden";
+    };
+
+    useEffect(() => {
+      resizeTextarea();
+    }, [currentValue, minRows, maxRows]);
+
+    useEffect(() => {
+      if (autoFocus) {
+        textareaRef.current?.focus();
+      }
+    }, [autoFocus]);
+
+    useImperativeHandle(
+      ref,
+      () => ({
+        focus: (): void => {
+          textareaRef.current?.focus();
+        },
+
+        clear: (): void => {
+          setCurrentValue("");
+        },
+
+        getValue: (): string => {
+          return currentValue;
+        },
+
+        setValue: (nextValue: string): void => {
+          setCurrentValue(nextValue);
+        },
+      }),
+      [currentValue]
+    );
+
+    const handleChange = (
+      event: React.ChangeEvent<HTMLTextAreaElement>
+    ): void => {
+      const nextValue = event.target.value;
 
       if (
-        !isStreaming &&
-        !isUploading &&
-        (
-          input.trim() ||
-          selectedFile
-        )
+        maxLength !== undefined &&
+        nextValue.length > maxLength
       ) {
-        sendMessage();
+        return;
       }
-    }
-  }
 
-  const canSend =
-    Boolean(
-      input.trim() ||
-      selectedFile
-    ) &&
-    !isUploading &&
-    !isStreaming;
+      setCurrentValue(nextValue);
+    };
 
-  return (
-    <div className="mx-auto w-full max-w-4xl">
+    const handleSubmit = async (): Promise<void> => {
+      const message = currentValue.trim();
+
+      if (
+        isBusy ||
+        (!message && attachments.length === 0)
+      ) {
+        return;
+      }
+
+      if (!onSubmit) {
+        return;
+      }
+
+      try {
+        setSubmitting(true);
+
+        await onSubmit(
+          message,
+          attachments
+        );
+
+        if (!isControlled) {
+          setInternalValue("");
+        }
+
+        onChange?.("");
+      } finally {
+        setSubmitting(false);
+      }
+    };
+
+    const handleKeyDown = (
+      event: React.KeyboardEvent<HTMLTextAreaElement>
+    ): void => {
+      if (
+        event.key === "Enter" &&
+        !event.shiftKey &&
+        !event.nativeEvent.isComposing
+      ) {
+        event.preventDefault();
+        void handleSubmit();
+      }
+    };
+
+    const handleFileChange = (
+      event: React.ChangeEvent<HTMLInputElement>
+    ): void => {
+      const files = Array.from(
+        event.target.files ?? []
+      );
+
+      if (files.length > 0) {
+        onAttachmentAdd?.(files);
+      }
+
+      event.target.value = "";
+    };
+
+    const handleRemoveAttachment = (
+      attachmentId: string
+    ): void => {
+      onAttachmentRemove?.(attachmentId);
+    };
+
+    const canSubmit =
+      !isBusy &&
+      (currentValue.trim().length > 0 ||
+        attachments.length > 0);
+
+    return (
       <div
-        className="
-          overflow-hidden
-          rounded-3xl
-          border
-          border-white/10
-          bg-zinc-900/80
-          shadow-2xl
-          shadow-black/30
-          backdrop-blur-xl
-          transition
-          focus-within:border-white/20
-          focus-within:bg-zinc-900
-        "
-      >
-        {/* DOSYA ÖNİZLEME */}
-
-        {selectedFile && (
-          <div
-            className="
-              mx-3
-              mt-3
-              flex
-              min-w-0
-              items-center
-              gap-3
-              rounded-2xl
-              border
-              border-white/10
-              bg-white/[0.04]
-              px-3
-              py-2.5
-              sm:mx-4
-              sm:mt-4
-            "
-          >
-            <div
-              className="
-                flex
-                h-9
-                w-9
-                shrink-0
-                items-center
-                justify-center
-                rounded-xl
-                bg-white/[0.06]
-                text-zinc-300
-              "
-            >
-              <Paperclip size={17} />
-            </div>
-
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium text-zinc-200">
-                {selectedFile.name}
-              </p>
-
-              <p className="mt-0.5 text-xs text-zinc-500">
-                {isUploading
-                  ? "Dosya yükleniyor..."
-                  : "Mesajla birlikte gönderilecek"}
-              </p>
-            </div>
-
-            {!isUploading &&
-              !isStreaming && (
-                <button
-                  type="button"
-                  onClick={() =>
-                    setSelectedFile(
-                      null
-                    )
-                  }
-                  className="
-                    flex
-                    h-8
-                    w-8
-                    shrink-0
-                    items-center
-                    justify-center
-                    rounded-lg
-                    text-zinc-500
-                    transition
-                    hover:bg-white/[0.06]
-                    hover:text-white
-                  "
-                  aria-label="Dosyayı kaldır"
-                >
-                  <X size={16} />
-                </button>
-              )}
-          </div>
+        className={cn(
+          "w-full",
+          className
         )}
+      >
+        {attachments.length > 0 ? (
+          <div className="mb-3 flex flex-wrap gap-2">
+            {attachments.map((attachment) => (
+              <div
+                key={attachment.id}
+                className="flex max-w-full items-center gap-2 rounded-xl border border-border bg-card px-3 py-2"
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-foreground">
+                    {attachment.name}
+                  </p>
 
-        {/* TEXTAREA */}
+                  {attachment.size ? (
+                    <p className="text-xs text-muted-foreground">
+                      {formatFileSize(
+                        attachment.size
+                      )}
+                    </p>
+                  ) : null}
+                </div>
 
-        <textarea
-          value={input}
-          onChange={(event) =>
-            setInput(
-              event.target.value
-            )
-          }
-          onKeyDown={handleKeyDown}
-          placeholder="SYRAVEN'a bir şey sor..."
-          disabled={
-            isStreaming ||
-            isUploading
-          }
-          rows={1}
-          className="
-            block
-            min-h-[64px]
-            max-h-48
-            w-full
-            resize-none
-            bg-transparent
-            px-4
-            pt-4
-            pb-2
-            text-[15px]
-            leading-6
-            text-white
-            outline-none
-            placeholder:text-zinc-500
-            disabled:cursor-not-allowed
-            disabled:opacity-60
-            sm:px-5
-            sm:text-base
-          "
-        />
+                {onAttachmentRemove ? (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleRemoveAttachment(
+                        attachment.id
+                      )
+                    }
+                    disabled={isBusy}
+                    aria-label={`Remove ${attachment.name}`}
+                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    ×
+                  </button>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        ) : null}
 
-        {/* ALT ACTION BAR */}
+        <div className="relative flex items-end gap-2 rounded-2xl border border-border bg-card p-2 shadow-sm transition-colors focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/10">
+          {leftActions ? (
+            <div className="flex shrink-0 items-center gap-1">
+              {leftActions}
+            </div>
+          ) : null}
 
-        <div
-          className="
-            flex
-            items-center
-            justify-between
-            gap-3
-            px-3
-            pb-3
-            sm:px-4
-            sm:pb-4
-          "
-        >
-          {/* DOSYA EKLE */}
+          {onAttachmentAdd ? (
+            <>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                className="hidden"
+                onChange={handleFileChange}
+                disabled={isBusy}
+              />
+
+              <button
+                type="button"
+                onClick={() =>
+                  fileInputRef.current?.click()
+                }
+                disabled={isBusy}
+                aria-label="Add attachment"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                +
+              </button>
+            </>
+          ) : null}
+
+          <textarea
+            ref={textareaRef}
+            value={currentValue}
+            onChange={handleChange}
+            onKeyDown={handleKeyDown}
+            placeholder={placeholder}
+            disabled={isBusy}
+            rows={minRows}
+            maxLength={maxLength}
+            aria-label={placeholder}
+            className={cn(
+              "max-h-40 min-h-[2.5rem] flex-1 resize-none bg-transparent px-2 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground",
+              "disabled:cursor-not-allowed disabled:opacity-50",
+              textareaClassName
+            )}
+          />
+
+          {rightActions ? (
+            <div className="flex shrink-0 items-center gap-1">
+              {rightActions}
+            </div>
+          ) : null}
 
           <button
             type="button"
-            onClick={() =>
-              fileInputRef.current?.click()
-            }
-            disabled={
-              isStreaming ||
-              isUploading
-            }
-            className="
-              flex
-              h-10
-              w-10
-              shrink-0
-              items-center
-              justify-center
-              rounded-xl
-              border
-              border-white/10
-              bg-white/[0.035]
-              text-zinc-400
-              transition
-              hover:bg-white/[0.08]
-              hover:text-white
-              disabled:cursor-not-allowed
-              disabled:opacity-40
-            "
-            aria-label="Dosya ekle"
+            onClick={() => {
+              void handleSubmit();
+            }}
+            disabled={!canSubmit}
+            aria-label="Send message"
+            className={cn(
+              "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl",
+              "transition-all duration-200",
+              canSubmit
+                ? "bg-primary text-primary-foreground hover:opacity-90 active:scale-95"
+                : "cursor-not-allowed bg-muted text-muted-foreground"
+            )}
           >
-            <Paperclip size={18} />
-          </button>
-
-          <input
-            ref={fileInputRef}
-            type="file"
-            className="hidden"
-            onChange={handleFileChange}
-            disabled={
-              isStreaming ||
-              isUploading
-            }
-          />
-
-          {/* SAĞ TARAF */}
-
-          <div className="flex items-center gap-2">
-            {!isStreaming && (
-              <span className="hidden text-xs text-zinc-600 sm:inline">
-                Enter ile gönder
+            {submitting || loading ? (
+              <span
+                className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"
+                aria-label="Sending"
+              />
+            ) : (
+              <span
+                className="text-lg leading-none"
+                aria-hidden="true"
+              >
+                ↑
               </span>
             )}
+          </button>
+        </div>
 
-            <button
-              type="button"
-              onClick={
-                isStreaming
-                  ? stopStreaming
-                  : sendMessage
-              }
-              disabled={
-                !isStreaming &&
-                !canSend
-              }
-              className={`
-                flex
-                h-10
-                min-w-[40px]
-                items-center
-                justify-center
-                rounded-xl
-                px-3
-                transition
-                active:scale-95
-                disabled:cursor-not-allowed
-                disabled:opacity-40
+        <div className="mt-2 flex items-center justify-between gap-3 px-1">
+          <p className="text-xs text-muted-foreground">
+            Enter to send · Shift + Enter for new line
+          </p>
 
-                ${
-                  isStreaming
-                    ? `
-                      bg-red-500
-                      text-white
-                      hover:bg-red-600
-                    `
-                    : `
-                      bg-white
-                      text-black
-                      hover:bg-zinc-200
-                    `
-                }
-              `}
-              aria-label={
-                isStreaming
-                  ? "Durdur"
-                  : "Gönder"
-              }
-            >
-              {isStreaming ? (
-                <>
-                  <Square
-                    size={15}
-                    fill="currentColor"
-                  />
-
-                  <span className="ml-2 hidden text-sm font-medium sm:inline">
-                    Durdur
-                  </span>
-                </>
-              ) : isUploading ? (
-                <span className="text-sm">
-                  ...
-                </span>
-              ) : (
-                <Send size={18} />
+          {showCharacterCount &&
+          maxLength !== undefined ? (
+            <span
+              className={cn(
+                "text-xs tabular-nums",
+                currentValue.length >= maxLength
+                  ? "text-destructive"
+                  : "text-muted-foreground"
               )}
-            </button>
-          </div>
+            >
+              {currentValue.length}/{maxLength}
+            </span>
+          ) : null}
         </div>
       </div>
+    );
+  }
+);
 
-      <p
-        className="
-          mt-2
-          px-2
-          text-center
-          text-[11px]
-          leading-5
-          text-zinc-600
-        "
-      >
-        SYRAVEN hata yapabilir. Önemli bilgileri kontrol edin.
-      </p>
-    </div>
-  );
-}
+ChatInput.displayName = "ChatInput";
+
+export default ChatInput;

@@ -1,521 +1,293 @@
 "use client";
 
-import { useState } from "react";
+import React from "react";
 
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+export type MessageRole =
+  | "user"
+  | "assistant"
+  | "system";
 
-type Attachment = {
-  name: string;
-  url: string;
-  type: string;
-} | null;
+export interface MessageAction {
+  id: string;
+  label: string;
+  icon?: React.ReactNode;
+  disabled?: boolean;
+  onClick: () => void;
+}
 
-type MessageProps = {
-  sender: "user" | "syraven";
-  text: string;
-  attachment?: Attachment;
-};
+export interface MessageProps {
+  id?: string;
 
-export default function Message({
-  sender,
-  text,
-  attachment,
-}: MessageProps) {
-  const isUser =
-    sender === "user";
+  role: MessageRole;
 
-  const isImage =
-    attachment?.type?.startsWith(
-      "image/"
-    );
+  content: React.ReactNode;
 
-  const [copied, setCopied] =
-    useState(false);
+  avatar?: React.ReactNode;
 
-  async function copyText() {
-    if (!text) {
-      return;
-    }
+  name?: string;
 
-    try {
-      await navigator.clipboard.writeText(
-        text
-      );
+  timestamp?: React.ReactNode;
 
-      setCopied(true);
+  actions?: MessageAction[];
 
-      window.setTimeout(() => {
-        setCopied(false);
-      }, 1500);
-    } catch (error) {
-      console.error(
-        "Kopyalama hatası:",
-        error
-      );
-    }
-  }
+  isLoading?: boolean;
 
-  async function copyCode(
-    code: string
-  ) {
-    try {
-      await navigator.clipboard.writeText(
-        code
-      );
-    } catch (error) {
-      console.error(
-        "Kod kopyalama hatası:",
-        error
-      );
-    }
-  }
+  className?: string;
+
+  contentClassName?: string;
+
+  children?: React.ReactNode;
+}
+
+function cn(
+  ...classes: Array<
+    string | false | null | undefined
+  >
+): string {
+  return classes.filter(Boolean).join(" ");
+}
+
+function DefaultAvatar({
+  role,
+}: {
+  role: MessageRole;
+}): React.ReactElement {
+  const label =
+    role === "user"
+      ? "U"
+      : role === "assistant"
+        ? "AI"
+        : "S";
 
   return (
     <div
-      className={`
-        flex
-        w-full
-        min-w-0
-        ${
-          isUser
-            ? "justify-end"
-            : "justify-start"
-        }
-      `}
+      className={cn(
+        "flex h-9 w-9 shrink-0 items-center justify-center",
+        "rounded-xl text-xs font-semibold",
+        role === "user" &&
+          "bg-primary text-primary-foreground",
+        role === "assistant" &&
+          "bg-muted text-foreground",
+        role === "system" &&
+          "bg-muted text-muted-foreground"
+      )}
+      aria-hidden="true"
     >
-      <div
-        className={`
-          min-w-0
-          max-w-[92%]
-          sm:max-w-[85%]
-          lg:max-w-[80%]
+      {label}
+    </div>
+  );
+}
 
-          ${
-            isUser
-              ? `
-                rounded-3xl
-                rounded-br-lg
-                bg-blue-600
-                px-4
-                py-3
-                text-white
-                shadow-lg
-                shadow-blue-950/20
-              `
-              : `
-                rounded-3xl
-                rounded-bl-lg
-                border
-                border-white/[0.08]
-                bg-white/[0.035]
-                px-4
-                py-4
-                text-zinc-200
-                shadow-xl
-                shadow-black/10
-                backdrop-blur-xl
-              `
-          }
-        `}
-      >
-        {/* HEADER */}
+function LoadingDots(): React.ReactElement {
+  return (
+    <div
+      className="flex items-center gap-1 py-1"
+      aria-label="Generating response"
+      role="status"
+    >
+      <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground [animation-delay:-0.3s]" />
+      <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground [animation-delay:-0.15s]" />
+      <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground" />
+    </div>
+  );
+}
 
-        <div
-          className={`
-            mb-3
-            flex
-            items-center
-            gap-2
-            text-[11px]
-            font-semibold
-            uppercase
-            tracking-[0.12em]
-
-            ${
-              isUser
-                ? "text-blue-100/80"
-                : "text-zinc-500"
-            }
-          `}
+function MessageActions({
+  actions,
+}: {
+  actions: MessageAction[];
+}): React.ReactElement {
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-1">
+      {actions.map((action) => (
+        <button
+          key={action.id}
+          type="button"
+          onClick={action.onClick}
+          disabled={action.disabled}
+          className={cn(
+            "inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5",
+            "text-xs font-medium text-muted-foreground",
+            "transition-colors hover:bg-muted hover:text-foreground",
+            "focus-visible:outline-none",
+            "focus-visible:ring-2",
+            "focus-visible:ring-primary/30",
+            action.disabled &&
+              "cursor-not-allowed opacity-50"
+          )}
+          aria-label={action.label}
         >
-          <div
-            className={`
-              flex
-              h-6
-              w-6
-              shrink-0
-              items-center
-              justify-center
-              rounded-lg
-              text-xs
+          {action.icon ? (
+            <span
+              className="flex h-4 w-4 items-center justify-center"
+              aria-hidden="true"
+            >
+              {action.icon}
+            </span>
+          ) : null}
 
-              ${
-                isUser
-                  ? "bg-white/15"
-                  : "border border-white/10 bg-white/[0.05]"
-              }
-            `}
-          >
-            {isUser ? "U" : "✦"}
-          </div>
+          <span>{action.label}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
 
-          <span>
-            {isUser
-              ? "Sen"
-              : "SYRAVEN"}
+export default function Message({
+  id,
+  role,
+  content,
+  avatar,
+  name,
+  timestamp,
+  actions = [],
+  isLoading = false,
+  className,
+  contentClassName,
+  children,
+}: MessageProps): React.ReactElement {
+  const isUser = role === "user";
+
+  const defaultName =
+    role === "user"
+      ? "You"
+      : role === "assistant"
+        ? "NOVA"
+        : "System";
+
+  return (
+    <article
+      id={id}
+      className={cn(
+        "group flex w-full gap-3 sm:gap-4",
+        isUser && "flex-row-reverse",
+        className
+      )}
+      data-role={role}
+    >
+      <div className="shrink-0">
+        {avatar ?? (
+          <DefaultAvatar role={role} />
+        )}
+      </div>
+
+      <div
+        className={cn(
+          "min-w-0 max-w-[85%] flex-1",
+          isUser && "flex flex-col items-end"
+        )}
+      >
+        <div
+          className={cn(
+            "mb-1 flex items-center gap-2",
+            isUser && "flex-row-reverse"
+          )}
+        >
+          <span className="text-sm font-semibold text-foreground">
+            {name ?? defaultName}
           </span>
+
+          {timestamp ? (
+            <span className="text-xs text-muted-foreground">
+              {timestamp}
+            </span>
+          ) : null}
         </div>
 
-        {/* ATTACHMENT */}
-
-        {attachment && (
-          <div className="mb-4 min-w-0">
-            {isImage ? (
-              <a
-                href={attachment.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="
-                  block
-                  overflow-hidden
-                  rounded-2xl
-                  border
-                  border-white/10
-                  bg-black/20
-                "
-              >
-                <img
-                  src={attachment.url}
-                  alt={attachment.name}
-                  className="
-                    block
-                    max-h-[420px]
-                    w-auto
-                    max-w-full
-                    object-contain
-                  "
-                />
-              </a>
-            ) : (
-              <a
-                href={attachment.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="
-                  flex
-                  min-w-0
-                  items-center
-                  gap-3
-                  rounded-2xl
-                  border
-                  border-white/10
-                  bg-black/20
-                  px-3
-                  py-3
-                  transition
-                  hover:bg-black/30
-                "
-              >
-                <div
-                  className="
-                    flex
-                    h-10
-                    w-10
-                    shrink-0
-                    items-center
-                    justify-center
-                    rounded-xl
-                    bg-white/[0.06]
-                    text-lg
-                  "
-                >
-                  📎
-                </div>
-
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-zinc-200">
-                    {attachment.name}
-                  </p>
-
-                  <p className="mt-0.5 text-xs text-zinc-500">
-                    Dosyayı aç
-                  </p>
-                </div>
-
-                <span className="shrink-0 text-zinc-500">
-                  ↗
-                </span>
-              </a>
-            )}
-          </div>
-        )}
-
-        {/* MESSAGE */}
-
-        {text && (
-          <div
-            className={`
-              min-w-0
-              overflow-hidden
-              text-sm
-              leading-7
-              sm:text-[15px]
-
-              ${
-                isUser
-                  ? "text-white"
-                  : "text-zinc-200"
-              }
-            `}
-          >
-            <ReactMarkdown
-              remarkPlugins={[
-                remarkGfm,
-              ]}
-              components={{
-                p({ children }) {
-                  return (
-                    <p className="mb-4 break-words last:mb-0">
-                      {children}
-                    </p>
-                  );
-                },
-
-                h1({ children }) {
-                  return (
-                    <h1 className="mb-4 mt-6 break-words text-2xl font-bold text-white first:mt-0">
-                      {children}
-                    </h1>
-                  );
-                },
-
-                h2({ children }) {
-                  return (
-                    <h2 className="mb-3 mt-6 break-words text-xl font-semibold text-white first:mt-0">
-                      {children}
-                    </h2>
-                  );
-                },
-
-                h3({ children }) {
-                  return (
-                    <h3 className="mb-3 mt-5 break-words text-lg font-semibold text-white first:mt-0">
-                      {children}
-                    </h3>
-                  );
-                },
-
-                ul({ children }) {
-                  return (
-                    <ul className="mb-4 list-disc space-y-1 pl-6">
-                      {children}
-                    </ul>
-                  );
-                },
-
-                ol({ children }) {
-                  return (
-                    <ol className="mb-4 list-decimal space-y-1 pl-6">
-                      {children}
-                    </ol>
-                  );
-                },
-
-                li({ children }) {
-                  return (
-                    <li className="break-words">
-                      {children}
-                    </li>
-                  );
-                },
-
-                blockquote({
-                  children,
-                }) {
-                  return (
-                    <blockquote className="my-4 border-l-2 border-zinc-600 pl-4 italic text-zinc-400">
-                      {children}
-                    </blockquote>
-                  );
-                },
-
-                a({
-                  href,
-                  children,
-                }) {
-                  return (
-                    <a
-                      href={href}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="break-all text-blue-400 underline decoration-blue-400/30 underline-offset-4 transition hover:text-blue-300"
-                    >
-                      {children}
-                    </a>
-                  );
-                },
-
-                table({
-                  children,
-                }) {
-                  return (
-                    <div className="my-5 w-full overflow-x-auto rounded-xl border border-white/10">
-                      <table className="min-w-full text-left text-sm">
-                        {children}
-                      </table>
-                    </div>
-                  );
-                },
-
-                th({ children }) {
-                  return (
-                    <th className="whitespace-nowrap border-b border-white/10 bg-white/[0.04] px-4 py-3 font-semibold text-zinc-200">
-                      {children}
-                    </th>
-                  );
-                },
-
-                td({ children }) {
-                  return (
-                    <td className="border-b border-white/[0.06] px-4 py-3 text-zinc-400">
-                      {children}
-                    </td>
-                  );
-                },
-
-                hr() {
-                  return (
-                    <hr className="my-6 border-white/10" />
-                  );
-                },
-
-                code({
-                  className,
-                  children,
-                  ...props
-                }) {
-                  const languageMatch =
-                    /language-(\w+)/.exec(
-                      className || ""
-                    );
-
-                  const code =
-                    String(children).replace(
-                      /\n$/,
-                      ""
-                    );
-
-                  const isCodeBlock =
-                    Boolean(
-                      languageMatch
-                    );
-
-                  if (isCodeBlock) {
-                    const language =
-                      languageMatch?.[1] ||
-                      "code";
-
-                    return (
-                      <div className="my-5 min-w-0 overflow-hidden rounded-2xl border border-white/10 bg-[#0d1117]">
-                        <div className="flex items-center justify-between gap-3 border-b border-white/10 bg-white/[0.035] px-4 py-2.5">
-                          <span className="truncate text-[11px] font-medium uppercase tracking-wider text-zinc-500">
-                            {language}
-                          </span>
-
-                          <button
-                            type="button"
-                            onClick={() =>
-                              copyCode(code)
-                            }
-                            className="
-                              shrink-0
-                              rounded-lg
-                              border
-                              border-white/10
-                              bg-white/[0.03]
-                              px-2.5
-                              py-1.5
-                              text-[11px]
-                              text-zinc-400
-                              transition
-                              hover:bg-white/[0.08]
-                              hover:text-white
-                            "
-                          >
-                            Kopyala
-                          </button>
-                        </div>
-
-                        <pre className="max-w-full overflow-x-auto p-4 text-[13px] leading-7 text-zinc-200">
-                          <code
-                            className={`font-mono ${
-                              className || ""
-                            }`}
-                            {...props}
-                          >
-                            {children}
-                          </code>
-                        </pre>
-                      </div>
-                    );
-                  }
-
-                  return (
-                    <code
-                      className="
-                        break-words
-                        rounded-md
-                        border
-                        border-white/10
-                        bg-black/20
-                        px-1.5
-                        py-0.5
-                        font-mono
-                        text-[0.9em]
-                        text-zinc-100
-                      "
-                      {...props}
-                    >
-                      {children}
-                    </code>
-                  );
-                },
-              }}
-            >
-              {text}
-            </ReactMarkdown>
-          </div>
-        )}
-
-        {/* COPY */}
-
-        {!isUser &&
-          text && (
-            <div className="mt-4 flex justify-end border-t border-white/[0.06] pt-3">
-              <button
-                type="button"
-                onClick={copyText}
-                className="
-                  rounded-lg
-                  border
-                  border-white/10
-                  bg-white/[0.025]
-                  px-2.5
-                  py-1.5
-                  text-[11px]
-                  text-zinc-500
-                  transition
-                  hover:bg-white/[0.06]
-                  hover:text-zinc-200
-                "
-              >
-                {copied
-                  ? "✓ Kopyalandı"
-                  : "Kopyala"}
-              </button>
+        <div
+          className={cn(
+            "w-fit max-w-full rounded-2xl px-4 py-3",
+            role === "user"
+              ? "bg-primary text-primary-foreground"
+              : role === "assistant"
+                ? "bg-muted/50 text-foreground"
+                : "border border-border bg-background text-muted-foreground",
+            contentClassName
+          )}
+        >
+          {isLoading ? (
+            <LoadingDots />
+          ) : (
+            <div className="break-words text-sm leading-6">
+              {content}
             </div>
           )}
+
+          {children ? (
+            <div className="mt-3">
+              {children}
+            </div>
+          ) : null}
+        </div>
+
+        {!isLoading && actions.length > 0 ? (
+          <MessageActions
+            actions={actions}
+          />
+        ) : null}
+      </div>
+    </article>
+  );
+}
+
+export interface MessageGroupProps {
+  children: React.ReactNode;
+  className?: string;
+}
+
+export function MessageGroup({
+  children,
+  className,
+}: MessageGroupProps): React.ReactElement {
+  return (
+    <div
+      className={cn(
+        "flex w-full flex-col gap-6",
+        className
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
+export function MessageSkeleton({
+  role = "assistant",
+  className,
+}: {
+  role?: MessageRole;
+  className?: string;
+}): React.ReactElement {
+  const isUser = role === "user";
+
+  return (
+    <div
+      className={cn(
+        "flex w-full animate-pulse gap-3 sm:gap-4",
+        isUser && "flex-row-reverse",
+        className
+      )}
+    >
+      <div className="h-9 w-9 shrink-0 rounded-xl bg-muted" />
+
+      <div
+        className={cn(
+          "max-w-[75%] flex-1",
+          isUser && "flex flex-col items-end"
+        )}
+      >
+        <div
+          className={cn(
+            "mb-2 h-3 w-20 rounded bg-muted",
+            isUser && "self-end"
+          )}
+        />
+
+        <div className="space-y-2 rounded-2xl bg-muted/50 p-4">
+          <div className="h-3 w-full rounded bg-muted" />
+          <div className="h-3 w-5/6 rounded bg-muted" />
+          <div className="h-3 w-2/3 rounded bg-muted" />
+        </div>
       </div>
     </div>
   );

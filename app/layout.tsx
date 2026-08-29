@@ -1,74 +1,75 @@
-import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
-import { ChatProvider } from "@/app/context/ChatContext";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
-
 export const metadata: Metadata = {
-  metadataBase: new URL("https://syraven.vercel.app"),
-
   title: {
-    default: "SYRAVEN | AI Workspace",
-    template: "%s | SYRAVEN",
+    default: "NOVA",
+    template: "%s | NOVA",
   },
 
   description:
-    "SYRAVEN is an intelligent AI workspace for conversations, document analysis, persistent memory, coding, and powerful AI tools.",
+    "NOVA is an intelligent workspace for AI agents, projects, knowledge, collaboration, automation, and creative work.",
 
   keywords: [
-    "SYRAVEN",
-    "AI workspace",
-    "AI assistant",
-    "artificial intelligence",
-    "AI chat",
-    "document analysis",
-    "persistent memory",
-    "AI coding",
+    "NOVA",
+    "AI",
+    "Artificial Intelligence",
+    "AI Agents",
+    "Workspace",
+    "Automation",
+    "Projects",
+    "Knowledge",
+    "Collaboration",
   ],
 
   authors: [
     {
-      name: "SYRAVEN",
+      name: "NOVA",
     },
   ],
 
-  creator: "SYRAVEN",
-
-  openGraph: {
-    type: "website",
-    locale: "en_US",
-    url: "https://syraven.vercel.app",
-    siteName: "SYRAVEN",
-
-    title: "SYRAVEN | AI Workspace",
-
-    description:
-      "One workspace. Limitless intelligence. AI chat, document intelligence, persistent memory, coding and powerful AI tools.",
-  },
-
-  twitter: {
-    card: "summary_large_image",
-
-    title: "SYRAVEN | AI Workspace",
-
-    description:
-      "One workspace. Limitless intelligence.",
-  },
+  creator: "NOVA",
+  publisher: "NOVA",
 
   robots: {
     index: true,
     follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-video-preview": -1,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+    },
   },
+
+  icons: {
+    icon: "/favicon.ico",
+  },
+
+  openGraph: {
+    type: "website",
+    locale: "en_US",
+    siteName: "NOVA",
+    title: "NOVA — Intelligent Workspace",
+    description:
+      "The intelligent workspace for AI agents, projects, knowledge, automation, and collaboration.",
+  },
+
+  twitter: {
+    card: "summary_large_image",
+    title: "NOVA — Intelligent Workspace",
+    description:
+      "The intelligent workspace for AI agents, projects, knowledge, automation, and collaboration.",
+  },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+  themeColor: "#09090b",
+  colorScheme: "dark",
 };
 
 export default function RootLayout({
@@ -77,15 +78,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
-      <body className="min-h-full flex flex-col bg-black text-white">
-        <ChatProvider>
-          {children}
-        </ChatProvider>
-      </body>
+    <html lang="en" suppressHydrationWarning>
+      <body>{children}</body>
     </html>
   );
 }

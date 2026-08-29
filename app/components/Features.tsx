@@ -1,233 +1,351 @@
-export default function Features() {
-  const features = [
-    {
-      icon: "✦",
-      title: "Intelligent AI Chat",
-      description:
-        "Ask questions, explore ideas and work through complex tasks with SYRAVEN in one continuous conversation.",
-      accent: "from-blue-500/[0.08]",
-      preview: (
-        <>
-          <div className="flex items-center gap-3">
-            <div className="h-2 w-2 rounded-full bg-emerald-400" />
+"use client";
 
-            <span className="text-sm text-zinc-400">
-              SYRAVEN Intelligence
-            </span>
-          </div>
+import React from "react";
 
-          <div className="mt-4 h-2 w-3/4 rounded-full bg-white/10" />
+export type FeatureStatus =
+  | "available"
+  | "new"
+  | "beta"
+  | "coming-soon";
 
-          <div className="mt-2 h-2 w-1/2 rounded-full bg-white/5" />
-        </>
-      ),
-    },
+export interface FeatureItem {
+  id: string;
+  title: string;
+  description: string;
 
-    {
-      icon: "◫",
-      title: "File Intelligence",
-      description:
-        "Upload files and use AI to explore, understand and work with the information inside them.",
-      accent: "from-purple-500/[0.08]",
-      preview: (
-        <>
-          <div className="flex items-center justify-between gap-3">
-            <span className="truncate text-sm text-zinc-300">
-              Research.pdf
-            </span>
+  icon?: React.ReactNode;
 
-            <span className="shrink-0 text-xs text-emerald-400">
-              Ready
-            </span>
-          </div>
+  badge?: string;
+  status?: FeatureStatus;
 
-          <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-white/10">
-            <div className="h-full w-full rounded-full bg-gradient-to-r from-blue-500 to-purple-500" />
-          </div>
-        </>
-      ),
-    },
+  href?: string;
 
-    {
-      icon: "◉",
-      title: "Persistent Memory",
-      description:
-        "Save important information and preferences so SYRAVEN can use relevant context across conversations.",
-      accent: "from-cyan-500/[0.08]",
-      preview: (
-        <>
-          <div className="text-xs uppercase tracking-widest text-zinc-600">
-            Memory
-          </div>
+  highlighted?: boolean;
+  disabled?: boolean;
 
-          <div className="mt-3 text-sm leading-6 text-zinc-300">
-            Important user context is available when needed.
-          </div>
+  onClick?: (feature: FeatureItem) => void;
+}
 
-          <div className="mt-3 text-xs text-emerald-400">
-            ● Remembered
-          </div>
-        </>
-      ),
-    },
+export interface FeaturesProps {
+  title?: string;
+  description?: string;
 
-    {
-      icon: "⚡",
-      title: "Real-Time Responses",
-      description:
-        "Watch responses appear as they are generated for a faster and more natural conversation experience.",
-      accent: "from-amber-500/[0.07]",
-      preview: (
-        <>
-          <div className="flex items-center gap-2 text-sm text-zinc-300">
-            <span>SYRAVEN is thinking</span>
+  eyebrow?: string;
 
-            <span className="animate-pulse">
-              ...
-            </span>
-          </div>
+  features: FeatureItem[];
 
-          <div className="mt-4 flex gap-1">
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white/60" />
+  columns?: 2 | 3 | 4;
 
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white/40 [animation-delay:150ms]" />
+  className?: string;
+  headerClassName?: string;
+  gridClassName?: string;
 
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white/20 [animation-delay:300ms]" />
-          </div>
-        </>
-      ),
-    },
+  renderFeature?: (
+    feature: FeatureItem,
+    index: number
+  ) => React.ReactNode;
+}
 
-    {
-      icon: "☷",
-      title: "Your Conversations",
-      description:
-        "Create new chats, revisit previous conversations, rename them and keep your workspace organized.",
-      accent: "from-indigo-500/[0.08]",
-      preview: (
-        <div className="space-y-2">
-          <div className="rounded-lg bg-white/[0.06] px-3 py-2 text-xs text-zinc-300">
-            ✦ New conversation
-          </div>
+const statusLabels: Record<FeatureStatus, string> = {
+  available: "Available",
+  new: "New",
+  beta: "Beta",
+  "coming-soon": "Coming soon",
+};
 
-          <div className="px-3 text-xs text-zinc-500">
-            Product strategy
-          </div>
+const statusClasses: Record<FeatureStatus, string> = {
+  available:
+    "border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+  new:
+    "border-primary/20 bg-primary/10 text-primary",
+  beta:
+    "border-blue-500/20 bg-blue-500/10 text-blue-600 dark:text-blue-400",
+  "coming-soon":
+    "border-amber-500/20 bg-amber-500/10 text-amber-600 dark:text-amber-400",
+};
 
-          <div className="px-3 text-xs text-zinc-600">
-            Website ideas
-          </div>
+function cn(
+  ...classes: Array<string | false | null | undefined>
+): string {
+  return classes.filter(Boolean).join(" ");
+}
+
+function getGridColumns(
+  columns: 2 | 3 | 4
+): string {
+  switch (columns) {
+    case 2:
+      return "md:grid-cols-2";
+
+    case 3:
+      return "md:grid-cols-2 xl:grid-cols-3";
+
+    case 4:
+      return "sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4";
+
+    default:
+      return "md:grid-cols-2 xl:grid-cols-3";
+  }
+}
+
+interface FeatureCardProps {
+  feature: FeatureItem;
+}
+
+function FeatureCard({
+  feature,
+}: FeatureCardProps) {
+  const {
+    title,
+    description,
+    icon,
+    badge,
+    status = "available",
+    href,
+    highlighted = false,
+    disabled = false,
+    onClick,
+  } = feature;
+
+  const isDisabled =
+    disabled || status === "coming-soon";
+
+  const isInteractive =
+    !isDisabled && (Boolean(href) || Boolean(onClick));
+
+  const handleClick = (): void => {
+    if (isDisabled) {
+      return;
+    }
+
+    onClick?.(feature);
+  };
+
+  const content = (
+    <>
+      <div className="flex items-start justify-between gap-4">
+        <div
+          className={cn(
+            "flex h-12 w-12 shrink-0 items-center justify-center",
+            "rounded-2xl border border-border bg-muted",
+            "text-lg text-foreground transition-transform duration-200",
+            isInteractive && "group-hover:scale-105"
+          )}
+        >
+          {icon ?? "✦"}
         </div>
-      ),
-    },
 
-    {
-      icon: "⌘",
-      title: "One Workspace",
-      description:
-        "Keep conversations, files and remembered information together in one simple AI workspace.",
-      accent: "from-emerald-500/[0.07]",
-      preview: (
-        <div className="flex gap-2">
-          <div className="flex h-8 flex-1 items-center rounded-lg bg-white/[0.06] px-3 text-[10px] text-zinc-500">
-            Chat
-          </div>
+        <div className="flex flex-wrap justify-end gap-2">
+          {badge ? (
+            <span className="rounded-full border border-border bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
+              {badge}
+            </span>
+          ) : null}
 
-          <div className="flex h-8 w-14 items-center justify-center rounded-lg bg-white/[0.06] text-[10px] text-zinc-500">
-            Files
-          </div>
-
-          <div className="flex h-8 w-12 items-center justify-center rounded-lg bg-white/[0.06] text-[10px] text-zinc-500">
-            Memory
-          </div>
+          {status !== "available" ? (
+            <span
+              className={cn(
+                "rounded-full border px-2.5 py-1 text-xs font-medium",
+                statusClasses[status]
+              )}
+            >
+              {statusLabels[status]}
+            </span>
+          ) : null}
         </div>
-      ),
-    },
-  ];
+      </div>
+
+      <div className="mt-5">
+        <h3 className="text-base font-semibold tracking-tight text-foreground">
+          {title}
+        </h3>
+
+        <p className="mt-2 text-sm leading-6 text-muted-foreground">
+          {description}
+        </p>
+      </div>
+
+      {isInteractive ? (
+        <div className="mt-6 flex items-center gap-2 text-sm font-medium text-primary">
+          <span>
+            Explore
+          </span>
+
+          <span
+            className="transition-transform duration-200 group-hover:translate-x-1"
+            aria-hidden="true"
+          >
+            →
+          </span>
+        </div>
+      ) : null}
+    </>
+  );
+
+  const cardClassName = cn(
+    "group relative flex min-h-[220px] flex-col rounded-2xl border p-5",
+    "bg-card text-card-foreground transition-all duration-200",
+    highlighted
+      ? "border-primary/50 shadow-lg ring-1 ring-primary/10"
+      : "border-border",
+    isInteractive &&
+      "cursor-pointer hover:-translate-y-1 hover:border-primary/40 hover:shadow-xl",
+    isDisabled &&
+      "cursor-not-allowed opacity-60",
+    !isInteractive && !isDisabled && "cursor-default"
+  );
+
+  if (href && !isDisabled) {
+    return (
+      <a
+        href={href}
+        className={cardClassName}
+        aria-label={`Explore ${title}`}
+      >
+        {content}
+      </a>
+    );
+  }
+
+  if (isInteractive) {
+    return (
+      <button
+        type="button"
+        onClick={handleClick}
+        className={cn(
+          cardClassName,
+          "w-full text-left"
+        )}
+      >
+        {content}
+      </button>
+    );
+  }
 
   return (
-    <section
-      id="features"
-      className="relative overflow-hidden bg-black px-4 py-24 text-white sm:px-6 sm:py-32"
+    <article
+      className={cardClassName}
+      aria-disabled={isDisabled || undefined}
     >
-      {/* BACKGROUND */}
-      <div className="pointer-events-none absolute left-1/4 top-0 h-72 w-72 rounded-full bg-blue-500/10 blur-[120px] sm:h-96 sm:w-96 sm:blur-[140px]" />
+      {content}
+    </article>
+  );
+}
 
-      <div className="pointer-events-none absolute bottom-0 right-1/4 h-72 w-72 rounded-full bg-purple-500/10 blur-[120px] sm:h-96 sm:w-96 sm:blur-[140px]" />
+export default function Features({
+  title = "Everything you need",
+  description,
+  eyebrow,
+  features,
+  columns = 3,
+  className,
+  headerClassName,
+  gridClassName,
+  renderFeature,
+}: FeaturesProps) {
+  return (
+    <section
+      className={cn(
+        "w-full",
+        className
+      )}
+    >
+      {title || description || eyebrow ? (
+        <div
+          className={cn(
+            "mx-auto mb-8 max-w-2xl text-center",
+            headerClassName
+          )}
+        >
+          {eyebrow ? (
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">
+              {eyebrow}
+            </p>
+          ) : null}
 
-      <div className="relative z-10 mx-auto max-w-7xl">
+          {title ? (
+            <h2 className="mt-3 text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
+              {title}
+            </h2>
+          ) : null}
 
-        {/* HEADER */}
-        <div className="mx-auto mb-14 max-w-3xl text-center sm:mb-20">
-          <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-sm text-zinc-400 backdrop-blur-xl">
-            <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.8)]" />
-
-            <span>Built for your AI workflow</span>
-          </div>
-
-          <h2 className="text-4xl font-bold tracking-tight sm:text-5xl md:text-6xl">
-            More than a conversation.
-            <br />
-
-            <span className="text-zinc-500">
-              Your AI workspace.
-            </span>
-          </h2>
-
-          <p className="mt-6 text-base leading-7 text-zinc-400 sm:text-lg sm:leading-8">
-            SYRAVEN brings intelligent conversations, files,
-            memory and your conversation history together
-            in one seamless workspace.
-          </p>
+          {description ? (
+            <p className="mt-3 text-sm leading-6 text-muted-foreground sm:text-base">
+              {description}
+            </p>
+          ) : null}
         </div>
+      ) : null}
 
-        {/* FEATURE GRID */}
-        <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-          {features.map((feature) => (
-            <div
-              key={feature.title}
-              className="group relative overflow-hidden rounded-3xl border border-white/10 bg-white/[0.025] p-6 transition duration-500 hover:-translate-y-1 hover:border-white/20 sm:p-8"
-            >
-              {/* HOVER GLOW */}
-              <div
-                className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${feature.accent} via-transparent to-transparent opacity-0 transition duration-500 group-hover:opacity-100`}
-              />
-
-              <div className="relative">
-
-                {/* ICON */}
-                <div className="mb-7 flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.05] text-xl text-zinc-200">
-                  {feature.icon}
-                </div>
-
-                {/* TITLE */}
-                <h3 className="text-2xl font-semibold tracking-tight">
-                  {feature.title}
-                </h3>
-
-                {/* DESCRIPTION */}
-                <p className="mt-3 leading-7 text-zinc-400">
-                  {feature.description}
-                </p>
-
-                {/* PREVIEW */}
-                <div className="mt-8 min-h-[80px] rounded-2xl border border-white/10 bg-black/40 p-4">
-                  {feature.preview}
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* BOTTOM CTA */}
-        <div className="mt-20 text-center sm:mt-24">
-          <p className="text-xs uppercase tracking-[0.25em] text-zinc-600 sm:text-sm sm:tracking-[0.3em]">
-            Intelligence that remembers your journey
-          </p>
-
-          <div className="mx-auto mt-6 h-px max-w-xl bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-        </div>
+      <div
+        className={cn(
+          "grid grid-cols-1 gap-4",
+          getGridColumns(columns),
+          gridClassName
+        )}
+      >
+        {features.map((feature, index) => (
+          <React.Fragment key={feature.id}>
+            {renderFeature
+              ? renderFeature(feature, index)
+              : (
+                <FeatureCard
+                  feature={feature}
+                />
+              )}
+          </React.Fragment>
+        ))}
       </div>
     </section>
   );
 }
+
+export function FeaturesSkeleton({
+  count = 6,
+  columns = 3,
+  className,
+}: {
+  count?: number;
+  columns?: 2 | 3 | 4;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        "grid grid-cols-1 gap-4",
+        getGridColumns(columns),
+        className
+      )}
+    >
+      {Array.from(
+        { length: count },
+        (_, index) => (
+          <div
+            key={index}
+            className="animate-pulse rounded-2xl border border-border bg-card p-5"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div className="h-12 w-12 rounded-2xl bg-muted" />
+
+              <div className="h-6 w-16 rounded-full bg-muted" />
+            </div>
+
+            <div className="mt-5">
+              <div className="h-5 w-32 rounded bg-muted" />
+
+              <div className="mt-3 space-y-2">
+                <div className="h-3 w-full rounded bg-muted" />
+                <div className="h-3 w-5/6 rounded bg-muted" />
+                <div className="h-3 w-2/3 rounded bg-muted" />
+              </div>
+            </div>
+
+            <div className="mt-6 h-4 w-20 rounded bg-muted" />
+          </div>
+        )
+      )}
+    </div>
+  );
+}
+
+export { FeatureCard };

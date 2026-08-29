@@ -1,180 +1,361 @@
-import Link from "next/link";
+"use client";
 
-export default function Hero() {
+import React from "react";
+
+export interface HeroAction {
+  label: string;
+  href?: string;
+  onClick?: () => void;
+  icon?: React.ReactNode;
+  external?: boolean;
+}
+
+export interface HeroStat {
+  value: string;
+  label: string;
+}
+
+export interface HeroProps {
+  eyebrow?: React.ReactNode;
+
+  title: React.ReactNode;
+  description?: React.ReactNode;
+
+  primaryAction?: HeroAction;
+  secondaryAction?: HeroAction;
+
+  stats?: HeroStat[];
+
+  visual?: React.ReactNode;
+
+  badge?: React.ReactNode;
+
+  align?: "left" | "center";
+
+  size?: "default" | "large";
+
+  className?: string;
+  contentClassName?: string;
+  visualClassName?: string;
+
+  children?: React.ReactNode;
+}
+
+function cn(
+  ...classes: Array<string | false | null | undefined>
+): string {
+  return classes.filter(Boolean).join(" ");
+}
+
+interface HeroActionButtonProps {
+  action: HeroAction;
+  variant: "primary" | "secondary";
+}
+
+function HeroActionButton({
+  action,
+  variant,
+}: HeroActionButtonProps) {
+  const {
+    label,
+    href,
+    onClick,
+    icon,
+    external = false,
+  } = action;
+
+  const className = cn(
+    "inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-5 py-3",
+    "text-sm font-semibold transition-all duration-200",
+    "focus-visible:outline-none focus-visible:ring-2",
+    "focus-visible:ring-primary/30 focus-visible:ring-offset-2",
+    "focus-visible:ring-offset-background",
+    variant === "primary"
+      ? "bg-primary text-primary-foreground shadow-sm hover:opacity-90 active:scale-[0.98]"
+      : "border border-border bg-card text-foreground hover:bg-muted active:scale-[0.98]"
+  );
+
+  const content = (
+    <>
+      <span>{label}</span>
+
+      {icon ? (
+        <span
+          className="flex shrink-0 items-center"
+          aria-hidden="true"
+        >
+          {icon}
+        </span>
+      ) : null}
+    </>
+  );
+
+  if (href) {
+    return (
+      <a
+        href={href}
+        className={className}
+        target={external ? "_blank" : undefined}
+        rel={
+          external
+            ? "noopener noreferrer"
+            : undefined
+        }
+      >
+        {content}
+      </a>
+    );
+  }
+
   return (
-    <section className="relative min-h-screen overflow-hidden bg-black text-white">
-      {/* Background glow */}
-      <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute left-1/2 top-[-220px] h-[420px] w-[420px] -translate-x-1/2 rounded-full bg-blue-600/10 blur-[120px] sm:h-[520px] sm:w-[520px] sm:blur-[140px]" />
+    <button
+      type="button"
+      onClick={onClick}
+      className={className}
+    >
+      {content}
+    </button>
+  );
+}
 
-        <div className="absolute right-[-180px] top-[35%] h-[420px] w-[420px] rounded-full bg-purple-600/10 blur-[130px] sm:h-[520px] sm:w-[520px] sm:blur-[150px]" />
+export default function Hero({
+  eyebrow,
+  title,
+  description,
+  primaryAction,
+  secondaryAction,
+  stats = [],
+  visual,
+  badge,
+  align = "left",
+  size = "default",
+  className,
+  contentClassName,
+  visualClassName,
+  children,
+}: HeroProps) {
+  const isCentered = align === "center";
 
-        <div className="absolute bottom-[-150px] left-[-180px] h-[360px] w-[360px] rounded-full bg-cyan-500/5 blur-[110px] sm:h-[420px] sm:w-[420px] sm:blur-[130px]" />
+  const sizeClasses =
+    size === "large"
+      ? "py-20 sm:py-24 lg:py-32"
+      : "py-14 sm:py-20 lg:py-24";
+
+  const layoutClasses = visual
+    ? "lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:items-center lg:gap-16"
+    : "mx-auto max-w-4xl";
+
+  return (
+    <section
+      className={cn(
+        "relative w-full overflow-hidden bg-background",
+        sizeClasses,
+        className
+      )}
+    >
+      {/* Background decoration */}
+      <div
+        className="pointer-events-none absolute inset-0 overflow-hidden"
+        aria-hidden="true"
+      >
+        <div className="absolute left-1/2 top-0 h-[500px] w-[500px] -translate-x-1/2 rounded-full bg-primary/5 blur-3xl" />
+
+        <div className="absolute -right-40 top-20 h-[300px] w-[300px] rounded-full bg-primary/5 blur-3xl" />
       </div>
 
-      {/* Grid */}
-      <div
-        className="pointer-events-none absolute inset-0 opacity-[0.035]"
-        style={{
-          backgroundImage:
-            "linear-gradient(rgba(255,255,255,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px)",
-          backgroundSize: "80px 80px",
-        }}
-      />
-
-      <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-7xl flex-col items-center px-4 pt-28 text-center sm:px-6 sm:pt-36">
-        {/* Eyebrow */}
-        <div className="mb-6 inline-flex max-w-[calc(100vw-32px)] items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-zinc-300 shadow-[0_0_30px_rgba(255,255,255,0.03)] backdrop-blur-xl sm:mb-8 sm:px-4 sm:text-sm">
-          <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.8)]" />
-
-          <span className="truncate">
-            The intelligent workspace for the future
-          </span>
-        </div>
-
-        {/* Main headline */}
-        <h1 className="w-full max-w-5xl text-[44px] font-semibold leading-[0.98] tracking-[-0.045em] sm:text-6xl md:text-7xl lg:text-[88px]">
-          One workspace.
-          <br />
-
-          <span className="bg-gradient-to-r from-white via-zinc-200 to-zinc-500 bg-clip-text text-transparent">
-            Limitless intelligence.
-          </span>
-        </h1>
-
-        {/* Description */}
-        <p className="mt-6 w-full max-w-2xl px-2 text-sm leading-6 text-zinc-400 sm:mt-8 sm:text-lg sm:leading-7">
-          SYRAVEN brings AI chat, document intelligence, persistent memory,
-          coding and powerful AI tools into one elegant workspace.
-        </p>
-
-        {/* CTA */}
-        <div className="mt-8 flex w-full flex-col items-center gap-3 sm:mt-10 sm:w-auto sm:flex-row sm:gap-4">
-          <Link
-            href="/register"
-            className="group inline-flex w-full items-center justify-center rounded-xl bg-white px-7 py-3.5 text-sm font-semibold text-black shadow-[0_0_40px_rgba(255,255,255,0.08)] transition duration-300 hover:scale-[1.03] hover:bg-zinc-100 sm:w-auto"
+      <div className="relative mx-auto w-full max-w-[1600px] px-4 sm:px-6 lg:px-8">
+        <div className={layoutClasses}>
+          <div
+            className={cn(
+              isCentered && !visual
+                ? "text-center"
+                : "text-left",
+              contentClassName
+            )}
           >
-            Start for free
-
-            <span className="ml-2 transition-transform duration-300 group-hover:translate-x-1">
-              →
-            </span>
-          </Link>
-
-          <a
-            href="#features"
-            className="inline-flex w-full items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] px-7 py-3.5 text-sm font-semibold text-white backdrop-blur-xl transition duration-300 hover:border-white/20 hover:bg-white/[0.07] sm:w-auto"
-          >
-            Explore SYRAVEN
-          </a>
-        </div>
-
-        {/* Trust line */}
-        <div className="mt-4 text-[11px] text-zinc-600 sm:text-xs">
-          No credit card required · Start in seconds
-        </div>
-
-        {/* Product preview */}
-        <div className="relative mt-14 w-full max-w-6xl sm:mt-20">
-          {/* Glow */}
-          <div className="absolute left-1/2 top-1/2 h-[180px] w-[80%] -translate-x-1/2 -translate-y-1/2 rounded-full bg-blue-500/10 blur-[80px] sm:h-[260px] sm:blur-[100px]" />
-
-          {/* Browser */}
-          <div className="relative w-full overflow-hidden rounded-xl border border-white/10 bg-zinc-950/90 text-left shadow-[0_30px_100px_rgba(0,0,0,0.7)] backdrop-blur-2xl sm:rounded-2xl">
-            {/* Browser top */}
-            <div className="flex h-10 items-center border-b border-white/10 bg-white/[0.025] px-3 sm:h-12 sm:px-4">
-              <div className="flex shrink-0 gap-1.5">
-                <span className="h-2 w-2 rounded-full bg-zinc-700 sm:h-2.5 sm:w-2.5" />
-                <span className="h-2 w-2 rounded-full bg-zinc-700 sm:h-2.5 sm:w-2.5" />
-                <span className="h-2 w-2 rounded-full bg-zinc-700 sm:h-2.5 sm:w-2.5" />
+            {badge ? (
+              <div
+                className={cn(
+                  "mb-5",
+                  isCentered && !visual && "flex justify-center"
+                )}
+              >
+                {badge}
               </div>
+            ) : null}
 
-              <div className="mx-auto max-w-[150px] truncate rounded-md border border-white/5 bg-white/[0.03] px-4 py-1 text-[8px] text-zinc-600 sm:max-w-none sm:px-20 sm:text-[10px]">
-                app.syraven.ai
+            {eyebrow ? (
+              <div
+                className={cn(
+                  "mb-4 text-sm font-semibold tracking-wide text-primary",
+                  isCentered && !visual && "flex justify-center"
+                )}
+              >
+                {eyebrow}
               </div>
+            ) : null}
+
+            <h1
+              className={cn(
+                "max-w-4xl text-balance font-semibold tracking-tight text-foreground",
+                size === "large"
+                  ? "text-4xl sm:text-5xl lg:text-6xl xl:text-7xl"
+                  : "text-4xl sm:text-5xl lg:text-6xl",
+                isCentered && !visual && "mx-auto"
+              )}
+            >
+              {title}
+            </h1>
+
+            {description ? (
+              <div
+                className={cn(
+                  "mt-6 max-w-2xl text-base leading-7 text-muted-foreground sm:text-lg sm:leading-8",
+                  isCentered && !visual && "mx-auto"
+                )}
+              >
+                {description}
+              </div>
+            ) : null}
+
+            {primaryAction || secondaryAction ? (
+              <div
+                className={cn(
+                  "mt-8 flex flex-wrap items-center gap-3",
+                  isCentered &&
+                    !visual &&
+                    "justify-center"
+                )}
+              >
+                {primaryAction ? (
+                  <HeroActionButton
+                    action={primaryAction}
+                    variant="primary"
+                  />
+                ) : null}
+
+                {secondaryAction ? (
+                  <HeroActionButton
+                    action={secondaryAction}
+                    variant="secondary"
+                  />
+                ) : null}
+              </div>
+            ) : null}
+
+            {stats.length > 0 ? (
+              <dl
+                className={cn(
+                  "mt-10 grid max-w-2xl grid-cols-2 gap-6 border-t border-border pt-6 sm:grid-cols-3",
+                  isCentered &&
+                    !visual &&
+                    "mx-auto text-left"
+                )}
+              >
+                {stats.map((stat, index) => (
+                  <div
+                    key={`${stat.label}-${index}`}
+                    className="min-w-0"
+                  >
+                    <dt className="text-sm text-muted-foreground">
+                      {stat.label}
+                    </dt>
+
+                    <dd className="mt-1 text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
+                      {stat.value}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            ) : null}
+
+            {children ? (
+              <div
+                className={cn(
+                  "mt-8",
+                  isCentered && !visual && "mx-auto"
+                )}
+              >
+                {children}
+              </div>
+            ) : null}
+          </div>
+
+          {visual ? (
+            <div
+              className={cn(
+                "relative mt-12 lg:mt-0",
+                visualClassName
+              )}
+            >
+              {visual}
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+export function HeroSkeleton({
+  visual = true,
+  className,
+}: {
+  visual?: boolean;
+  className?: string;
+}) {
+  return (
+    <section
+      className={cn(
+        "w-full animate-pulse bg-background py-20 sm:py-24 lg:py-32",
+        className
+      )}
+    >
+      <div className="mx-auto w-full max-w-[1600px] px-4 sm:px-6 lg:px-8">
+        <div
+          className={cn(
+            visual &&
+              "lg:grid lg:grid-cols-2 lg:items-center lg:gap-16"
+          )}
+        >
+          <div>
+            <div className="h-6 w-28 rounded-full bg-muted" />
+
+            <div className="mt-6 space-y-3">
+              <div className="h-12 w-full max-w-2xl rounded bg-muted" />
+              <div className="h-12 w-5/6 max-w-xl rounded bg-muted" />
             </div>
 
-            {/* Product */}
-            <div className="grid min-h-[300px] grid-cols-[85px_1fr] sm:min-h-[430px] sm:grid-cols-[190px_1fr]">
-              {/* Sidebar */}
-              <div className="border-r border-white/10 bg-white/[0.015] p-2 sm:p-4">
-                <div className="mb-5 truncate text-[9px] font-bold tracking-[0.18em] sm:mb-8 sm:text-sm">
-                  SYRAVEN
-                </div>
+            <div className="mt-6 max-w-xl space-y-3">
+              <div className="h-4 w-full rounded bg-muted" />
+              <div className="h-4 w-11/12 rounded bg-muted" />
+              <div className="h-4 w-4/5 rounded bg-muted" />
+            </div>
 
-                <div className="space-y-1 text-[8px] sm:space-y-2 sm:text-xs">
-                  <div className="truncate rounded-lg bg-white/[0.07] px-2 py-2 text-white sm:px-3 sm:py-2.5">
-                    ✦ New conversation
+            <div className="mt-8 flex gap-3">
+              <div className="h-11 w-36 rounded-xl bg-muted" />
+              <div className="h-11 w-32 rounded-xl bg-muted" />
+            </div>
+
+            <div className="mt-10 grid grid-cols-3 gap-6 border-t border-border pt-6">
+              {Array.from(
+                { length: 3 },
+                (_, index) => (
+                  <div key={index}>
+                    <div className="h-3 w-16 rounded bg-muted" />
+                    <div className="mt-2 h-6 w-20 rounded bg-muted" />
                   </div>
-
-                  <div className="truncate px-2 py-1.5 text-zinc-600 sm:px-3 sm:py-2">
-                    Recent chats
-                  </div>
-
-                  <div className="truncate px-2 py-1.5 text-zinc-500 sm:px-3 sm:py-2">
-                    Product strategy
-                  </div>
-
-                  <div className="truncate px-2 py-1.5 text-zinc-500 sm:px-3 sm:py-2">
-                    Website architecture
-                  </div>
-
-                  <div className="truncate px-2 py-1.5 text-zinc-500 sm:px-3 sm:py-2">
-                    Market research
-                  </div>
-                </div>
-              </div>
-
-              {/* Chat */}
-              <div className="flex min-w-0 flex-col">
-                <div className="flex min-w-0 items-center justify-between gap-2 border-b border-white/10 px-3 py-3 sm:px-6 sm:py-4">
-                  <div className="min-w-0">
-                    <p className="truncate text-[10px] font-medium sm:text-sm">
-                      New conversation
-                    </p>
-
-                    <p className="mt-0.5 truncate text-[8px] text-zinc-600 sm:text-[11px]">
-                      SYRAVEN Intelligence
-                    </p>
-                  </div>
-
-                  <div className="shrink-0 rounded-lg border border-white/10 px-2 py-1 text-[7px] text-zinc-500 sm:px-3 sm:py-1.5 sm:text-[10px]">
-                    AI Workspace
-                  </div>
-                </div>
-
-                <div className="flex flex-1 flex-col justify-center px-3 py-6 sm:px-8 sm:py-10">
-                  <div className="mx-auto w-full max-w-2xl">
-                    <div className="mb-5 sm:mb-8">
-                      <p className="text-[8px] uppercase tracking-[0.18em] text-zinc-600 sm:text-xs sm:tracking-[0.2em]">
-                        SYRAVEN
-                      </p>
-
-                      <h2 className="mt-2 text-base font-medium tracking-tight text-zinc-200 sm:mt-3 sm:text-2xl">
-                        What are you building today?
-                      </h2>
-                    </div>
-
-                    <div className="rounded-lg border border-white/10 bg-white/[0.025] p-2.5 shadow-inner sm:rounded-xl sm:p-4">
-                      <div className="flex min-w-0 items-center justify-between gap-2">
-                        <span className="truncate text-[8px] text-zinc-600 sm:text-xs">
-                          Ask anything...
-                        </span>
-
-                        <span className="shrink-0 rounded-lg bg-white px-2 py-1 text-[8px] font-semibold text-black sm:px-3 sm:py-1.5 sm:text-[10px]">
-                          Send
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
+                )
+              )}
             </div>
           </div>
-        </div>
 
-        {/* Bottom spacing */}
-        <div className="h-20 sm:h-28" />
+          {visual ? (
+            <div className="mt-12 lg:mt-0">
+              <div className="aspect-square w-full rounded-3xl border border-border bg-muted" />
+            </div>
+          ) : null}
+        </div>
       </div>
     </section>
   );

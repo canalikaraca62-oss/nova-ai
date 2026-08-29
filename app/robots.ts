@@ -1,12 +1,32 @@
 import type { MetadataRoute } from "next";
 
 export default function robots(): MetadataRoute.Robots {
-  return {
-    rules: {
-      userAgent: "*",
-      allow: "/",
-    },
+  const baseUrl =
+    process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ||
+    "https://syraven.com";
 
-    sitemap: "https://syraven.vercel.app/sitemap.xml",
+  return {
+    rules: [
+      {
+        userAgent: "*",
+        allow: "/",
+        disallow: [
+          "/api/",
+          "/login",
+          "/register",
+          "/reset-password",
+          "/dashboard",
+          "/workspace",
+          "/profile",
+          "/settings",
+          "/notifications",
+          "/billing",
+        ],
+      },
+    ],
+
+    sitemap: `${baseUrl}/sitemap.xml`,
+
+    host: baseUrl,
   };
 }
