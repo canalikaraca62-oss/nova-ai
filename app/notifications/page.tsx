@@ -54,7 +54,7 @@ const INITIAL_NOTIFICATIONS: NotificationItem[] = [
     id: "notification-2",
     title: "New AI capability available",
     description:
-      "A new autonomous capability has been added to the NOVA marketplace.",
+      "A new autonomous capability has been added to the SYRAVEN marketplace.",
     type: "update",
     createdAt: "18 minutes ago",
     unread: true,
@@ -65,7 +65,7 @@ const INITIAL_NOTIFICATIONS: NotificationItem[] = [
     id: "notification-3",
     title: "Workspace memory updated",
     description:
-      "NOVA successfully extracted and stored new long-term knowledge from your recent activity.",
+      "SYRAVEN successfully extracted and stored new long-term knowledge from your recent activity.",
     type: "system",
     createdAt: "1 hour ago",
     unread: true,
@@ -107,7 +107,7 @@ const INITIAL_NOTIFICATIONS: NotificationItem[] = [
   },
   {
     id: "notification-7",
-    title: "NOVA platform update",
+    title: "SYRAVEN platform update",
     description:
       "Performance improvements and new workspace capabilities are now available.",
     type: "update",
@@ -381,7 +381,7 @@ export default function NotificationsPage() {
               </h2>
 
               <p className="mt-1 text-sm text-muted-foreground">
-                Important updates from your NOVA workspace.
+                Important updates from your SYRAVEN workspace.
               </p>
             </div>
           </div>

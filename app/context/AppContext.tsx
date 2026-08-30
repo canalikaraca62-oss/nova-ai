@@ -63,7 +63,7 @@ const AppContext = createContext<AppContextValue | undefined>(
   undefined
 );
 
-const THEME_STORAGE_KEY = "nova-theme";
+const THEME_STORAGE_KEY = "syraven-theme";
 
 function getSystemTheme(): "light" | "dark" {
   if (typeof window === "undefined") {

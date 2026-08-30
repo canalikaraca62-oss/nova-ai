@@ -59,14 +59,14 @@ interface MarketplaceItem {
 
 const MARKETPLACE_ITEMS: MarketplaceItem[] = [
   {
-    id: "nova-research-agent",
-    name: "NOVA Research Agent",
+    id: "syraven-research-agent",
+    name: "SYRAVEN Research Agent",
     description:
       "Autonomous research agent for deep analysis, source discovery and structured intelligence.",
     longDescription:
-      "NOVA Research Agent helps teams transform complex questions into structured research workflows. It can organize information, identify relevant topics, synthesize findings and create actionable intelligence for your workspace.",
+      "SYRAVEN Research Agent helps teams transform complex questions into structured research workflows. It can organize information, identify relevant topics, synthesize findings and create actionable intelligence for your workspace.",
     category: "AI Agents",
-    author: "NOVA Intelligence",
+    author: "SYRAVEN Intelligence",
     version: "1.0.0",
     rating: 4.9,
     reviews: 248,
@@ -82,7 +82,7 @@ const MARKETPLACE_ITEMS: MarketplaceItem[] = [
       "Workspace integration",
     ],
     requirements: [
-      "NOVA Workspace",
+      "SYRAVEN Workspace",
       "Knowledge access",
       "Active AI capabilities",
     ],
@@ -96,7 +96,7 @@ const MARKETPLACE_ITEMS: MarketplaceItem[] = [
     longDescription:
       "Code Architect provides a structured intelligence layer for software development. It helps teams understand complex codebases, identify architectural patterns and accelerate engineering decisions.",
     category: "Development",
-    author: "NOVA Engineering",
+    author: "SYRAVEN Engineering",
     version: "1.2.0",
     rating: 4.8,
     reviews: 193,
@@ -113,7 +113,7 @@ const MARKETPLACE_ITEMS: MarketplaceItem[] = [
     ],
     requirements: [
       "Repository access",
-      "NOVA Workspace",
+      "SYRAVEN Workspace",
       "Development permissions",
     ],
     updatedAt: "Updated recently",
@@ -126,7 +126,7 @@ const MARKETPLACE_ITEMS: MarketplaceItem[] = [
     longDescription:
       "Data Intelligence helps teams turn complex datasets into understandable insights. It supports structured analysis, pattern discovery and intelligent reporting across your workspace.",
     category: "Data",
-    author: "NOVA Data",
+    author: "SYRAVEN Data",
     version: "1.1.0",
     rating: 4.7,
     reviews: 156,
@@ -143,7 +143,7 @@ const MARKETPLACE_ITEMS: MarketplaceItem[] = [
     ],
     requirements: [
       "Data access",
-      "NOVA Workspace",
+      "SYRAVEN Workspace",
     ],
     updatedAt: "Updated recently",
   },
@@ -171,7 +171,7 @@ const MARKETPLACE_ITEMS: MarketplaceItem[] = [
       "Intelligent automation",
     ],
     requirements: [
-      "NOVA Workspace",
+      "SYRAVEN Workspace",
       "Automation permissions",
     ],
     updatedAt: "Updated recently",
@@ -200,7 +200,7 @@ const MARKETPLACE_ITEMS: MarketplaceItem[] = [
       "Research summaries",
     ],
     requirements: [
-      "NOVA Workspace",
+      "SYRAVEN Workspace",
       "Research capabilities",
     ],
     updatedAt: "Updated recently",
@@ -213,7 +213,7 @@ const MARKETPLACE_ITEMS: MarketplaceItem[] = [
     longDescription:
       "Autonomous Builder supports software teams throughout planning, implementation and iteration by providing an intelligent development workflow.",
     category: "Development",
-    author: "NOVA Labs",
+    author: "SYRAVEN Labs",
     version: "1.3.0",
     rating: 4.9,
     reviews: 207,
@@ -229,7 +229,7 @@ const MARKETPLACE_ITEMS: MarketplaceItem[] = [
       "Product iteration",
     ],
     requirements: [
-      "NOVA Workspace",
+      "SYRAVEN Workspace",
       "Development environment",
     ],
     updatedAt: "Updated recently",
@@ -259,7 +259,7 @@ const MARKETPLACE_ITEMS: MarketplaceItem[] = [
     ],
     requirements: [
       "Knowledge access",
-      "NOVA Workspace",
+      "SYRAVEN Workspace",
     ],
     updatedAt: "Updated recently",
   },
@@ -288,7 +288,7 @@ const MARKETPLACE_ITEMS: MarketplaceItem[] = [
     ],
     requirements: [
       "Team workspace",
-      "NOVA Workspace",
+      "SYRAVEN Workspace",
     ],
     updatedAt: "Updated recently",
   },
@@ -528,7 +528,7 @@ export default function MarketplaceDetailPage() {
 
               <p className="mt-2 text-sm leading-6 text-muted-foreground">
                 Install this capability and make it available
-                across your NOVA workspace.
+                across your SYRAVEN workspace.
               </p>
 
               <button

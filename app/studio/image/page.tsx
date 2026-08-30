@@ -206,7 +206,7 @@ export default function StudioImagePage() {
 
       const link = document.createElement("a");
       link.href = objectUrl;
-      link.download = `nova-image-${image.id}.jpg`;
+      link.download = `syraven-image-${image.id}.jpg`;
 
       document.body.appendChild(link);
       link.click();

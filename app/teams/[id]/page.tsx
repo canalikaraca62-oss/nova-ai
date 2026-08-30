@@ -37,8 +37,8 @@ type Team = {
 
 const teams: Team[] = [
   {
-    id: "nova-core",
-    name: "NOVA Core",
+    id: "syraven-core",
+    name: "SYRAVEN Core",
     description:
       "Core platform architecture, artificial intelligence infrastructure and global product strategy.",
     initials: "NC",
@@ -49,7 +49,7 @@ const teams: Team[] = [
       {
         id: "alex-morgan",
         name: "Alex Morgan",
-        email: "alex@nova.ai",
+        email: "alex@syraven.ai",
         role: "Owner",
         initials: "AM",
         status: "active",
@@ -57,7 +57,7 @@ const teams: Team[] = [
       {
         id: "sarah-chen",
         name: "Sarah Chen",
-        email: "sarah@nova.ai",
+        email: "sarah@syraven.ai",
         role: "Admin",
         initials: "SC",
         status: "active",
@@ -65,7 +65,7 @@ const teams: Team[] = [
       {
         id: "marcus-reed",
         name: "Marcus Reed",
-        email: "marcus@nova.ai",
+        email: "marcus@syraven.ai",
         role: "Member",
         initials: "MR",
         status: "active",
@@ -73,7 +73,7 @@ const teams: Team[] = [
       {
         id: "emma-wilson",
         name: "Emma Wilson",
-        email: "emma@nova.ai",
+        email: "emma@syraven.ai",
         role: "Member",
         initials: "EW",
         status: "active",
@@ -90,7 +90,7 @@ const teams: Team[] = [
       {
         id: "activity-2",
         title: "New member joined",
-        description: "Emma Wilson joined the NOVA Core team.",
+        description: "Emma Wilson joined the SYRAVEN Core team.",
         time: "2 hours ago",
         type: "member",
       },
@@ -116,7 +116,7 @@ const teams: Team[] = [
       {
         id: "elena-rossi",
         name: "Elena Rossi",
-        email: "elena@nova.ai",
+        email: "elena@syraven.ai",
         role: "Admin",
         initials: "ER",
         status: "active",
@@ -124,7 +124,7 @@ const teams: Team[] = [
       {
         id: "david-kim",
         name: "David Kim",
-        email: "david@nova.ai",
+        email: "david@syraven.ai",
         role: "Member",
         initials: "DK",
         status: "active",
@@ -160,7 +160,7 @@ const teams: Team[] = [
       {
         id: "olivia-bennett",
         name: "Olivia Bennett",
-        email: "olivia@nova.ai",
+        email: "olivia@syraven.ai",
         role: "Admin",
         initials: "OB",
         status: "active",
@@ -168,7 +168,7 @@ const teams: Team[] = [
       {
         id: "james-wilson",
         name: "James Wilson",
-        email: "james@nova.ai",
+        email: "james@syraven.ai",
         role: "Viewer",
         initials: "JW",
         status: "invited",

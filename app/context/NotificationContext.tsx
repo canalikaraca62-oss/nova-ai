@@ -143,7 +143,7 @@ const NotificationContext =
   >(undefined);
 
 const NOTIFICATION_STORAGE_KEY =
-  "nova-notifications";
+  "syraven-notifications";
 
 function isBrowser(): boolean {
   return typeof window !== "undefined";

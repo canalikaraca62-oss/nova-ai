@@ -153,7 +153,7 @@ export default function LoginPage() {
                 <Sparkles className="h-5 w-5" />
               </div>
 
-              NOVA
+              SYRAVEN
             </Link>
           </div>
 
@@ -189,7 +189,7 @@ export default function LoginPage() {
                   <Sparkles className="h-5 w-5" />
                 </div>
 
-                NOVA
+                SYRAVEN
               </Link>
             </div>
 
@@ -203,7 +203,7 @@ export default function LoginPage() {
               </h2>
 
               <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                Sign in to continue to your NOVA workspace.
+                Sign in to continue to your SYRAVEN workspace.
               </p>
             </div>
 
@@ -332,7 +332,7 @@ export default function LoginPage() {
             </form>
 
             <p className="mt-8 text-center text-sm text-muted-foreground">
-              New to NOVA?{" "}
+              New to SYRAVEN?{" "}
               <Link
                 href="/signup"
                 className="font-medium text-primary hover:underline"

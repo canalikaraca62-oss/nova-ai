@@ -146,7 +146,7 @@ function LogoContent({
 }
 
 export default function Logo({
-  name = "NOVA",
+  name = "SYRAVEN",
   tagline,
   href,
   size = "md",

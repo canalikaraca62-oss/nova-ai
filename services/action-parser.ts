@@ -1,57 +1,92 @@
-import type {
-  ActionRequest,
-  ActionType,
-} from "./action-types";
+/**
+ * SYRAVEN Action Parser
+ *
+ * Production-grade action parsing and normalization layer.
+ *
+ * Responsibilities:
+ * - Parse unknown input safely
+ * - Parse JSON strings
+ * - Normalize action types
+ * - Support multiple AI action schemas
+ * - Validate single and batch actions
+ * - Return fully type-safe discriminated results
+ */
 
-type ParsedActionResponse = {
-  type?: unknown;
-  requiresConfirmation?: unknown;
-  confidence?: unknown;
-  data?: unknown;
-};
+export type ActionParseErrorCode =
+  | "INVALID_INPUT"
+  | "INVALID_JSON"
+  | "INVALID_ACTION"
+  | "MISSING_ACTION_TYPE"
+  | "INVALID_ACTION_TYPE"
+  | "INVALID_PAYLOAD"
+  | "EMPTY_ACTION_LIST"
+  | "TOO_MANY_ACTIONS";
 
-const GROQ_API_URL =
-  "https://api.groq.com/openai/v1/chat/completions";
-
-const MODEL =
-  process.env.GROQ_MODEL ||
-  "openai/gpt-oss-20b";
-
-const MAX_MESSAGE_LENGTH = 12000;
-
-const ACTION_TYPES: ActionType[] = [
-  "none",
-  "calendar_create",
-  "calendar_update",
-  "calendar_delete",
-  "email_send",
-  "email_reply",
-  "reminder_create",
-  "notification_send",
-  "web_task",
-];
-
-function createNoneAction(
-  confidence = 1
-): ActionRequest {
-  return {
-    type: "none",
-    requiresConfirmation: false,
-    confidence,
-    data: {},
-  };
+export interface ActionParseError {
+  message: string;
+  code: ActionParseErrorCode;
+  path?: string;
 }
 
-function isActionType(
-  value: unknown
-): value is ActionType {
-  return (
-    typeof value === "string" &&
-    ACTION_TYPES.includes(
-      value as ActionType
-    )
-  );
+export interface ParsedAction<TInput = unknown> {
+  type: string;
+  input: TInput;
+  id?: string;
+  metadata?: Record<string, unknown>;
 }
+
+export interface ActionParseSuccess<TInput = unknown> {
+  success: true;
+  status: "success";
+  action: ParsedAction<TInput>;
+}
+
+export interface ActionParseFailure {
+  success: false;
+  status: "error";
+  error: ActionParseError;
+}
+
+export type ActionParseResult<TInput = unknown> =
+  | ActionParseSuccess<TInput>
+  | ActionParseFailure;
+
+export interface ActionBatchParseSuccess<TInput = unknown> {
+  success: true;
+  status: "success";
+  actions: ParsedAction<TInput>[];
+}
+
+export interface ActionBatchParseFailure {
+  success: false;
+  status: "error";
+  error: ActionParseError;
+}
+
+export type ActionBatchParseResult<TInput = unknown> =
+  | ActionBatchParseSuccess<TInput>
+  | ActionBatchParseFailure;
+
+export interface ActionParserOptions {
+  allowJsonString?: boolean;
+  allowEmptyInput?: boolean;
+  normalizeType?: boolean;
+  acceptedTypePattern?: RegExp;
+  maxActions?: number;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                  CONSTANTS                                 */
+/* -------------------------------------------------------------------------- */
+
+const DEFAULT_MAX_ACTIONS = 100;
+
+const DEFAULT_ACTION_TYPE_PATTERN =
+  /^[a-zA-Z][a-zA-Z0-9._:/-]*$/;
+
+/* -------------------------------------------------------------------------- */
+/*                                TYPE GUARDS                                 */
+/* -------------------------------------------------------------------------- */
 
 function isRecord(
   value: unknown
@@ -63,337 +98,536 @@ function isRecord(
   );
 }
 
-function clampConfidence(
+function isNonEmptyString(
   value: unknown
-): number {
-  if (
-    typeof value !== "number" ||
-    !Number.isFinite(value)
-  ) {
-    return 0;
-  }
-
-  return Math.max(
-    0,
-    Math.min(1, value)
+): value is string {
+  return (
+    typeof value === "string" &&
+    value.trim().length > 0
   );
 }
 
-function extractJson(
-  text: string
-): ParsedActionResponse | null {
-  const cleaned =
-    text
-      .trim()
-      .replace(
-        /^```(?:json)?\s*/i,
-        ""
-      )
-      .replace(
-        /\s*```$/i,
-        ""
-      )
-      .trim();
+/* -------------------------------------------------------------------------- */
+/*                              RESULT HELPERS                                */
+/* -------------------------------------------------------------------------- */
 
-  try {
-    const parsed =
-      JSON.parse(cleaned);
-
-    if (isRecord(parsed)) {
-      return parsed;
-    }
-  } catch {
-    // JSON doğrudan parse edilemedi.
-  }
-
-  const start =
-    cleaned.indexOf("{");
-
-  const end =
-    cleaned.lastIndexOf("}");
-
-  if (
-    start === -1 ||
-    end === -1 ||
-    end <= start
-  ) {
-    return null;
-  }
-
-  const jsonCandidate =
-    cleaned.slice(
-      start,
-      end + 1
-    );
-
-  try {
-    const parsed =
-      JSON.parse(jsonCandidate);
-
-    if (!isRecord(parsed)) {
-      return null;
-    }
-
-    return parsed;
-  } catch {
-    return null;
-  }
-}
-
-function normalizeAction(
-  result: ParsedActionResponse
-): ActionRequest {
-  const type =
-    isActionType(result.type)
-      ? result.type
-      : "none";
-
-  if (type === "none") {
-    return {
-      type: "none",
-      requiresConfirmation: false,
-      confidence:
-        clampConfidence(
-          result.confidence
-        ),
-      data: {},
-    };
-  }
-
+function createParseFailure(
+  message: string,
+  code: ActionParseErrorCode,
+  path?: string
+): ActionParseFailure {
   return {
-    type,
-    requiresConfirmation: true,
-    confidence:
-      clampConfidence(
-        result.confidence
-      ),
-    data:
-      isRecord(result.data)
-        ? result.data
-        : {},
+    success: false,
+    status: "error",
+    error: {
+      message,
+      code,
+      ...(path ? { path } : {}),
+    },
   };
 }
 
-export async function parseAction(
-  userMessage: string
-): Promise<ActionRequest> {
-  const cleanMessage =
-    userMessage
-      .trim()
-      .slice(
-        0,
-        MAX_MESSAGE_LENGTH
-      );
+function createBatchParseFailure(
+  message: string,
+  code: ActionParseErrorCode,
+  path?: string
+): ActionBatchParseFailure {
+  return {
+    success: false,
+    status: "error",
+    error: {
+      message,
+      code,
+      ...(path ? { path } : {}),
+    },
+  };
+}
 
-  if (!cleanMessage) {
-    return createNoneAction();
+/* -------------------------------------------------------------------------- */
+/*                              NORMALIZATION                                 */
+/* -------------------------------------------------------------------------- */
+
+function normalizeActionType(
+  value: string,
+  normalize: boolean
+): string {
+  const trimmed = value.trim();
+
+  if (!normalize) {
+    return trimmed;
   }
 
-  const apiKey =
-    process.env.GROQ_API_KEY;
+  return trimmed
+    .toLowerCase()
+    .replace(/\s+/g, "-")
+    .replace(/_+/g, "-");
+}
 
-  if (!apiKey) {
-    console.error(
-      "GROQ_API_KEY bulunamadı."
-    );
-
-    return createNoneAction(0);
+function normalizeActionId(
+  value: unknown
+): string | undefined {
+  if (typeof value !== "string") {
+    return undefined;
   }
 
+  const normalized = value.trim();
+
+  return normalized.length > 0
+    ? normalized
+    : undefined;
+}
+
+function normalizeMetadata(
+  value: unknown
+): Record<string, unknown> | undefined {
+  return isRecord(value)
+    ? value
+    : undefined;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                JSON PARSER                                 */
+/* -------------------------------------------------------------------------- */
+
+type JsonParseResult =
+  | {
+      success: true;
+      data: unknown;
+    }
+  | {
+      success: false;
+      error: ActionParseError;
+    };
+
+function tryParseJson(
+  value: string
+): JsonParseResult {
   try {
-    const response =
-      await fetch(
-        GROQ_API_URL,
-        {
-          method: "POST",
-
-          headers: {
-            "Content-Type":
-              "application/json",
-
-            Authorization:
-              `Bearer ${apiKey}`,
-          },
-
-          body: JSON.stringify({
-            model: MODEL,
-
-            temperature: 0,
-
-            reasoning_effort:
-              "low",
-
-            include_reasoning:
-              false,
-
-            max_completion_tokens:
-              500,
-
-            response_format: {
-              type:
-                "json_object",
-            },
-
-            messages: [
-              {
-                role: "system",
-
-                content: `
-Sen SYRAVEN ACTION ANALYZER sistemisin.
-
-Görevin kullanıcının mesajında gerçekten bir işlem isteği olup olmadığını belirlemektir.
-
-Sadece JSON döndür.
-
-Geçerli action türleri:
-
-- none
-- calendar_create
-- calendar_update
-- calendar_delete
-- email_send
-- email_reply
-- reminder_create
-- notification_send
-- web_task
-
-JSON formatı:
-
-{
-  "type": "none",
-  "requiresConfirmation": false,
-  "confidence": 0,
-  "data": {}
-}
-
-Kurallar:
-
-1. Kullanıcı sadece soru soruyorsa type "none" kullan.
-
-2. Kullanıcı gerçekten bir işlem yapılmasını istiyorsa uygun action türünü seç.
-
-3. Şimdilik hiçbir işlemi gerçekleştirme.
-
-4. Action türü "none" değilse requiresConfirmation her zaman true olmalıdır.
-
-5. type "none" ise requiresConfirmation her zaman false olmalıdır.
-
-6. confidence 0 ile 1 arasında sayı olmalıdır.
-
-7. Kullanıcının söylemediği bilgileri uydurma.
-
-8. data içine sadece kullanıcının açıkça verdiği bilgileri koy.
-
-9. Mesaj belirsizse tahmin yürütme. type "none" kullan.
-
-Örnek:
-
-Kullanıcı:
-"Yarın saat 15'te toplantı oluştur."
-
-JSON:
-{
-  "type": "calendar_create",
-  "requiresConfirmation": true,
-  "confidence": 0.98,
-  "data": {
-    "date": "yarın",
-    "time": "15:00",
-    "title": "toplantı"
+    return {
+      success: true,
+      data: JSON.parse(value),
+    };
+  } catch {
+    return {
+      success: false,
+      error: {
+        message:
+          "Invalid JSON action payload.",
+        code: "INVALID_JSON",
+      },
+    };
   }
 }
 
-Kullanıcı:
-"Yarın yağmur yağacak mı?"
+/* -------------------------------------------------------------------------- */
+/*                             ACTION FIELD HELPERS                           */
+/* -------------------------------------------------------------------------- */
 
-JSON:
-{
-  "type": "none",
-  "requiresConfirmation": false,
-  "confidence": 0.99,
-  "data": {}
+function extractActionType(
+  value: Record<string, unknown>
+): unknown {
+  return (
+    value.type ??
+    value.actionType ??
+    value.action ??
+    value.name
+  );
 }
 
-Kullanıcı:
-"Ahmet'e toplantının yarına alındığını mail at."
-
-JSON:
-{
-  "type": "email_send",
-  "requiresConfirmation": true,
-  "confidence": 0.97,
-  "data": {
-    "recipient": "Ahmet",
-    "content": "toplantının yarına alındığını bildir"
+function extractActionInput(
+  value: Record<string, unknown>
+): unknown {
+  if ("input" in value) {
+    return value.input;
   }
+
+  if ("payload" in value) {
+    return value.payload;
+  }
+
+  if ("data" in value) {
+    return value.data;
+  }
+
+  if ("params" in value) {
+    return value.params;
+  }
+
+  return undefined;
 }
-                `.trim(),
-              },
 
-              {
-                role: "user",
+function extractActionId(
+  value: Record<string, unknown>
+): unknown {
+  return (
+    value.id ??
+    value.actionId ??
+    value.requestId
+  );
+}
 
-                content:
-                  cleanMessage,
-              },
-            ],
-          }),
-        }
+/* -------------------------------------------------------------------------- */
+/*                             SINGLE ACTION PARSER                           */
+/* -------------------------------------------------------------------------- */
+
+export function parseAction<TInput = unknown>(
+  value: unknown,
+  options: ActionParserOptions = {}
+): ActionParseResult<TInput> {
+  const allowJsonString =
+    options.allowJsonString ?? true;
+
+  const allowEmptyInput =
+    options.allowEmptyInput ?? true;
+
+  const normalizeType =
+    options.normalizeType ?? true;
+
+  const acceptedTypePattern =
+    options.acceptedTypePattern ??
+    DEFAULT_ACTION_TYPE_PATTERN;
+
+  let parsedValue = value;
+
+  if (typeof parsedValue === "string") {
+    if (!allowJsonString) {
+      return createParseFailure(
+        "String action input is not allowed.",
+        "INVALID_INPUT"
       );
-
-    if (!response.ok) {
-      const errorText =
-        await response.text();
-
-      console.error(
-        "Action parser API hatası:",
-        response.status,
-        errorText
-      );
-
-      return createNoneAction(0);
     }
 
-    const responseData =
-      await response.json();
+    const jsonResult =
+      tryParseJson(parsedValue);
 
-    const content =
-      responseData
-        ?.choices?.[0]
-        ?.message?.content;
-
-    if (
-      typeof content !== "string" ||
-      !content.trim()
-    ) {
-      console.error(
-        "Action parser boş yanıt döndürdü."
-      );
-
-      return createNoneAction(0);
+    if (!jsonResult.success) {
+      return {
+        success: false,
+        status: "error",
+        error: jsonResult.error,
+      };
     }
 
-    const parsed =
-      extractJson(content);
+    parsedValue = jsonResult.data;
+  }
 
-    if (!parsed) {
-      console.error(
-        "Action parser geçerli JSON döndürmedi:",
-        content
-      );
-
-      return createNoneAction(0);
-    }
-
-    return normalizeAction(
-      parsed
+  if (!isRecord(parsedValue)) {
+    return createParseFailure(
+      "Action must be an object.",
+      "INVALID_ACTION"
     );
-  } catch (error) {
-    console.error(
-      "Action parser hatası:",
-      error
+  }
+
+  const rawType =
+    extractActionType(parsedValue);
+
+  if (
+    rawType === undefined ||
+    rawType === null
+  ) {
+    return createParseFailure(
+      "Action type is required.",
+      "MISSING_ACTION_TYPE",
+      "type"
+    );
+  }
+
+  if (!isNonEmptyString(rawType)) {
+    return createParseFailure(
+      "Action type must be a non-empty string.",
+      "INVALID_ACTION_TYPE",
+      "type"
+    );
+  }
+
+  const type =
+    normalizeActionType(
+      rawType,
+      normalizeType
     );
 
-    return createNoneAction(0);
+  if (!acceptedTypePattern.test(type)) {
+    return createParseFailure(
+      `Invalid action type "${type}".`,
+      "INVALID_ACTION_TYPE",
+      "type"
+    );
+  }
+
+  const input =
+    extractActionInput(parsedValue);
+
+  if (
+    input === undefined &&
+    !allowEmptyInput
+  ) {
+    return createParseFailure(
+      "Action input is required.",
+      "INVALID_PAYLOAD",
+      "input"
+    );
+  }
+
+  const id =
+    normalizeActionId(
+      extractActionId(parsedValue)
+    );
+
+  const metadata =
+    normalizeMetadata(
+      parsedValue.metadata
+    );
+
+  const action: ParsedAction<TInput> = {
+    type,
+    input: input as TInput,
+  };
+
+  if (id) {
+    action.id = id;
+  }
+
+  if (metadata) {
+    action.metadata = metadata;
+  }
+
+  return {
+    success: true,
+    status: "success",
+    action,
+  };
+}
+
+/* -------------------------------------------------------------------------- */
+/*                              BATCH ACTION PARSER                           */
+/* -------------------------------------------------------------------------- */
+
+export function parseActions<TInput = unknown>(
+  value: unknown,
+  options: ActionParserOptions = {}
+): ActionBatchParseResult<TInput> {
+  const allowJsonString =
+    options.allowJsonString ?? true;
+
+  const maxActions =
+    options.maxActions ??
+    DEFAULT_MAX_ACTIONS;
+
+  let parsedValue = value;
+
+  if (typeof parsedValue === "string") {
+    if (!allowJsonString) {
+      return createBatchParseFailure(
+        "String action input is not allowed.",
+        "INVALID_INPUT"
+      );
+    }
+
+    const jsonResult =
+      tryParseJson(parsedValue);
+
+    if (!jsonResult.success) {
+      return {
+        success: false,
+        status: "error",
+        error: jsonResult.error,
+      };
+    }
+
+    parsedValue = jsonResult.data;
+  }
+
+  let rawActions: unknown[];
+
+  if (Array.isArray(parsedValue)) {
+    rawActions = parsedValue;
+  } else if (isRecord(parsedValue)) {
+    if (Array.isArray(parsedValue.actions)) {
+      rawActions = parsedValue.actions;
+    } else {
+      rawActions = [parsedValue];
+    }
+  } else {
+    return createBatchParseFailure(
+      "Actions must be an array or object.",
+      "INVALID_INPUT"
+    );
+  }
+
+  if (rawActions.length === 0) {
+    return createBatchParseFailure(
+      "Action list cannot be empty.",
+      "EMPTY_ACTION_LIST"
+    );
+  }
+
+  const normalizedMaxActions =
+    Number.isFinite(maxActions) &&
+    maxActions > 0
+      ? Math.floor(maxActions)
+      : DEFAULT_MAX_ACTIONS;
+
+  if (
+    rawActions.length >
+    normalizedMaxActions
+  ) {
+    return createBatchParseFailure(
+      `Action list exceeds maximum allowed size of ${normalizedMaxActions}.`,
+      "TOO_MANY_ACTIONS",
+      "actions"
+    );
+  }
+
+  const actions: ParsedAction<TInput>[] = [];
+
+  for (
+    let index = 0;
+    index < rawActions.length;
+    index += 1
+  ) {
+    const result =
+      parseAction<TInput>(
+        rawActions[index],
+        options
+      );
+
+    if (!result.success) {
+      const errorPath =
+        result.error.path
+          ? `actions[${index}].${result.error.path}`
+          : `actions[${index}]`;
+
+      return createBatchParseFailure(
+        result.error.message,
+        result.error.code,
+        errorPath
+      );
+    }
+
+    actions.push(result.action);
+  }
+
+  return {
+    success: true,
+    status: "success",
+    actions,
+  };
+}
+
+/* -------------------------------------------------------------------------- */
+/*                              ACTION PARSER CLASS                           */
+/* -------------------------------------------------------------------------- */
+
+export class ActionParser {
+  private readonly options:
+    Required<
+      Omit<
+        ActionParserOptions,
+        "acceptedTypePattern"
+      >
+    > & {
+      acceptedTypePattern: RegExp;
+    };
+
+  constructor(
+    options: ActionParserOptions = {}
+  ) {
+    this.options = {
+      allowJsonString:
+        options.allowJsonString ?? true,
+
+      allowEmptyInput:
+        options.allowEmptyInput ?? true,
+
+      normalizeType:
+        options.normalizeType ?? true,
+
+      acceptedTypePattern:
+        options.acceptedTypePattern ??
+        DEFAULT_ACTION_TYPE_PATTERN,
+
+      maxActions:
+        options.maxActions ??
+        DEFAULT_MAX_ACTIONS,
+    };
+  }
+
+  parse<TInput = unknown>(
+    value: unknown
+  ): ActionParseResult<TInput> {
+    return parseAction<TInput>(
+      value,
+      this.options
+    );
+  }
+
+  parseMany<TInput = unknown>(
+    value: unknown
+  ): ActionBatchParseResult<TInput> {
+    return parseActions<TInput>(
+      value,
+      this.options
+    );
+  }
+
+  tryParse<TInput = unknown>(
+    value: unknown
+  ): ParsedAction<TInput> | null {
+    const result =
+      this.parse<TInput>(value);
+
+    if (!result.success) {
+      return null;
+    }
+
+    return result.action;
+  }
+
+  isValid(
+    value: unknown
+  ): boolean {
+    return this.parse(value).success;
   }
 }
+
+/* -------------------------------------------------------------------------- */
+/*                              TYPE GUARDS                                   */
+/* -------------------------------------------------------------------------- */
+
+export function isParsedAction(
+  value: unknown
+): value is ParsedAction {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return isNonEmptyString(value.type);
+}
+
+export function safeParseAction<TInput = unknown>(
+  value: unknown,
+  options: ActionParserOptions = {}
+): ParsedAction<TInput> | null {
+  const result =
+    parseAction<TInput>(
+      value,
+      options
+    );
+
+  return result.success
+    ? result.action
+    : null;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                              DEFAULT INSTANCE                              */
+/* -------------------------------------------------------------------------- */
+
+export const actionParser =
+  new ActionParser();
+
+/* -------------------------------------------------------------------------- */
+/*                              DEFAULT EXPORT                                */
+/* -------------------------------------------------------------------------- */
+
+export default actionParser;

@@ -162,7 +162,7 @@ export default function ResetPasswordPage() {
           </div>
 
           <span className="text-xl font-semibold tracking-tight text-foreground">
-            NOVA
+            SYRAVEN
           </span>
         </Link>
 
@@ -193,7 +193,7 @@ export default function ResetPasswordPage() {
 
                 <p className="mt-3 text-sm leading-6 text-muted-foreground">
                   Enter the email address associated with your
-                  NOVA account and we'll send you instructions to
+                  SYRAVEN account and we'll send you instructions to
                   reset your password.
                 </p>
               </div>
@@ -317,7 +317,7 @@ export default function ResetPasswordPage() {
           <Sparkles className="h-3.5 w-3.5 text-primary" />
 
           <span>
-            Secure access recovery powered by NOVA
+            Secure access recovery powered by SYRAVEN.
           </span>
         </div>
       </div>

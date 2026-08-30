@@ -41,7 +41,7 @@ const projects: SearchProject[] = [
     name: "Global Intelligence Platform",
     description:
       "A next-generation AI intelligence infrastructure for autonomous research, strategic analysis and enterprise decision making.",
-    workspace: "NOVA Core",
+    workspace: "SYRAVEN Core",
     status: "active",
     progress: 68,
     members: 24,
@@ -73,8 +73,8 @@ const projects: SearchProject[] = [
     tags: ["Agents", "Automation", "AI"],
   },
   {
-    id: "nova-marketplace",
-    name: "NOVA Marketplace",
+    id: "syraven-marketplace",
+    name: "SYRAVEN Marketplace",
     description:
       "A unified marketplace for AI agents, workflows, templates and intelligence capabilities.",
     workspace: "Product",
@@ -89,7 +89,7 @@ const projects: SearchProject[] = [
     name: "Knowledge Graph",
     description:
       "A connected intelligence layer for documents, memories, entities and organizational knowledge.",
-    workspace: "NOVA Core",
+    workspace: "SYRAVEN Core",
     status: "planning",
     progress: 31,
     members: 9,
@@ -101,7 +101,7 @@ const projects: SearchProject[] = [
     name: "Voice Intelligence",
     description:
       "Voice-driven AI interaction with transcription, semantic memory and intelligent action execution.",
-    workspace: "NOVA Studio",
+    workspace: "SYRAVEN Studio",
     status: "active",
     progress: 56,
     members: 11,
@@ -217,7 +217,7 @@ export default function ProjectSearchPage() {
         <section className="text-center">
           <div className="inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/[0.05] px-4 py-2 text-sm font-medium text-primary">
             <Sparkles className="h-4 w-4" />
-            NOVA Project Intelligence
+            SYRAVEN Project Intelligence
           </div>
 
           <h1 className="mt-6 text-4xl font-semibold tracking-tight text-foreground sm:text-5xl">
@@ -344,7 +344,7 @@ export default function ProjectSearchPage() {
               <Loader2 className="h-7 w-7 animate-spin text-primary" />
 
               <p className="mt-4 text-sm text-muted-foreground">
-                Searching NOVA intelligence...
+                Searching SYRAVEN intelligence...
               </p>
             </div>
           )}
@@ -403,7 +403,7 @@ export default function ProjectSearchPage() {
               </h3>
 
               <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-                NOVA search is designed to evolve into a unified
+                SYRAVEN search is designed to evolve into a unified
                 intelligence layer connecting projects, tasks, documents,
                 conversations, agents and organizational memory.
               </p>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -32,22 +32,39 @@ type PresentationStyle =
   | "corporate"
   | "dark";
 
+type SlideType = "cover" | "content" | "metrics" | "summary";
+
 type PresentationSlide = {
   id: string;
   title: string;
   subtitle: string;
   content: string[];
-  type: "cover" | "content" | "metrics" | "summary";
+  type: SlideType;
 };
 
 type PresentationProject = {
   id: string;
   title: string;
   topic: string;
+  audience: string;
+  instructions: string;
   style: PresentationStyle;
   slideCount: number;
   createdAt: string;
   slides: PresentationSlide[];
+};
+
+type GeneratePresentationRequest = {
+  topic: string;
+  audience: string;
+  instructions: string;
+  style: PresentationStyle;
+  slideCount: number;
+};
+
+type GeneratePresentationResponse = {
+  title?: string;
+  slides?: PresentationSlide[];
 };
 
 const presentationStyles: Array<{
@@ -84,119 +101,271 @@ const presentationStyles: Array<{
 
 const slideOptions = [5, 8, 10, 12, 15, 20];
 
-function createSlides(
-  topic: string,
-  count: number,
+function createId(prefix = "presentation") {
+  if (
+    typeof window !== "undefined" &&
+    typeof crypto !== "undefined" &&
+    typeof crypto.randomUUID === "function"
+  ) {
+    return `${prefix}-${crypto.randomUUID()}`;
+  }
+
+  return `${prefix}-${Date.now()}-${Math.random()
+    .toString(36)
+    .slice(2, 10)}`;
+}
+
+function normalizeSlide(
+  slide: Partial<PresentationSlide>,
+  index: number,
+): PresentationSlide {
+  return {
+    id: slide.id || createId(`slide-${index + 1}`),
+    title: slide.title?.trim() || `Slide ${index + 1}`,
+    subtitle: slide.subtitle?.trim() || "",
+    content:
+      Array.isArray(slide.content) && slide.content.length > 0
+        ? slide.content
+            .filter(
+              (item): item is string =>
+                typeof item === "string" && item.trim().length > 0,
+            )
+            .slice(0, 6)
+        : ["Key strategic insight"],
+    type:
+      slide.type === "cover" ||
+      slide.type === "content" ||
+      slide.type === "metrics" ||
+      slide.type === "summary"
+        ? slide.type
+        : "content",
+  };
+}
+
+function createFallbackSlides(
+  request: GeneratePresentationRequest,
 ): PresentationSlide[] {
+  const {
+    topic,
+    audience,
+    instructions,
+    slideCount,
+  } = request;
+
+  const audienceLabel = audience.trim()
+    ? audience.trim()
+    : "decision-makers and stakeholders";
+
+  const instructionLabel = instructions.trim()
+    ? instructions.trim()
+    : "Focus on strategic clarity, measurable value, and scalable execution.";
+
   const baseSlides: PresentationSlide[] = [
     {
-      id: "cover",
+      id: createId("cover"),
       title: topic,
-      subtitle: "AI Generated Strategic Presentation",
+      subtitle: `A strategic presentation for ${audienceLabel}`,
       content: [
-        "A structured presentation generated with intelligent storytelling.",
+        "SYRAVEN AI-generated strategic narrative",
       ],
       type: "cover",
     },
     {
-      id: "overview",
-      title: "Executive Overview",
-      subtitle: "The opportunity and strategic context",
+      id: createId("context"),
+      title: "Executive Context",
+      subtitle: "Why this topic matters now",
       content: [
-        "Clear definition of the core challenge",
-        "Key market and business opportunities",
-        "Strategic direction for sustainable growth",
+        `The strategic relevance of ${topic}`,
+        `Key implications for ${audienceLabel}`,
+        "The market, technology, and operational forces shaping the opportunity",
       ],
       type: "content",
     },
     {
-      id: "problem",
-      title: "The Challenge",
-      subtitle: "Understanding the current landscape",
+      id: createId("challenge"),
+      title: "The Core Challenge",
+      subtitle: "Understanding the problem before designing the solution",
       content: [
-        "Rapid changes in technology and market expectations",
-        "Increasing pressure for efficiency and innovation",
-        "Need for scalable and future-ready solutions",
+        "Increasing complexity across technology, operations, and decision-making",
+        "Growing expectations for speed, intelligence, and measurable outcomes",
+        "The need to connect fragmented systems into a scalable operating model",
       ],
       type: "content",
     },
     {
-      id: "solution",
-      title: "Our Strategic Solution",
-      subtitle: "A clear path toward measurable impact",
+      id: createId("opportunity"),
+      title: "Strategic Opportunity",
+      subtitle: "Where transformation can create disproportionate value",
       content: [
-        "Build a scalable intelligent infrastructure",
-        "Automate high-value workflows",
-        "Create a connected data and decision ecosystem",
+        `Create a differentiated approach around ${topic}`,
+        "Build reusable intelligence and operational capabilities",
+        "Turn strategic insight into repeatable execution",
       ],
       type: "content",
     },
     {
-      id: "metrics",
+      id: createId("solution"),
+      title: "Recommended Strategy",
+      subtitle: "A structured path from ambition to execution",
+      content: [
+        "Establish a clear foundation and governance model",
+        "Prioritize high-impact workflows and measurable use cases",
+        "Scale through modular systems, automation, and intelligence",
+      ],
+      type: "content",
+    },
+    {
+      id: createId("impact"),
       title: "Projected Impact",
-      subtitle: "Potential value creation",
+      subtitle: "The potential value of successful execution",
       content: [
-        "40% improvement in operational efficiency",
-        "3x faster strategic decision cycles",
-        "Significant long-term scalability potential",
+        "Faster decision cycles through connected intelligence",
+        "Higher operational efficiency through automation",
+        "Long-term scalability through reusable infrastructure",
       ],
       type: "metrics",
     },
     {
-      id: "roadmap",
+      id: createId("roadmap"),
       title: "Implementation Roadmap",
-      subtitle: "From strategy to execution",
+      subtitle: "A phased approach to sustainable transformation",
       content: [
-        "Phase 1 — Foundation and infrastructure",
-        "Phase 2 — Product and workflow deployment",
-        "Phase 3 — Scale, optimization and expansion",
+        "Phase 1 — Strategy, architecture, and foundations",
+        "Phase 2 — Product deployment and workflow integration",
+        "Phase 3 — Optimization, expansion, and ecosystem scale",
       ],
       type: "content",
     },
     {
-      id: "future",
-      title: "Future Vision",
-      subtitle: "Building the next generation platform",
+      id: createId("recommendations"),
+      title: "Strategic Recommendations",
+      subtitle: "Key actions for leadership and execution teams",
       content: [
-        "Global scalability",
-        "AI-native operational intelligence",
-        "Long-term ecosystem expansion",
+        instructionLabel,
+        "Define measurable success criteria before scaling",
+        "Maintain strong alignment between technology, operations, and business goals",
       ],
       type: "summary",
     },
     {
-      id: "summary",
+      id: createId("future"),
+      title: "Future Vision",
+      subtitle: "Building for long-term competitive advantage",
+      content: [
+        "AI-native operational intelligence",
+        "Global scalability and ecosystem expansion",
+        "A continuously improving strategic platform",
+      ],
+      type: "summary",
+    },
+    {
+      id: createId("summary"),
       title: "Key Takeaways",
       subtitle: "The strategic conclusion",
       content: [
-        "Strong opportunity for transformation",
-        "Clear execution roadmap",
-        "Significant potential for long-term value creation",
+        `${topic} represents a meaningful transformation opportunity`,
+        "A structured execution model reduces risk and improves speed",
+        "Long-term value depends on scalable systems and disciplined implementation",
       ],
       type: "summary",
     },
   ];
 
-  if (count <= baseSlides.length) {
-    return baseSlides.slice(0, count);
+  if (slideCount <= baseSlides.length) {
+    return baseSlides.slice(0, slideCount);
   }
 
   const additionalSlides = Array.from(
-    { length: count - baseSlides.length },
-    (_, index) => ({
-      id: `additional-${index + 1}`,
+    { length: slideCount - baseSlides.length },
+    (_, index): PresentationSlide => ({
+      id: createId(`insight-${index + 1}`),
       title: `Strategic Insight ${index + 1}`,
-      subtitle: "Additional analysis and opportunity",
+      subtitle: `Additional analysis for ${audienceLabel}`,
       content: [
-        "Advanced opportunity analysis",
-        "Data-driven strategic recommendation",
-        "Scalable execution framework",
+        `Deepen understanding of ${topic}`,
+        "Identify high-leverage opportunities",
+        "Convert insight into measurable execution priorities",
       ],
-      type: "content" as const,
+      type: "content",
     }),
   );
 
   return [...baseSlides, ...additionalSlides];
+}
+
+async function generatePresentationWithApi(
+  request: GeneratePresentationRequest,
+): Promise<PresentationSlide[] | null> {
+  try {
+    const response = await fetch("/api/presentations/generate", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(request),
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const data =
+      (await response.json()) as GeneratePresentationResponse;
+
+    if (!Array.isArray(data.slides) || data.slides.length === 0) {
+      return null;
+    }
+
+    return data.slides
+      .map((slide, index) => normalizeSlide(slide, index))
+      .slice(0, request.slideCount);
+  } catch {
+    return null;
+  }
+}
+
+function getProjectExportContent(
+  project: PresentationProject,
+) {
+  const styleName =
+    presentationStyles.find(
+      (style) => style.id === project.style,
+    )?.name ?? "Professional";
+
+  const header = [
+    `# ${project.title}`,
+    "",
+    "Generated with SYRAVEN Presentation Studio",
+    "",
+    `Topic: ${project.topic}`,
+    `Audience: ${project.audience || "Not specified"}`,
+    `Style: ${styleName}`,
+    `Slides: ${project.slides.length}`,
+    `Created: ${new Date(
+      project.createdAt,
+    ).toLocaleString()}`,
+    "",
+    "---",
+    "",
+  ].join("\n");
+
+  const slides = project.slides
+    .map((slide, index) => {
+      const items = slide.content
+        .map((item) => `- ${item}`)
+        .join("\n");
+
+      return [
+        `## Slide ${index + 1}: ${slide.title}`,
+        "",
+        slide.subtitle,
+        "",
+        items,
+      ].join("\n");
+    })
+    .join("\n\n---\n\n");
+
+  return `${header}${slides}`;
 }
 
 export default function PresentationStudioPage() {
@@ -243,10 +412,21 @@ export default function PresentationStudioPage() {
     [selectedStyle],
   );
 
-  const generatePresentation = async () => {
-    if (!topic.trim()) {
+  const generatePresentation = useCallback(async () => {
+    const normalizedTopic = topic.trim();
+
+    if (!normalizedTopic) {
+      setStatus("error");
       setError(
         "Please enter a presentation topic before generating.",
+      );
+      return;
+    }
+
+    if (normalizedTopic.length < 3) {
+      setStatus("error");
+      setError(
+        "Please enter a more detailed presentation topic.",
       );
       return;
     }
@@ -254,19 +434,31 @@ export default function PresentationStudioPage() {
     setError(null);
     setStatus("generating");
 
-    try {
-      await new Promise((resolve) =>
-        window.setTimeout(resolve, 1800),
-      );
+    const request: GeneratePresentationRequest = {
+      topic: normalizedTopic,
+      audience: audience.trim(),
+      instructions: instructions.trim(),
+      style: selectedStyle,
+      slideCount,
+    };
 
-      const slides = createSlides(topic.trim(), slideCount);
+    try {
+      const apiSlides =
+        await generatePresentationWithApi(request);
+
+      const slides =
+        apiSlides && apiSlides.length > 0
+          ? apiSlides
+          : createFallbackSlides(request);
 
       const project: PresentationProject = {
-        id: crypto.randomUUID(),
-        title: topic.trim(),
-        topic: topic.trim(),
+        id: createId("project"),
+        title: normalizedTopic,
+        topic: normalizedTopic,
+        audience: audience.trim(),
+        instructions: instructions.trim(),
         style: selectedStyle,
-        slideCount,
+        slideCount: slides.length,
         createdAt: new Date().toISOString(),
         slides,
       };
@@ -285,37 +477,40 @@ export default function PresentationStudioPage() {
         "Presentation generation failed. Please try again.",
       );
     }
-  };
+  }, [
+    audience,
+    instructions,
+    selectedStyle,
+    slideCount,
+    topic,
+  ]);
 
-  const deleteProject = (projectId: string) => {
-    setProjects((currentProjects) =>
-      currentProjects.filter(
-        (project) => project.id !== projectId,
-      ),
-    );
+  const deleteProject = useCallback(
+    (projectId: string) => {
+      setProjects((currentProjects) =>
+        currentProjects.filter(
+          (project) => project.id !== projectId,
+        ),
+      );
 
-    if (selectedProjectId === projectId) {
-      setSelectedProjectId(null);
-      setActiveSlideIndex(0);
-    }
-  };
+      if (selectedProjectId === projectId) {
+        setSelectedProjectId(null);
+        setActiveSlideIndex(0);
+      }
+    },
+    [selectedProjectId],
+  );
 
-  const downloadPresentation = () => {
+  const downloadPresentation = useCallback(() => {
     if (!selectedProject) {
       return;
     }
 
-    const content = selectedProject.slides
-      .map(
-        (slide, index) =>
-          `SLIDE ${index + 1}\n\n${slide.title}\n${slide.subtitle}\n\n${slide.content
-            .map((item) => `• ${item}`)
-            .join("\n")}`,
-      )
-      .join("\n\n====================\n\n");
+    const content =
+      getProjectExportContent(selectedProject);
 
     const blob = new Blob([content], {
-      type: "text/plain;charset=utf-8",
+      type: "text/markdown;charset=utf-8",
     });
 
     const url = URL.createObjectURL(blob);
@@ -323,27 +518,31 @@ export default function PresentationStudioPage() {
     const link = document.createElement("a");
     link.href = url;
 
-    link.download = `${selectedProject.title
+    const filename = selectedProject.title
       .toLowerCase()
-      .replace(/[^a-z0-9]+/gi, "-")}-presentation.txt`;
+      .replace(/[^a-z0-9]+/gi, "-")
+      .replace(/^-|-$/g, "");
+
+    link.download = `${filename || "syraven-presentation"}.md`;
 
     document.body.appendChild(link);
     link.click();
     link.remove();
 
     URL.revokeObjectURL(url);
-  };
+  }, [selectedProject]);
 
-  const resetForm = () => {
+  const resetForm = useCallback(() => {
     setTopic("");
     setAudience("");
     setInstructions("");
     setSelectedStyle("professional");
     setSlideCount(10);
     setError(null);
-  };
+    setStatus("idle");
+  }, []);
 
-  const nextSlide = () => {
+  const nextSlide = useCallback(() => {
     if (!selectedProject) {
       return;
     }
@@ -354,15 +553,15 @@ export default function PresentationStudioPage() {
         selectedProject.slides.length - 1,
       ),
     );
-  };
+  }, [selectedProject]);
 
-  const previousSlide = () => {
+  const previousSlide = useCallback(() => {
     setActiveSlideIndex((currentIndex) =>
       Math.max(currentIndex - 1, 0),
     );
-  };
+  }, []);
 
-  const getSlideTheme = () => {
+  const getSlideTheme = useCallback(() => {
     switch (selectedProject?.style) {
       case "dark":
         return "bg-zinc-950 text-white";
@@ -371,27 +570,26 @@ export default function PresentationStudioPage() {
         return "bg-gradient-to-br from-violet-600 via-purple-600 to-indigo-700 text-white";
 
       case "corporate":
-        return "bg-gradient-to-br from-slate-900 to-slate-700 text-white";
+        return "bg-gradient-to-br from-slate-900 via-slate-800 to-slate-700 text-white";
 
       case "minimal":
         return "bg-white text-slate-900";
 
+      case "professional":
       default:
         return "bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 text-white";
     }
-  };
+  }, [selectedProject?.style]);
 
   return (
     <main className="min-h-screen bg-background text-foreground">
       <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-        {/* HEADER */}
-
         <div className="mb-8 flex flex-col gap-5 border-b border-border pb-7 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <div className="mb-3 flex items-center gap-2 text-sm text-muted-foreground">
               <Link
                 href="/studio"
-                className="transition hover:text-foreground"
+                className="transition-colors hover:text-foreground"
               >
                 Studio
               </Link>
@@ -405,7 +603,7 @@ export default function PresentationStudioPage() {
 
             <h1 className="flex items-center gap-3 text-3xl font-bold tracking-tight sm:text-4xl">
               <Presentation className="h-8 w-8 text-primary" />
-              AI Presentation Studio
+              SYRAVEN Presentation Studio
             </h1>
 
             <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
@@ -436,12 +634,18 @@ export default function PresentationStudioPage() {
         </div>
 
         {error ? (
-          <div className="mb-6 flex items-start justify-between gap-4 rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+          <div
+            role="alert"
+            className="mb-6 flex items-start justify-between gap-4 rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive"
+          >
             <span>{error}</span>
 
             <button
               type="button"
-              onClick={() => setError(null)}
+              onClick={() => {
+                setError(null);
+                setStatus("idle");
+              }}
               aria-label="Close error"
               className="rounded-md p-1 transition hover:bg-destructive/10"
             >
@@ -451,8 +655,6 @@ export default function PresentationStudioPage() {
         ) : null}
 
         <div className="grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
-          {/* LEFT SIDEBAR */}
-
           <aside className="space-y-6">
             <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
               <div className="mb-5 flex items-center gap-2">
@@ -464,18 +666,22 @@ export default function PresentationStudioPage() {
                   </h2>
 
                   <p className="text-xs text-muted-foreground">
-                    Tell AI what you want to create
+                    Tell SYRAVEN what you want to create
                   </p>
                 </div>
               </div>
 
               <div className="space-y-5">
                 <div>
-                  <label className="mb-2 block text-sm font-medium">
+                  <label
+                    htmlFor="presentation-topic"
+                    className="mb-2 block text-sm font-medium"
+                  >
                     Presentation Topic
                   </label>
 
                   <textarea
+                    id="presentation-topic"
                     value={topic}
                     onChange={(event) =>
                       setTopic(event.target.value)
@@ -487,11 +693,15 @@ export default function PresentationStudioPage() {
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm font-medium">
+                  <label
+                    htmlFor="presentation-audience"
+                    className="mb-2 block text-sm font-medium"
+                  >
                     Target Audience
                   </label>
 
                   <input
+                    id="presentation-audience"
                     value={audience}
                     onChange={(event) =>
                       setAudience(event.target.value)
@@ -502,11 +712,15 @@ export default function PresentationStudioPage() {
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm font-medium">
+                  <label
+                    htmlFor="presentation-instructions"
+                    className="mb-2 block text-sm font-medium"
+                  >
                     Additional Instructions
                   </label>
 
                   <textarea
+                    id="presentation-instructions"
                     value={instructions}
                     onChange={(event) =>
                       setInstructions(event.target.value)
@@ -518,8 +732,6 @@ export default function PresentationStudioPage() {
                 </div>
               </div>
             </section>
-
-            {/* STYLE */}
 
             <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
               <div className="mb-4 flex items-center gap-2">
@@ -568,8 +780,6 @@ export default function PresentationStudioPage() {
               </div>
             </section>
 
-            {/* SLIDE COUNT */}
-
             <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
               <div className="mb-4 flex items-center gap-2">
                 <LayoutTemplate className="h-4 w-4 text-primary" />
@@ -604,8 +814,6 @@ export default function PresentationStudioPage() {
               </div>
             </section>
 
-            {/* GENERATE */}
-
             <button
               type="button"
               onClick={generatePresentation}
@@ -631,8 +839,6 @@ export default function PresentationStudioPage() {
             </p>
           </aside>
 
-          {/* MAIN WORKSPACE */}
-
           <section className="min-w-0 space-y-6">
             {status === "generating" ? (
               <div className="flex min-h-[650px] flex-col items-center justify-center rounded-2xl border border-border bg-card p-8 text-center shadow-sm">
@@ -643,12 +849,12 @@ export default function PresentationStudioPage() {
                 </div>
 
                 <h2 className="mt-8 text-xl font-semibold">
-                  AI is building your presentation
+                  SYRAVEN is building your presentation
                 </h2>
 
                 <p className="mt-3 max-w-md text-sm leading-6 text-muted-foreground">
                   Creating the narrative structure, organizing
-                  slides and preparing a professional visual
+                  slides, and preparing your strategic
                   presentation.
                 </p>
 
@@ -659,8 +865,6 @@ export default function PresentationStudioPage() {
               </div>
             ) : selectedProject && activeSlide ? (
               <>
-                {/* TOOLBAR */}
-
                 <div className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
@@ -673,13 +877,10 @@ export default function PresentationStudioPage() {
 
                     <p className="mt-1 text-xs text-muted-foreground">
                       {selectedProject.slides.length} slides ·{" "}
-                      {
-                        presentationStyles.find(
-                          (style) =>
-                            style.id ===
-                            selectedProject.style,
-                        )?.name
-                      }{" "}
+                      {presentationStyles.find(
+                        (style) =>
+                          style.id === selectedProject.style,
+                      )?.name ?? "Professional"}{" "}
                       style
                     </p>
                   </div>
@@ -707,8 +908,6 @@ export default function PresentationStudioPage() {
                   </div>
                 </div>
 
-                {/* SLIDE */}
-
                 <div className="overflow-hidden rounded-2xl border border-border bg-card p-3 shadow-sm sm:p-5">
                   <div
                     className={[
@@ -724,7 +923,7 @@ export default function PresentationStudioPage() {
                       <div className="mb-auto">
                         <div className="mb-6 flex items-center gap-3 text-xs font-medium uppercase tracking-[0.2em] opacity-70">
                           <Sparkles className="h-4 w-4" />
-                          AI Presentation
+                          SYRAVEN Intelligence
                         </div>
 
                         <h1 className="max-w-3xl text-3xl font-bold tracking-tight sm:text-5xl">
@@ -745,7 +944,10 @@ export default function PresentationStudioPage() {
                                 className="rounded-xl border border-current/10 bg-white/10 p-4 backdrop-blur-sm"
                               >
                                 <div className="mb-3 text-sm font-semibold opacity-60">
-                                  0{index + 1}
+                                  {String(index + 1).padStart(
+                                    2,
+                                    "0",
+                                  )}
                                 </div>
 
                                 <p className="text-sm leading-6 sm:text-base">
@@ -771,8 +973,6 @@ export default function PresentationStudioPage() {
                   </div>
                 </div>
 
-                {/* CONTROLS */}
-
                 <div className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
                   <button
                     type="button"
@@ -784,7 +984,7 @@ export default function PresentationStudioPage() {
                     Previous
                   </button>
 
-                  <div className="flex items-center justify-center gap-1">
+                  <div className="flex max-w-full items-center justify-center gap-1 overflow-x-auto py-1">
                     {selectedProject.slides.map(
                       (slide, index) => (
                         <button
@@ -794,7 +994,7 @@ export default function PresentationStudioPage() {
                             setActiveSlideIndex(index)
                           }
                           className={[
-                            "h-2 rounded-full transition-all",
+                            "h-2 shrink-0 rounded-full transition-all",
                             index === activeSlideIndex
                               ? "w-7 bg-primary"
                               : "w-2 bg-muted-foreground/30 hover:bg-muted-foreground/60",
@@ -820,8 +1020,6 @@ export default function PresentationStudioPage() {
                     <ChevronRight className="h-4 w-4" />
                   </button>
                 </div>
-
-                {/* SLIDE LIST */}
 
                 <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
                   <div className="mb-5 flex items-center justify-between">
@@ -892,18 +1090,17 @@ export default function PresentationStudioPage() {
                 </h2>
 
                 <p className="mt-3 max-w-lg text-sm leading-7 text-muted-foreground">
-                  Enter your presentation topic, choose a visual
-                  style and let AI create a complete slide
-                  structure for your project.
+                  Enter your presentation topic, define your
+                  audience, choose a visual style, and let
+                  SYRAVEN create a structured presentation.
                 </p>
 
                 <button
                   type="button"
                   onClick={() => {
-                    const element =
-                      document.querySelector("textarea");
-
-                    element?.focus();
+                    document
+                      .getElementById("presentation-topic")
+                      ?.focus();
                   }}
                   className="mt-7 inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground"
                 >
@@ -912,8 +1109,6 @@ export default function PresentationStudioPage() {
                 </button>
               </div>
             )}
-
-            {/* RECENT PRESENTATIONS */}
 
             {projects.length > 0 ? (
               <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
@@ -935,6 +1130,12 @@ export default function PresentationStudioPage() {
                   {projects.map((project) => {
                     const isSelected =
                       project.id === selectedProjectId;
+
+                    const styleName =
+                      presentationStyles.find(
+                        (style) =>
+                          style.id === project.style,
+                      )?.name ?? "Professional";
 
                     return (
                       <div
@@ -964,11 +1165,8 @@ export default function PresentationStudioPage() {
                             </p>
 
                             <p className="mt-1 text-xs text-muted-foreground">
-                              {project.slideCount} slides ·{" "}
-                              {presentationStyles.find(
-                                (style) =>
-                                  style.id === project.style,
-                              )?.name ?? "Professional"}
+                              {project.slides.length} slides ·{" "}
+                              {styleName}
                             </p>
                           </div>
                         </button>
@@ -979,7 +1177,7 @@ export default function PresentationStudioPage() {
                             deleteProject(project.id)
                           }
                           className="inline-flex items-center justify-center rounded-lg border border-border p-2 text-muted-foreground transition hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive"
-                          aria-label="Delete presentation"
+                          aria-label={`Delete ${project.title}`}
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>

@@ -55,12 +55,12 @@ interface MarketplaceItem {
 
 const MARKETPLACE_ITEMS: MarketplaceItem[] = [
   {
-    id: "nova-research-agent",
-    name: "NOVA Research Agent",
+    id: "syraven-research-agent",
+    name: "SYRAVEN Research Agent",
     description:
       "Autonomous research agent for deep analysis, source discovery and structured intelligence.",
     category: "AI Agents",
-    author: "NOVA Intelligence",
+    author: "SYRAVEN Intelligence",
     rating: 4.9,
     reviews: 248,
     installs: "12.4k",
@@ -74,7 +74,7 @@ const MARKETPLACE_ITEMS: MarketplaceItem[] = [
     description:
       "Analyze codebases, generate architecture insights and accelerate complex engineering workflows.",
     category: "Development",
-    author: "NOVA Engineering",
+    author: "SYRAVEN Engineering",
     rating: 4.8,
     reviews: 193,
     installs: "9.8k",
@@ -88,7 +88,7 @@ const MARKETPLACE_ITEMS: MarketplaceItem[] = [
     description:
       "Transform raw datasets into structured insights, reports and intelligent recommendations.",
     category: "Data",
-    author: "NOVA Data",
+    author: "SYRAVEN Data",
     rating: 4.7,
     reviews: 156,
     installs: "7.2k",
@@ -130,7 +130,7 @@ const MARKETPLACE_ITEMS: MarketplaceItem[] = [
     description:
       "An AI-powered development assistant for planning, building and improving software products.",
     category: "Development",
-    author: "NOVA Labs",
+    author: "SYRAVEN Labs",
     rating: 4.9,
     reviews: 207,
     installs: "10.1k",
@@ -261,7 +261,7 @@ export default function MarketplacePage() {
             <div>
               <div className="flex items-center gap-2 text-sm font-medium text-primary">
                 <Sparkles className="h-4 w-4" />
-                NOVA Ecosystem
+                SYRAVEN Ecosystem
               </div>
 
               <h1 className="mt-3 text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
@@ -271,7 +271,7 @@ export default function MarketplacePage() {
               <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
                 Discover intelligent capabilities,
                 autonomous agents and powerful tools
-                designed to expand your NOVA workspace.
+                designed to expand your SYRAVEN workspace.
               </p>
             </div>
 

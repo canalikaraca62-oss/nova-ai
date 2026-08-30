@@ -96,7 +96,7 @@ const AuthContext = createContext<
   AuthContextValue | undefined
 >(undefined);
 
-const AUTH_STORAGE_KEY = "nova-auth-session";
+const AUTH_STORAGE_KEY = "syraven-auth-session";
 
 function isBrowser(): boolean {
   return typeof window !== "undefined";

@@ -46,10 +46,10 @@ const KNOWLEDGE_ITEMS: KnowledgeItem[] = [
     type: "research",
     updatedAt: "Recently updated",
     createdAt: "August 2026",
-    author: "NOVA Intelligence",
+    author: "SYRAVEN Intelligence",
     tags: ["AI", "Architecture", "Strategy"],
     content: [
-      "This knowledge space contains the core strategic decisions and architectural principles behind the NOVA intelligence platform.",
+      "This knowledge space contains the core strategic decisions and architectural principles behind the SYRAVEN intelligence platform.",
       "The system is designed around scalable intelligence, autonomous workflows, secure data handling and modular product capabilities.",
       "Every major technical decision should support long-term extensibility while maintaining a fast and reliable user experience.",
     ],
@@ -350,7 +350,7 @@ export default function KnowledgeDetailPage() {
               className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
             >
               <Sparkles className="h-4 w-4" />
-              Ask NOVA
+              Ask SYRAVEN
             </Link>
           </div>
         </section>

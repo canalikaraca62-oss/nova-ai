@@ -19,7 +19,7 @@ import {
 type ProjectStatus = "planning" | "active";
 
 const workspaceOptions = [
-  "NOVA Core",
+  "SYRAVEN Core",
   "Research Lab",
   "Intelligence",
   "Product",
@@ -31,7 +31,7 @@ export default function NewProjectPage() {
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [workspace, setWorkspace] = useState("NOVA Core");
+  const [workspace, setWorkspace] = useState("SYRAVEN Core");
   const [status, setStatus] = useState<ProjectStatus>("planning");
   const [deadline, setDeadline] = useState("");
   const [members, setMembers] = useState("1");
@@ -174,7 +174,7 @@ export default function NewProjectPage() {
 
                     <div className="mt-2 flex items-center justify-between gap-4">
                       <p className="text-xs text-muted-foreground">
-                        A detailed description helps NOVA understand your
+                        A detailed description helps SYRAVEN understand your
                         project context.
                       </p>
 
@@ -340,11 +340,11 @@ export default function NewProjectPage() {
 
                   <div>
                     <h2 className="text-lg font-semibold text-foreground">
-                      NOVA project intelligence
+                      SYRAVEN project intelligence
                     </h2>
 
                     <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                      After creating your project, NOVA can help you
+                      After creating your project, SYRAVEN can help you
                       structure goals, generate tasks, connect knowledge
                       and continuously analyze project progress.
                     </p>
@@ -445,7 +445,7 @@ export default function NewProjectPage() {
                   />
                   <Step
                     number="3"
-                    text="Use NOVA AI to accelerate execution."
+                    text="Use SYRAVEN AI to accelerate execution."
                   />
                 </ol>
               </section>

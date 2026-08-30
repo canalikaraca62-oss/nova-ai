@@ -26,8 +26,8 @@ type Team = {
 
 const initialTeams: Team[] = [
   {
-    id: "nova-core",
-    name: "NOVA Core",
+    id: "syraven-core",
+    name: "SYRAVEN Core",
     description:
       "Core platform architecture, artificial intelligence infrastructure and global product strategy.",
     initials: "NC",
@@ -38,7 +38,7 @@ const initialTeams: Team[] = [
       {
         id: "member-1",
         name: "Alex Morgan",
-        email: "alex@nova.ai",
+        email: "alex@syraven.ai",
         role: "Owner",
         avatar: "AM",
         status: "active",
@@ -46,7 +46,7 @@ const initialTeams: Team[] = [
       {
         id: "member-2",
         name: "Sarah Chen",
-        email: "sarah@nova.ai",
+        email: "sarah@syraven.ai",
         role: "Admin",
         avatar: "SC",
         status: "active",
@@ -54,7 +54,7 @@ const initialTeams: Team[] = [
       {
         id: "member-3",
         name: "Marcus Reed",
-        email: "marcus@nova.ai",
+        email: "marcus@syraven.ai",
         role: "Member",
         avatar: "MR",
         status: "active",
@@ -74,7 +74,7 @@ const initialTeams: Team[] = [
       {
         id: "member-4",
         name: "Elena Rossi",
-        email: "elena@nova.ai",
+        email: "elena@syraven.ai",
         role: "Admin",
         avatar: "ER",
         status: "active",
@@ -82,7 +82,7 @@ const initialTeams: Team[] = [
       {
         id: "member-5",
         name: "David Kim",
-        email: "david@nova.ai",
+        email: "david@syraven.ai",
         role: "Member",
         avatar: "DK",
         status: "active",
@@ -102,7 +102,7 @@ const initialTeams: Team[] = [
       {
         id: "member-6",
         name: "Olivia Bennett",
-        email: "olivia@nova.ai",
+        email: "olivia@syraven.ai",
         role: "Admin",
         avatar: "OB",
         status: "active",
@@ -110,7 +110,7 @@ const initialTeams: Team[] = [
       {
         id: "member-7",
         name: "James Wilson",
-        email: "james@nova.ai",
+        email: "james@syraven.ai",
         role: "Viewer",
         avatar: "JW",
         status: "invited",
@@ -211,7 +211,7 @@ export default function TeamsPage() {
         {
           id: `owner-${Date.now()}`,
           name: "You",
-          email: "you@nova.ai",
+          email: "you@syraven.ai",
           role: "Owner",
           avatar: "YO",
           status: "active",

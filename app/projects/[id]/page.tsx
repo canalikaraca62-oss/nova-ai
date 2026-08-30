@@ -38,9 +38,9 @@ interface Project {
 }
 
 const projects: Record<string, Project> = {
-  "nova-platform": {
-    id: "nova-platform",
-    name: "NOVA Platform",
+  "syraven-platform": {
+    id: "syraven-platform",
+    name: "SYRAVEN Platform",
     description:
       "The central AI operating system for building intelligent workflows, managing knowledge, and coordinating autonomous agents.",
     status: "active",
@@ -51,7 +51,7 @@ const projects: Record<string, Project> = {
     updatedAt: "Updated 2 minutes ago",
     createdAt: "January 12, 2026",
     deadline: "December 31, 2026",
-    workspace: "NOVA Core",
+    workspace: "SYRAVEN Core",
   },
   "ai-research": {
     id: "ai-research",
@@ -89,7 +89,7 @@ const fallbackProject: Project = {
   id: "project",
   name: "Untitled Project",
   description:
-    "This project is part of your NOVA workspace. Add more details to begin organizing tasks, knowledge, and collaboration.",
+    "This project is part of your SYRAVEN workspace. Add more details to begin organizing tasks, knowledge, and collaboration.",
   status: "planning",
   progress: 0,
   members: 1,
@@ -126,7 +126,7 @@ const activities = [
   {
     title: "AI analysis generated",
     description:
-      "NOVA generated a new project intelligence summary.",
+      "SYRAVEN generated a new project intelligence summary.",
     time: "3 hours ago",
     icon: Sparkles,
   },
@@ -367,7 +367,7 @@ export default function ProjectDetailPage() {
                     <Sparkles className="h-5 w-5 text-primary" />
 
                     <h2 className="text-xl font-semibold text-foreground">
-                      NOVA Intelligence
+                      SYRAVEN Intelligence
                     </h2>
                   </div>
 
@@ -519,7 +519,7 @@ export default function ProjectDetailPage() {
                 <QuickAction
                   href="/studio"
                   icon={Sparkles}
-                  label="Ask NOVA AI"
+                  label="Ask SYRAVEN AI"
                 />
 
                 <QuickAction
@@ -540,7 +540,7 @@ export default function ProjectDetailPage() {
               </h2>
 
               <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                Ask NOVA to analyze progress, identify risks, create
+                Ask SYRAVEN to analyze progress, identify risks, create
                 plans or generate your next steps.
               </p>
 

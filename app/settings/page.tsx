@@ -35,7 +35,7 @@ type SettingsSection =
 
 type ThemeMode = "system" | "light" | "dark";
 
-interface NovaSettings {
+interface SyravenSettings {
   workspaceName: string;
   language: string;
   timezone: string;
@@ -61,12 +61,12 @@ interface NovaSettings {
   twoFactorEnabled: boolean;
 }
 
-const DEFAULT_SETTINGS: NovaSettings = {
-  workspaceName: "NOVA Workspace",
+const DEFAULT_SETTINGS: SyravenSettings = {
+  workspaceName: "SYRAVEN Workspace",
   language: "English",
   timezone: "Europe/Istanbul",
 
-  displayName: "NOVA User",
+  displayName: "SYRAVEN User",
   email: "",
 
   emailNotifications: true,
@@ -87,7 +87,7 @@ const DEFAULT_SETTINGS: NovaSettings = {
   twoFactorEnabled: false,
 };
 
-const SETTINGS_STORAGE_KEY = "nova-settings";
+const SETTINGS_STORAGE_KEY = "syraven-settings";
 
 const NAVIGATION_ITEMS: Array<{
   id: SettingsSection;
@@ -116,7 +116,7 @@ const NAVIGATION_ITEMS: Array<{
   {
     id: "ai",
     label: "AI Preferences",
-    description: "NOVA intelligence",
+    description: "SYRAVEN intelligence",
     icon: <Bot className="h-4 w-4" />,
   },
   {
@@ -144,10 +144,10 @@ export default function SettingsPage() {
     useState<SettingsSection>("general");
 
   const [settings, setSettings] =
-    useState<NovaSettings>(DEFAULT_SETTINGS);
+    useState<SyravenSettings>(DEFAULT_SETTINGS);
 
   const [savedSettings, setSavedSettings] =
-    useState<NovaSettings>(DEFAULT_SETTINGS);
+    useState<SyravenSettings>(DEFAULT_SETTINGS);
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -162,7 +162,7 @@ export default function SettingsPage() {
       if (storedSettings) {
         const parsedSettings = JSON.parse(
           storedSettings
-        ) as Partial<NovaSettings>;
+        ) as Partial<SyravenSettings>;
 
         const nextSettings = {
           ...DEFAULT_SETTINGS,
@@ -187,9 +187,9 @@ export default function SettingsPage() {
     );
   }, [settings, savedSettings]);
 
-  function updateSetting<K extends keyof NovaSettings>(
+  function updateSetting<K extends keyof SyravenSettings>(
     key: K,
-    value: NovaSettings[K]
+    value: SyravenSettings[K]
   ) {
     setSettings((current) => ({
       ...current,
@@ -253,7 +253,7 @@ export default function SettingsPage() {
           <div>
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Sparkles className="h-4 w-4 text-primary" />
-              NOVA Workspace
+              SYRAVEN Workspace
             </div>
 
             <h1 className="mt-3 text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
@@ -424,17 +424,17 @@ function GeneralSettings({
   settings,
   updateSetting,
 }: {
-  settings: NovaSettings;
-  updateSetting: <K extends keyof NovaSettings>(
+  settings: SyravenSettings;
+  updateSetting: <K extends keyof SyravenSettings>(
     key: K,
-    value: NovaSettings[K]
+    value: SyravenSettings[K]
   ) => void;
 }) {
   return (
     <SettingsPanel
       icon={<Globe2 className="h-5 w-5" />}
       title="General settings"
-      description="Configure the core preferences for your NOVA workspace."
+      description="Configure the core preferences for your SYRAVEN workspace."
     >
       <div className="grid gap-6">
         <FieldGroup
@@ -450,7 +450,7 @@ function GeneralSettings({
               )
             }
             className={inputClassName}
-            placeholder="NOVA Workspace"
+            placeholder="SYRAVEN Workspace"
           />
         </FieldGroup>
 
@@ -526,10 +526,10 @@ function ProfileSettings({
   settings,
   updateSetting,
 }: {
-  settings: NovaSettings;
-  updateSetting: <K extends keyof NovaSettings>(
+  settings: SyravenSettings;
+  updateSetting: <K extends keyof SyravenSettings>(
     key: K,
-    value: NovaSettings[K]
+    value: SyravenSettings[K]
   ) => void;
 }) {
   const initials =
@@ -613,17 +613,17 @@ function NotificationSettings({
   settings,
   updateSetting,
 }: {
-  settings: NovaSettings;
-  updateSetting: <K extends keyof NovaSettings>(
+  settings: SyravenSettings;
+  updateSetting: <K extends keyof SyravenSettings>(
     key: K,
-    value: NovaSettings[K]
+    value: SyravenSettings[K]
   ) => void;
 }) {
   return (
     <SettingsPanel
       icon={<Bell className="h-5 w-5" />}
       title="Notifications"
-      description="Control how and when NOVA keeps you informed."
+      description="Control how and when SYRAVEN keeps you informed."
     >
       <div className="divide-y divide-border">
         <ToggleRow
@@ -639,7 +639,7 @@ function NotificationSettings({
         <ToggleRow
           icon={<Smartphone className="h-5 w-5" />}
           title="Push notifications"
-          description="Receive real-time updates while using NOVA."
+          description="Receive real-time updates while using SYRAVEN."
           checked={settings.pushNotifications}
           onChange={(value) =>
             updateSetting("pushNotifications", value)
@@ -672,7 +672,7 @@ function NotificationSettings({
         <ToggleRow
           icon={<Sparkles className="h-5 w-5" />}
           title="Product updates"
-          description="Receive occasional updates about new NOVA capabilities."
+          description="Receive occasional updates about new SYRAVEN capabilities."
           checked={settings.marketingNotifications}
           onChange={(value) =>
             updateSetting(
@@ -690,17 +690,17 @@ function AiSettings({
   settings,
   updateSetting,
 }: {
-  settings: NovaSettings;
-  updateSetting: <K extends keyof NovaSettings>(
+  settings: SyravenSettings;
+  updateSetting: <K extends keyof SyravenSettings>(
     key: K,
-    value: NovaSettings[K]
+    value: SyravenSettings[K]
   ) => void;
 }) {
   return (
     <SettingsPanel
       icon={<Bot className="h-5 w-5" />}
       title="AI preferences"
-      description="Control how NOVA intelligence assists your work."
+      description="Control how SYRAVEN intelligence assists your work."
     >
       <div className="mb-8 rounded-2xl border border-primary/15 bg-primary/[0.04] p-5">
         <div className="flex gap-4">
@@ -710,11 +710,11 @@ function AiSettings({
 
           <div>
             <h3 className="font-medium text-foreground">
-              NOVA Intelligence
+              SYRAVEN Intelligence
             </h3>
 
             <p className="mt-1 text-sm leading-6 text-muted-foreground">
-              These preferences determine how proactively NOVA can
+              These preferences determine how proactively SYRAVEN can
               analyze your workspace and provide assistance.
             </p>
           </div>
@@ -725,7 +725,7 @@ function AiSettings({
         <ToggleRow
           icon={<Sparkles className="h-5 w-5" />}
           title="AI suggestions"
-          description="Allow NOVA to suggest actions and improvements."
+          description="Allow SYRAVEN to suggest actions and improvements."
           checked={settings.aiSuggestions}
           onChange={(value) =>
             updateSetting("aiSuggestions", value)
@@ -735,7 +735,7 @@ function AiSettings({
         <ToggleRow
           icon={<Bot className="h-5 w-5" />}
           title="Workspace memory"
-          description="Allow NOVA to retain useful workspace context."
+          description="Allow SYRAVEN to retain useful workspace context."
           checked={settings.aiMemory}
           onChange={(value) =>
             updateSetting("aiMemory", value)
@@ -755,7 +755,7 @@ function AiSettings({
         <ToggleRow
           icon={<Sparkles className="h-5 w-5" />}
           title="Proactive insights"
-          description="Allow NOVA to surface important insights before you ask."
+          description="Allow SYRAVEN to surface important insights before you ask."
           checked={settings.proactiveInsights}
           onChange={(value) =>
             updateSetting("proactiveInsights", value)
@@ -770,17 +770,17 @@ function AppearanceSettings({
   settings,
   updateSetting,
 }: {
-  settings: NovaSettings;
-  updateSetting: <K extends keyof NovaSettings>(
+  settings: SyravenSettings;
+  updateSetting: <K extends keyof SyravenSettings>(
     key: K,
-    value: NovaSettings[K]
+    value: SyravenSettings[K]
   ) => void;
 }) {
   return (
     <SettingsPanel
       icon={<Palette className="h-5 w-5" />}
       title="Appearance"
-      description="Customize the NOVA interface for your preferred workflow."
+      description="Customize the SYRAVEN interface for your preferred workflow."
     >
       <div>
         <h3 className="text-sm font-medium text-foreground">
@@ -788,7 +788,7 @@ function AppearanceSettings({
         </h3>
 
         <p className="mt-1 text-sm text-muted-foreground">
-          Choose how NOVA should appear on your device.
+          Choose how SYRAVEN should appear on your device.
         </p>
 
         <div className="mt-5 grid gap-3 sm:grid-cols-3">
@@ -850,17 +850,17 @@ function SecuritySettings({
   settings,
   updateSetting,
 }: {
-  settings: NovaSettings;
-  updateSetting: <K extends keyof NovaSettings>(
+  settings: SyravenSettings;
+  updateSetting: <K extends keyof SyravenSettings>(
     key: K,
-    value: NovaSettings[K]
+    value: SyravenSettings[K]
   ) => void;
 }) {
   return (
     <SettingsPanel
       icon={<Shield className="h-5 w-5" />}
       title="Security"
-      description="Protect your NOVA account and workspace access."
+      description="Protect your SYRAVEN account and workspace access."
     >
       <div className="divide-y divide-border">
         <ToggleRow
@@ -888,7 +888,7 @@ function SecuritySettings({
         <ActionCard
           icon={<Smartphone className="h-5 w-5" />}
           title="Active sessions"
-          description="Review devices signed into NOVA."
+          description="Review devices signed into SYRAVEN."
           action="View sessions"
         />
       </div>
@@ -922,7 +922,7 @@ function BillingSettings() {
     <SettingsPanel
       icon={<CreditCard className="h-5 w-5" />}
       title="Billing & subscription"
-      description="Manage your NOVA plan, billing information and invoices."
+      description="Manage your SYRAVEN plan, billing information and invoices."
     >
       <div className="rounded-2xl border border-primary/20 bg-primary/[0.04] p-6">
         <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
@@ -933,7 +933,7 @@ function BillingSettings() {
               </span>
 
               <span className="text-sm text-muted-foreground">
-                NOVA Starter
+                SYRAVEN Starter
               </span>
             </div>
 

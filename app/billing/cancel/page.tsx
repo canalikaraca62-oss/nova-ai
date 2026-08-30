@@ -214,7 +214,7 @@ export default function BillingCancelPage() {
 
           <div>
             <div className="text-sm font-semibold tracking-tight">
-              NOVA
+              SYRAVEN
             </div>
             <div className="text-[10px] uppercase tracking-[0.22em] text-white/40">
               Intelligence Platform

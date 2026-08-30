@@ -154,7 +154,7 @@ const BILLING_PLANS: BillingPlanDefinition[] = [
     id: "free",
     name: "Free",
     description:
-      "Essential tools for exploring the NOVA platform.",
+      "Essential tools for exploring the SYRAVEN platform.",
     monthlyPrice: 0,
     yearlyPrice: 0,
     currency: "EUR",

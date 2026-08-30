@@ -48,7 +48,7 @@ export default function TermsPage() {
                 href="/"
                 className="transition hover:text-white"
               >
-                NOVA
+                SYRAVEN
               </Link>
 
               <span>/</span>
@@ -66,7 +66,7 @@ export default function TermsPage() {
 
             <p className="mt-6 max-w-2xl text-base leading-8 text-white/50 sm:text-lg">
               These Terms of Service govern your access to and use of
-              the NOVA platform, products, services, applications,
+              the SYRAVEN platform, products, services, applications,
               artificial intelligence systems, and related technologies.
             </p>
 
@@ -122,7 +122,7 @@ export default function TermsPage() {
               </p>
 
               <a
-                href="mailto:legal@nova.ai"
+                href="mailto:legal@syraven.ai"
                 className="mt-4 inline-flex text-sm font-medium text-white transition hover:text-white/70"
               >
                 Contact legal →
@@ -142,13 +142,13 @@ export default function TermsPage() {
                   <div className="mt-5 space-y-5 text-[15px] leading-8 text-white/55">
                     <p>
                       By accessing, creating an account for, or using
-                      NOVA, you agree to be bound by these Terms of
+                      SYRAVEN, you agree to be bound by these Terms of
                       Service and all applicable policies referenced in
                       these Terms.
                     </p>
 
                     <p>
-                      If you are using NOVA on behalf of an organization,
+                      If you are using SYRAVEN on behalf of an organization,
                       company, institution, or other legal entity, you
                       represent and warrant that you have the authority
                       to bind that entity to these Terms.
@@ -156,7 +156,7 @@ export default function TermsPage() {
 
                     <p>
                       If you do not agree with these Terms, you must not
-                      access or use the NOVA platform or related services.
+                      access or use the SYRAVEN platform or related services.
                     </p>
                   </div>
                 </section>
@@ -178,7 +178,7 @@ export default function TermsPage() {
                     </p>
 
                     <p>
-                      You agree to promptly notify NOVA if you believe
+                      You agree to promptly notify SYRAVEN if you believe
                       your account, credentials, or access environment
                       has been compromised.
                     </p>
@@ -210,7 +210,7 @@ export default function TermsPage() {
 
                   <div className="mt-5 space-y-5 text-[15px] leading-8 text-white/55">
                     <p>
-                      NOVA provides software, artificial intelligence,
+                      SYRAVEN provides software, artificial intelligence,
                       collaboration, automation, knowledge management,
                       marketplace, workspace, and related digital
                       services.
@@ -244,7 +244,7 @@ export default function TermsPage() {
 
                   <div className="mt-5 space-y-5 text-[15px] leading-8 text-white/55">
                     <p>
-                      You may use NOVA only for lawful purposes and in
+                      You may use SYRAVEN only for lawful purposes and in
                       accordance with these Terms. You must not misuse,
                       disrupt, damage, reverse engineer, or attempt to
                       gain unauthorized access to the platform.
@@ -291,7 +291,7 @@ export default function TermsPage() {
                     <p>
                       You retain ownership of content, data, documents,
                       prompts, files, media, and other materials that you
-                      submit to NOVA, subject to the rights necessary for
+                      submit to SYRAVEN, subject to the rights necessary for
                       us to provide and operate the services.
                     </p>
 
@@ -303,7 +303,7 @@ export default function TermsPage() {
                     </p>
 
                     <p>
-                      NOVA does not claim ownership of your original
+                      SYRAVEN does not claim ownership of your original
                       content solely because you use our services.
                     </p>
                   </div>
@@ -318,7 +318,7 @@ export default function TermsPage() {
 
                   <div className="mt-5 space-y-5 text-[15px] leading-8 text-white/55">
                     <p>
-                      Some NOVA features use artificial intelligence,
+                      Some SYRAVEN features use artificial intelligence,
                       machine learning, automated reasoning, generative
                       systems, agents, or other computational processes.
                     </p>
@@ -356,14 +356,14 @@ export default function TermsPage() {
 
                   <div className="mt-5 space-y-5 text-[15px] leading-8 text-white/55">
                     <p>
-                      Certain NOVA services require payment. Prices,
+                      Certain SYRAVEN services require payment. Prices,
                       subscription terms, billing intervals, usage limits,
                       and applicable taxes may be presented to you before
                       completing a purchase.
                     </p>
 
                     <p>
-                      You authorize NOVA and its authorized payment
+                      You authorize SYRAVEN and its authorized payment
                       providers to charge the applicable fees associated
                       with your selected plan or services.
                     </p>
@@ -388,7 +388,7 @@ export default function TermsPage() {
 
                   <div className="mt-5 space-y-5 text-[15px] leading-8 text-white/55">
                     <p>
-                      NOVA, its platform, software, interfaces, systems,
+                      SYRAVEN, its platform, software, interfaces, systems,
                       branding, documentation, and proprietary technology
                       are protected by applicable intellectual property
                       laws.
@@ -397,7 +397,7 @@ export default function TermsPage() {
                     <p>
                       Except where expressly permitted, you may not copy,
                       modify, distribute, sell, lease, sublicense, or
-                      create derivative works based on protected NOVA
+                      create derivative works based on protected SYRAVEN
                       technology.
                     </p>
                   </div>
@@ -437,12 +437,12 @@ export default function TermsPage() {
 
                   <div className="mt-5 space-y-5 text-[15px] leading-8 text-white/55">
                     <p>
-                      You may stop using NOVA at any time, subject to any
+                      You may stop using SYRAVEN at any time, subject to any
                       active subscription or contractual commitments.
                     </p>
 
                     <p>
-                      NOVA may suspend or terminate access where
+                      SYRAVEN may suspend or terminate access where
                       reasonably necessary to protect users, infrastructure,
                       intellectual property, security, legal compliance,
                       or the integrity of the platform.
@@ -467,7 +467,7 @@ export default function TermsPage() {
                   <div className="mt-5 space-y-5 text-[15px] leading-8 text-white/55">
                     <p>
                       To the maximum extent permitted by applicable law,
-                      NOVA services are provided on an “as is” and “as
+                      SYRAVEN services are provided on an “as is” and “as
                       available” basis without warranties of any kind,
                       whether express, implied, or statutory.
                     </p>
@@ -490,7 +490,7 @@ export default function TermsPage() {
                   <div className="mt-5 space-y-5 text-[15px] leading-8 text-white/55">
                     <p>
                       To the maximum extent permitted by applicable law,
-                      NOVA and its affiliates, officers, employees,
+                      SYRAVEN and its affiliates, officers, employees,
                       partners, and suppliers will not be liable for
                       indirect, incidental, special, consequential, or
                       punitive damages arising from or related to your use
@@ -527,7 +527,7 @@ export default function TermsPage() {
                     </p>
 
                     <p>
-                      Your continued use of NOVA after updated Terms
+                      Your continued use of SYRAVEN after updated Terms
                       become effective constitutes acceptance of those
                       updated Terms where permitted by law.
                     </p>
@@ -544,20 +544,20 @@ export default function TermsPage() {
                   <div className="mt-5 text-[15px] leading-8 text-white/55">
                     <p>
                       If you have questions, concerns, or requests related
-                      to these Terms of Service, you may contact the NOVA
+                      to these Terms of Service, you may contact the SYRAVEN
                       legal team.
                     </p>
 
                     <div className="mt-6 rounded-2xl border border-white/10 bg-black/20 p-6">
                       <p className="font-medium text-white">
-                        NOVA Legal
+                        SYRAVEN Legal
                       </p>
 
                       <a
-                        href="mailto:legal@nova.ai"
+                        href="mailto:legal@syraven.ai"
                         className="mt-3 inline-block text-white/60 transition hover:text-white"
                       >
-                        legal@nova.ai
+                        legal@syraven.ai
                       </a>
 
                       <p className="mt-3 text-sm text-white/35">

@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 /* =========================================================
-   NOVA — GLOBAL DESIGN SYSTEM
+   SYRAVEN — GLOBAL DESIGN SYSTEM
    ========================================================= */
 
 :root {
@@ -233,33 +233,33 @@ select:-webkit-autofill:focus {
    UTILITY CLASSES
    ========================================================= */
 
-.nova-glass {
+.syraven-glass {
   background: rgba(17, 17, 20, 0.72);
   border: 1px solid rgba(255, 255, 255, 0.08);
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
 }
 
-.nova-card {
+.syraven-card {
   background: rgba(255, 255, 255, 0.025);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: var(--radius-2xl);
 }
 
-.nova-card-hover {
+.syraven-card-hover {
   transition:
     border-color 180ms ease,
     background-color 180ms ease,
     transform 180ms ease;
 }
 
-.nova-card-hover:hover {
+.syraven-card-hover:hover {
   background: rgba(255, 255, 255, 0.045);
   border-color: rgba(255, 255, 255, 0.18);
   transform: translateY(-1px);
 }
 
-.nova-gradient-text {
+.syraven-gradient-text {
   background: linear-gradient(
     135deg,
     #ffffff 0%,
@@ -273,19 +273,19 @@ select:-webkit-autofill:focus {
   -webkit-text-fill-color: transparent;
 }
 
-.nova-muted {
+.syraven-muted {
   color: rgba(255, 255, 255, 0.45);
 }
 
-.nova-subtle {
+.syraven-subtle {
   color: rgba(255, 255, 255, 0.3);
 }
 
-.nova-border {
+.syraven-border {
   border-color: rgba(255, 255, 255, 0.1);
 }
 
-.nova-divider {
+.syraven-divider {
   width: 100%;
   height: 1px;
   background: rgba(255, 255, 255, 0.08);
@@ -331,7 +331,7 @@ select:-webkit-autofill:focus {
    ANIMATIONS
    ========================================================= */
 
-@keyframes nova-fade-in {
+@keyframes syraven-fade-in {
   from {
     opacity: 0;
   }
@@ -341,7 +341,7 @@ select:-webkit-autofill:focus {
   }
 }
 
-@keyframes nova-slide-up {
+@keyframes syraven-slide-up {
   from {
     opacity: 0;
     transform: translateY(12px);
@@ -353,7 +353,7 @@ select:-webkit-autofill:focus {
   }
 }
 
-@keyframes nova-scale-in {
+@keyframes syraven-scale-in {
   from {
     opacity: 0;
     transform: scale(0.98);
@@ -365,7 +365,7 @@ select:-webkit-autofill:focus {
   }
 }
 
-@keyframes nova-pulse {
+@keyframes syraven-pulse {
   0%,
   100% {
     opacity: 1;
@@ -376,13 +376,13 @@ select:-webkit-autofill:focus {
   }
 }
 
-@keyframes nova-spin {
+@keyframes syraven-spin {
   to {
     transform: rotate(360deg);
   }
 }
 
-@keyframes nova-shimmer {
+@keyframes syraven-shimmer {
   0% {
     background-position: -200% center;
   }
@@ -392,27 +392,27 @@ select:-webkit-autofill:focus {
   }
 }
 
-.animate-nova-fade-in {
-  animation: nova-fade-in 300ms ease-out both;
+.animate-syraven-fade-in {
+  animation: syraven-fade-in 300ms ease-out both;
 }
 
-.animate-nova-slide-up {
-  animation: nova-slide-up 400ms ease-out both;
+.animate-syraven-slide-up {
+  animation: syraven-slide-up 400ms ease-out both;
 }
 
-.animate-nova-scale-in {
-  animation: nova-scale-in 250ms ease-out both;
+.animate-syraven-scale-in {
+  animation: syraven-scale-in 250ms ease-out both;
 }
 
-.animate-nova-pulse {
-  animation: nova-pulse 2s ease-in-out infinite;
+.animate-syraven-pulse {
+  animation: syraven-pulse 2s ease-in-out infinite;
 }
 
-.animate-nova-spin {
-  animation: nova-spin 1s linear infinite;
+.animate-syraven-spin {
+  animation: syraven-spin 1s linear infinite;
 }
 
-.animate-nova-shimmer {
+.animate-syraven-shimmer {
   background: linear-gradient(
     90deg,
     transparent 0%,
@@ -420,7 +420,7 @@ select:-webkit-autofill:focus {
     transparent 100%
   );
   background-size: 200% 100%;
-  animation: nova-shimmer 2s linear infinite;
+  animation: syraven-shimmer 2s linear infinite;
 }
 
 /* =========================================================

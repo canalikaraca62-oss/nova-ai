@@ -3,15 +3,15 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: {
-    default: "NOVA",
-    template: "%s | NOVA",
+    default: "SYRAVEN",
+    template: "%s | SYRAVEN",
   },
 
   description:
-    "NOVA is an intelligent workspace for AI agents, projects, knowledge, collaboration, automation, and creative work.",
+    "SYRAVEN is an intelligent workspace for AI agents, projects, knowledge, collaboration, automation, and creative work.",
 
   keywords: [
-    "NOVA",
+    "SYRAVEN",
     "AI",
     "Artificial Intelligence",
     "AI Agents",
@@ -24,12 +24,12 @@ export const metadata: Metadata = {
 
   authors: [
     {
-      name: "NOVA",
+      name: "SYRAVEN",
     },
   ],
 
-  creator: "NOVA",
-  publisher: "NOVA",
+  creator: "SYRAVEN",
+  publisher: "SYRAVEN",
 
   robots: {
     index: true,
@@ -50,15 +50,15 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     locale: "en_US",
-    siteName: "NOVA",
-    title: "NOVA — Intelligent Workspace",
+    siteName: "SYRAVEN",
+    title: "SYRAVEN — Intelligent Workspace",
     description:
       "The intelligent workspace for AI agents, projects, knowledge, automation, and collaboration.",
   },
 
   twitter: {
     card: "summary_large_image",
-    title: "NOVA — Intelligent Workspace",
+    title: "SYRAVEN — Intelligent Workspace",
     description:
       "The intelligent workspace for AI agents, projects, knowledge, automation, and collaboration.",
   },

@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 /* ==================================================
-   NOVA / SYRAVEN OPENAI TEST API
+   SYRAVEN / SYRAVEN OPENAI TEST API
    app/api/test-openai/route.ts
 ================================================== */
 
@@ -264,7 +264,7 @@ export async function POST(
       {
         role: "system",
         content:
-          "You are the AI engine powering NOVA. Be concise, accurate, helpful, and professional.",
+          "You are the AI engine powering SYRAVEN. Be concise, accurate, helpful, and professional.",
       },
       {
         role: "user",
@@ -326,7 +326,7 @@ export async function POST(
 
     if (!response.ok) {
       console.error(
-        "NOVA OPENAI TEST ERROR:",
+        "SYRAVEN OPENAI TEST ERROR:",
         {
           status:
             response.status,
@@ -419,7 +419,7 @@ export async function POST(
       error.name === "AbortError";
 
     console.error(
-      "NOVA OPENAI TEST ROUTE ERROR:",
+      "SYRAVEN OPENAI TEST ROUTE ERROR:",
       error
     );
 

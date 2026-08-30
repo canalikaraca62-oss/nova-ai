@@ -40,7 +40,7 @@ const projects: Project[] = [
     description:
       "A next-generation AI intelligence infrastructure for research, automation and strategic decision making.",
     status: "active",
-    workspace: "NOVA Core",
+    workspace: "SYRAVEN Core",
     progress: 68,
     members: 24,
     tasksCompleted: 86,
@@ -77,8 +77,8 @@ const projects: Project[] = [
     accent: "from-amber-500/20 via-orange-500/10 to-transparent",
   },
   {
-    id: "nova-marketplace",
-    name: "NOVA Marketplace",
+    id: "syraven-marketplace",
+    name: "SYRAVEN Marketplace",
     description:
       "A marketplace for AI agents, automation templates, workflows and intelligence tools.",
     status: "active",
@@ -96,7 +96,7 @@ const projects: Project[] = [
     description:
       "A connected intelligence layer for documents, memories, entities and organizational knowledge.",
     status: "planning",
-    workspace: "NOVA Core",
+    workspace: "SYRAVEN Core",
     progress: 31,
     members: 9,
     tasksCompleted: 22,
@@ -187,7 +187,7 @@ export default function ProjectsPage() {
           <div>
             <div className="flex items-center gap-2 text-sm font-medium text-primary">
               <Sparkles className="h-4 w-4" />
-              NOVA Projects
+              SYRAVEN Projects
             </div>
 
             <h1 className="mt-3 text-4xl font-semibold tracking-tight text-foreground sm:text-5xl">
@@ -362,7 +362,7 @@ export default function ProjectsPage() {
             <div>
               <div className="flex items-center gap-2 text-sm font-semibold text-primary">
                 <Sparkles className="h-4 w-4" />
-                NOVA Intelligence
+                SYRAVEN Intelligence
               </div>
 
               <h2 className="mt-3 text-2xl font-semibold tracking-tight text-foreground">

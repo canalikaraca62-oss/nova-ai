@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 /* ==================================================
-   NOVA VOICE SPEAK API
+   SYRAVEN VOICE SPEAK API
    app/api/voice/speak/route.ts
 
    Text -> Speech endpoint
@@ -50,7 +50,7 @@ type VoiceName =
   | "coral"
   | "echo"
   | "fable"
-  | "nova"
+  | "syraven"
   | "onyx"
   | "sage"
   | "shimmer"
@@ -84,7 +84,7 @@ const ALLOWED_VOICES:
     "coral",
     "echo",
     "fable",
-    "nova",
+    "syraven",
     "onyx",
     "sage",
     "shimmer",
@@ -504,7 +504,7 @@ export async function POST(
         );
 
       console.error(
-        "NOVA VOICE SPEAK ERROR:",
+        "SYRAVEN VOICE SPEAK ERROR:",
         {
           status:
             response.status,
@@ -562,21 +562,21 @@ export async function POST(
             ),
 
           "Content-Disposition":
-            `inline; filename="nova-voice.${format}"`,
+            `inline; filename="syraven-voice.${format}"`,
 
           "Cache-Control":
             "no-store",
 
-          "X-NOVA-Provider":
+          "X-SYRAVEN-Provider":
             "openai",
 
-          "X-NOVA-Model":
+          "X-SYRAVEN-Model":
             model,
 
-          "X-NOVA-Voice":
+          "X-SYRAVEN-Voice":
             voice,
 
-          "X-NOVA-Latency-Ms":
+          "X-SYRAVEN-Latency-Ms":
             String(
               Date.now() -
               startedAt
@@ -591,7 +591,7 @@ export async function POST(
         "AbortError";
 
     console.error(
-      "NOVA VOICE SPEAK ROUTE ERROR:",
+      "SYRAVEN VOICE SPEAK ROUTE ERROR:",
       error
     );
 

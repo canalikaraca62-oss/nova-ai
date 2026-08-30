@@ -138,10 +138,10 @@ const ChatContext = createContext<
 >(undefined);
 
 const CHAT_STORAGE_KEY =
-  "nova-chat-conversations";
+"syraven-chat-conversations";
 
 const MESSAGE_STORAGE_KEY =
-  "nova-chat-messages";
+  "syraven-chat-messages";
 
 function createId(prefix: string): string {
   if (

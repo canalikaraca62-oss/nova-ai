@@ -184,7 +184,7 @@ const ProjectContext = createContext<
    CONSTANTS
 ========================================================= */
 
-const PROJECT_STORAGE_KEY = "nova-projects";
+const PROJECT_STORAGE_KEY = "syraven-projects";
 
 /* =========================================================
    HELPERS

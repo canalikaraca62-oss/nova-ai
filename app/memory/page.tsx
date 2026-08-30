@@ -45,7 +45,7 @@ const INITIAL_MEMORIES: MemoryItem[] = [
     id: "memory-1",
     title: "Product vision",
     content:
-      "NOVA is being built as a large-scale intelligent platform that combines AI agents, knowledge, automation and powerful workspaces.",
+      "SYRAVEN is being built as a large-scale intelligent platform that combines AI agents, knowledge, automation and powerful workspaces.",
     category: "Project",
     importance: "High",
     createdAt: "Updated today",
@@ -315,7 +315,7 @@ export default function MemoryPage() {
             </h1>
 
             <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
-              Manage the information NOVA remembers to
+              Manage the information SYRAVEN remembers to
               create more intelligent, personalized and
               context-aware experiences.
             </p>
@@ -581,7 +581,7 @@ export default function MemoryPage() {
                 </h2>
 
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Store important context for NOVA.
+                  Store important context for SYRAVEN.
                 </p>
               </div>
 
@@ -615,7 +615,7 @@ export default function MemoryPage() {
                   onChange={(event) =>
                     setNewTitle(event.target.value)
                   }
-                  placeholder="What should NOVA remember?"
+                  placeholder="What should SYRAVEN remember?"
                   className="h-11 w-full rounded-xl border border-border bg-background px-4 text-sm outline-none placeholder:text-muted-foreground focus:border-primary"
                 />
               </div>

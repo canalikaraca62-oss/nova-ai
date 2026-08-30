@@ -1,1044 +1,592 @@
-// ==================================================
-// GROQ AI CLIENT
-// Production-ready centralized AI client
-// ==================================================
+import type {
+  AIMessage,
+  AIMessageRole,
+} from "./context";
 
-// ==================================================
-// TYPES
-// ==================================================
+/**
+ * Groq API configuration.
+ */
+export interface GroqConfig {
+  apiKey?: string;
 
-export type AIChatRole =
+  baseUrl?: string;
+
+  defaultModel?: string;
+
+  timeout?: number;
+
+  maxRetries?: number;
+}
+
+/**
+ * Supported model roles for the Groq API.
+ */
+export type GroqMessageRole =
   | "system"
   | "user"
-  | "assistant";
+  | "assistant"
+  | "tool";
 
-export type AIChatMessage = {
-  role: AIChatRole;
+/**
+ * Message sent to Groq.
+ */
+export interface GroqMessage {
+  role: GroqMessageRole;
+
   content: string;
-};
+}
 
-export type ReasoningEffort =
-  | "low"
-  | "medium"
-  | "high";
-
-type GroqUsage = {
-  prompt_tokens?: number;
-  completion_tokens?: number;
-  total_tokens?: number;
-
-  completion_tokens_details?: {
-    reasoning_tokens?: number;
-  };
-};
-
-type GroqChoice = {
-  finish_reason?: string | null;
-
-  message?: {
-    content?: string | null;
-    reasoning?: string | null;
-  };
-};
-
-type GroqResponse = {
-  id?: string;
-  model?: string;
-
-  choices?: GroqChoice[];
-
-  usage?: GroqUsage;
-
-  error?: {
-    message?: string;
-    type?: string;
-    code?: string;
-  };
-};
-
-export type GroqRequestOptions = {
+/**
+ * Chat completion options.
+ */
+export interface GroqChatOptions {
   model?: string;
 
   temperature?: number;
 
-  topP?: number;
-
   maxTokens?: number;
 
-  reasoningEffort?: ReasoningEffort;
+  topP?: number;
 
-  includeReasoning?: boolean;
+  stop?: string[];
 
-  timeoutMs?: number;
+  stream?: boolean;
+}
 
-  signal?: AbortSignal;
-};
+/**
+ * Simplified Groq completion result.
+ */
+export interface GroqChatResult {
+  id: string;
 
-// ==================================================
-// CONFIG
-// ==================================================
+  model: string;
 
-const GROQ_API_URL =
-  "https://api.groq.com/openai/v1/chat/completions";
+  content: string;
 
-const DEFAULT_MODEL =
-  process.env.GROQ_MODEL ||
-  "openai/gpt-oss-20b";
+  finishReason?: string;
 
-const DEFAULT_MAX_TOKENS = 2200;
+  usage?: {
+    promptTokens?: number;
 
-const DEFAULT_TIMEOUT_MS = 60_000;
+    completionTokens?: number;
 
-const DEFAULT_MAX_RETRIES = 2;
+    totalTokens?: number;
+  };
 
-const DEFAULT_TEMPERATURE = 0.7;
+  raw: unknown;
+}
 
-const DEFAULT_STREAM_TEMPERATURE = 0.6;
-
-const DEFAULT_TOP_P = 0.95;
-
-// ==================================================
-// ERROR CLASS
-// ==================================================
-
+/**
+ * Groq API error.
+ */
 export class GroqError extends Error {
-  readonly status: number;
+  public readonly status?: number;
 
-  readonly retryable: boolean;
+  public readonly code?: string;
 
-  readonly providerMessage?: string;
+  public readonly details?: unknown;
 
-  constructor({
-    message,
-    status,
-    retryable = false,
-    providerMessage,
-  }: {
-    message: string;
-    status: number;
-    retryable?: boolean;
-    providerMessage?: string;
-  }) {
+  constructor(
+    message: string,
+    options?: {
+      status?: number;
+      code?: string;
+      details?: unknown;
+    }
+  ) {
     super(message);
 
     this.name = "GroqError";
 
-    this.status = status;
+    this.status = options?.status;
 
-    this.retryable = retryable;
+    this.code = options?.code;
 
-    this.providerMessage =
-      providerMessage;
-
-    Object.setPrototypeOf(
-      this,
-      GroqError.prototype
-    );
+    this.details = options?.details;
   }
 }
 
-// ==================================================
-// GET API KEY
-// ==================================================
-
-function getGroqApiKey(): string {
-  const apiKey =
-    process.env.GROQ_API_KEY;
-
-  if (!apiKey) {
-    throw new Error(
-      "GROQ_API_KEY bulunamadı."
-    );
-  }
-
-  return apiKey;
-}
-
-// ==================================================
-// VALIDATION
-// ==================================================
-
-function validateMessages(
-  messages: AIChatMessage[]
-): void {
-  if (!Array.isArray(messages)) {
-    throw new Error(
-      "AI mesajları geçersiz."
-    );
-  }
-
-  if (messages.length === 0) {
-    throw new Error(
-      "AI için en az bir mesaj gerekli."
-    );
-  }
-
-  const validRoles: AIChatRole[] = [
-    "system",
-    "user",
-    "assistant",
-  ];
-
-  for (const message of messages) {
-    if (
-      !message ||
-      !validRoles.includes(
-        message.role
-      )
-    ) {
-      throw new Error(
-        "Geçersiz AI mesaj rolü."
-      );
-    }
-
-    if (
-      typeof message.content !==
-        "string"
-    ) {
-      throw new Error(
-        "AI mesaj içeriği string olmalıdır."
-      );
-    }
-
-    if (!message.content.trim()) {
-      throw new Error(
-        "Boş AI mesajı gönderilemez."
-      );
-    }
-  }
-}
-
-function normalizeTemperature(
-  value: number | undefined,
-  fallback: number
-): number {
-  const result =
-    value ?? fallback;
-
-  if (
-    !Number.isFinite(result) ||
-    result < 0 ||
-    result > 2
-  ) {
-    throw new Error(
-      "temperature 0 ile 2 arasında olmalıdır."
-    );
-  }
-
-  return result;
-}
-
-function normalizeTopP(
-  value: number | undefined
-): number {
-  const result =
-    value ?? DEFAULT_TOP_P;
-
-  if (
-    !Number.isFinite(result) ||
-    result < 0 ||
-    result > 1
-  ) {
-    throw new Error(
-      "topP 0 ile 1 arasında olmalıdır."
-    );
-  }
-
-  return result;
-}
-
-function normalizeMaxTokens(
-  value: number | undefined
-): number {
-  const result =
-    value ?? DEFAULT_MAX_TOKENS;
-
-  if (
-    !Number.isFinite(result) ||
-    result <= 0
-  ) {
-    throw new Error(
-      "maxTokens 0'dan büyük olmalıdır."
-    );
-  }
-
-  return Math.floor(result);
-}
-
-// ==================================================
-// ERROR PARSING
-// ==================================================
-
-function parseProviderError(
-  errorText: string
-): string | undefined {
-  if (!errorText) {
-    return undefined;
-  }
-
-  try {
-    const parsed =
-      JSON.parse(errorText) as GroqResponse;
-
-    const message =
-      parsed?.error?.message;
-
-    if (
-      typeof message === "string" &&
-      message.trim()
-    ) {
-      return message.trim();
-    }
-  } catch {
-    // JSON değilse provider mesajı
-    // olarak kullanmıyoruz.
-  }
-
-  return undefined;
-}
-
-// ==================================================
-// ERROR FACTORY
-// ==================================================
-
-function createGroqError(
-  status: number,
-  errorText: string
-): GroqError {
-  const providerMessage =
-    parseProviderError(errorText);
-
-  console.error(
-    "GROQ API HATASI:",
-    {
-      status,
-      providerMessage,
-    }
-  );
-
-  switch (status) {
-    case 400:
-      return new GroqError({
-        status,
-
-        retryable: false,
-
-        providerMessage,
-
-        message:
-          "AI isteği geçersiz.",
-      });
-
-    case 401:
-      return new GroqError({
-        status,
-
-        retryable: false,
-
-        providerMessage,
-
-        message:
-          "AI servis yetkilendirmesi başarısız.",
-      });
-
-    case 403:
-      return new GroqError({
-        status,
-
-        retryable: false,
-
-        providerMessage,
-
-        message:
-          "AI servisine erişim izni yok.",
-      });
-
-    case 404:
-      return new GroqError({
-        status,
-
-        retryable: false,
-
-        providerMessage,
-
-        message:
-          "AI modeli veya servis bulunamadı.",
-      });
-
-    case 413:
-      return new GroqError({
-        status,
-
-        retryable: false,
-
-        providerMessage,
-
-        message:
-          "Gönderilen içerik model sınırını aştı.",
-      });
-
-    case 422:
-      return new GroqError({
-        status,
-
-        retryable: false,
-
-        providerMessage,
-
-        message:
-          "AI isteği işlenemedi.",
-      });
-
-    case 429:
-      return new GroqError({
-        status,
-
-        retryable: true,
-
-        providerMessage,
-
-        message:
-          "AI kullanım limiti geçici olarak aşıldı.",
-      });
-
-    case 498:
-      return new GroqError({
-        status,
-
-        retryable: true,
-
-        providerMessage,
-
-        message:
-          "AI işlem kapasitesi geçici olarak dolu.",
-      });
-
-    case 500:
-    case 502:
-    case 503:
-    case 504:
-      return new GroqError({
-        status,
-
-        retryable: true,
-
-        providerMessage,
-
-        message:
-          "AI servisi geçici olarak kullanılamıyor.",
-      });
-
-    default:
-      return new GroqError({
-        status,
-
-        retryable: false,
-
-        providerMessage,
-
-        message:
-          `AI servisi hata verdi. HTTP ${status}`,
-      });
-  }
-}
-
-// ==================================================
-// SLEEP
-// ==================================================
-
-function sleep(
-  milliseconds: number
-): Promise<void> {
-  return new Promise(
-    (resolve) => {
-      setTimeout(
-        resolve,
-        milliseconds
-      );
-    }
-  );
-}
-
-// ==================================================
-// RETRY DELAY
-// ==================================================
-
-function getRetryDelay(
-  response: Response,
-  attempt: number
-): number {
-  const retryAfter =
-    response.headers.get(
-      "retry-after"
-    );
-
-  if (retryAfter) {
-    const seconds =
-      Number(retryAfter);
-
-    if (
-      Number.isFinite(seconds) &&
-      seconds > 0
-    ) {
-      return Math.min(
-        seconds * 1000,
-        30_000
-      );
-    }
-  }
-
-  // Exponential backoff + küçük random jitter
-  const baseDelay =
-    500 *
-    Math.pow(
-      2,
-      attempt
-    );
-
-  const jitter =
-    Math.floor(
-      Math.random() * 250
-    );
-
-  return Math.min(
-    baseDelay + jitter,
-    10_000
-  );
-}
-
-// ==================================================
-// COMBINED ABORT SIGNAL
-// ==================================================
-
-function createRequestSignal(
-  timeoutMs: number,
-  externalSignal?: AbortSignal
-): {
-  signal: AbortSignal;
-  cleanup: () => void;
-} {
-  const controller =
-    new AbortController();
-
-  const timeout =
-    setTimeout(
-      () => {
-        controller.abort(
-          new Error(
-            "Groq isteği zaman aşımına uğradı."
-          )
-        );
-      },
-      timeoutMs
-    );
-
-  const abortFromExternal =
-    () => {
-      controller.abort(
-        externalSignal?.reason
-      );
-    };
-
-  if (externalSignal) {
-    if (externalSignal.aborted) {
-      abortFromExternal();
-    } else {
-      externalSignal.addEventListener(
-        "abort",
-        abortFromExternal,
-        {
-          once: true,
-        }
-      );
-    }
-  }
+/**
+ * Default Groq configuration.
+ */
+const DEFAULT_CONFIG: Required<
+  Pick<
+    GroqConfig,
+    "baseUrl" | "defaultModel" | "timeout" | "maxRetries"
+  >
+> = {
+  baseUrl: "https://api.groq.com/openai/v1",
+
+  defaultModel:
+    process.env.GROQ_MODEL ||
+    "llama-3.3-70b-versatile",
+
+  timeout: 120000,
+
+  maxRetries: 2,
+};
+
+/**
+ * Converts an internal AI message into
+ * a Groq-compatible message.
+ */
+export function toGroqMessage(
+  message: Pick<AIMessage, "role" | "content">
+): GroqMessage {
+  const roleMap: Record<
+    AIMessageRole,
+    GroqMessageRole
+  > = {
+    system: "system",
+    user: "user",
+    assistant: "assistant",
+    tool: "tool",
+  };
 
   return {
-    signal:
-      controller.signal,
+    role: roleMap[message.role],
 
-    cleanup: () => {
-      clearTimeout(timeout);
-
-      if (externalSignal) {
-        externalSignal.removeEventListener(
-          "abort",
-          abortFromExternal
-        );
-      }
-    },
+    content: message.content,
   };
 }
 
-// ==================================================
-// BUILD REQUEST BODY
-// ==================================================
-
-function buildRequestBody(
-  messages: AIChatMessage[],
-  options: {
-    model?: string;
-    temperature: number;
-    topP: number;
-    maxTokens: number;
-    reasoningEffort?: ReasoningEffort;
-    includeReasoning?: boolean;
-    stream: boolean;
-  }
-) {
-  return {
-    model:
-      options.model ||
-      DEFAULT_MODEL,
-
-    messages,
-
-    temperature:
-      options.temperature,
-
-    top_p:
-      options.topP,
-
-    max_completion_tokens:
-      options.maxTokens,
-
-    stream:
-      options.stream,
-
-    ...(options.reasoningEffort
-      ? {
-          reasoning_effort:
-            options.reasoningEffort,
-        }
-      : {}),
-
-    ...(typeof options.includeReasoning ===
-    "boolean"
-      ? {
-          include_reasoning:
-            options.includeReasoning,
-        }
-      : {}),
-  };
+/**
+ * Converts multiple internal messages
+ * into Groq-compatible messages.
+ */
+export function toGroqMessages(
+  messages: Array<
+    Pick<AIMessage, "role" | "content">
+  >
+): GroqMessage[] {
+  return messages.map(toGroqMessage);
 }
 
-// ==================================================
-// FETCH GROQ
-// ==================================================
-
-async function fetchGroq(
-  body: Record<string, unknown>,
-  options?: {
-    timeoutMs?: number;
-    signal?: AbortSignal;
-    retries?: number;
-  }
-): Promise<Response> {
-  const apiKey =
-    getGroqApiKey();
-
-  const timeoutMs =
-    options?.timeoutMs ??
-    DEFAULT_TIMEOUT_MS;
-
-  const maxRetries =
-    options?.retries ??
-    DEFAULT_MAX_RETRIES;
-
-  for (
-    let attempt = 0;
-    attempt <= maxRetries;
-    attempt++
-  ) {
-    const {
-      signal,
-      cleanup,
-    } =
-      createRequestSignal(
-        timeoutMs,
-        options?.signal
-      );
-
-    try {
-      const response =
-        await fetch(
-          GROQ_API_URL,
-          {
-            method: "POST",
-
-            headers: {
-              Authorization:
-                `Bearer ${apiKey}`,
-
-              "Content-Type":
-                "application/json",
-            },
-
-            body:
-              JSON.stringify(body),
-
-            signal,
-          }
-        );
-
-      cleanup();
-
-      if (response.ok) {
-        return response;
-      }
-
-      const errorText =
-        await response.text();
-
-      const groqError =
-        createGroqError(
-          response.status,
-          errorText
-        );
-
-      const canRetry =
-        groqError.retryable &&
-        attempt < maxRetries;
-
-      if (!canRetry) {
-        throw groqError;
-      }
-
-      const retryDelay =
-        getRetryDelay(
-          response,
-          attempt
-        );
-
-      console.warn(
-        "GROQ RETRY:",
-        {
-          attempt:
-            attempt + 1,
-
-          maxRetries,
-
-          status:
-            response.status,
-
-          retryDelay,
-        }
-      );
-
-      await sleep(
-        retryDelay
-      );
-    } catch (error) {
-      cleanup();
-
-      if (
-        error instanceof GroqError
-      ) {
-        throw error;
-      }
-
-      // Kullanıcı isteği iptal ettiyse
-      // yeniden deneme yapma.
-      if (
-        options?.signal?.aborted
-      ) {
-        throw error;
-      }
-
-      // Network veya timeout hatası
-      const isLastAttempt =
-        attempt >= maxRetries;
-
-      if (isLastAttempt) {
-        console.error(
-          "GROQ NETWORK/TIMEOUT HATASI:",
-          error
-        );
-
-        throw new Error(
-          "AI servisine bağlanırken hata oluştu."
-        );
-      }
-
-      const retryDelay =
-        Math.min(
-          500 *
-            Math.pow(
-              2,
-              attempt
-            ) +
-            Math.floor(
-              Math.random() * 250
-            ),
-          10_000
-        );
-
-      console.warn(
-        "GROQ NETWORK RETRY:",
-        {
-          attempt:
-            attempt + 1,
-
-          maxRetries,
-
-          retryDelay,
-        }
-      );
-
-      await sleep(
-        retryDelay
-      );
-    }
-  }
-
-  throw new Error(
-    "AI isteği tamamlanamadı."
-  );
-}
-
-// ==================================================
-// NORMAL AI REQUEST
-// ==================================================
-
-export async function callGroq(
-  messages: AIChatMessage[],
-  options?: GroqRequestOptions
-): Promise<string> {
-  validateMessages(
-    messages
-  );
-
-  const temperature =
-    normalizeTemperature(
-      options?.temperature,
-      DEFAULT_TEMPERATURE
-    );
-
-  const topP =
-    normalizeTopP(
-      options?.topP
-    );
-
-  const maxTokens =
-    normalizeMaxTokens(
-      options?.maxTokens
-    );
-
-  const response =
-    await fetchGroq(
-      buildRequestBody(
-        messages,
-        {
-          model:
-            options?.model,
-
-          temperature,
-
-          topP,
-
-          maxTokens,
-
-          reasoningEffort:
-            options?.reasoningEffort,
-
-          includeReasoning:
-            options?.includeReasoning ??
-            false,
-
-          stream: false,
-        }
-      ),
-      {
-        timeoutMs:
-          options?.timeoutMs,
-
-        signal:
-          options?.signal,
-      }
-    );
-
-  const data =
-    await response.json() as GroqResponse;
-
-  const choice =
-    data?.choices?.[0];
-
-  const content =
-    choice?.message?.content;
-
-  if (
-    typeof content === "string" &&
-    content.trim()
-  ) {
-    return content.trim();
-  }
-
-  const finishReason =
-    choice?.finish_reason;
-
-  console.error(
-    "GROQ BOŞ CEVAP:",
-    {
-      requestId:
-        data?.id,
-
-      model:
-        data?.model,
-
-      finishReason,
-
-      usage:
-        data?.usage,
-    }
-  );
-
-  if (
-    finishReason ===
-    "length"
-  ) {
-    throw new GroqError({
-      status: 200,
-
-      retryable: false,
-
-      message:
-        "AI cevap üretmeden önce çıktı token limitine ulaştı.",
-    });
-  }
-
-  throw new GroqError({
-    status: 200,
-
-    retryable: false,
-
-    message:
-      "AI boş bir cevap döndürdü.",
+/**
+ * Safely waits for a number of milliseconds.
+ */
+function sleep(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, milliseconds);
   });
 }
 
-// ==================================================
-// STREAM AI REQUEST
-// ==================================================
-
-export async function streamGroq(
-  messages: AIChatMessage[],
-  options?: GroqRequestOptions
-): Promise<Response> {
-  validateMessages(
-    messages
-  );
-
-  const temperature =
-    normalizeTemperature(
-      options?.temperature,
-      DEFAULT_STREAM_TEMPERATURE
-    );
-
-  const topP =
-    normalizeTopP(
-      options?.topP
-    );
-
-  const maxTokens =
-    normalizeMaxTokens(
-      options?.maxTokens
-    );
-
-  const response =
-    await fetchGroq(
-      buildRequestBody(
-        messages,
-        {
-          model:
-            options?.model,
-
-          temperature,
-
-          topP,
-
-          maxTokens,
-
-          reasoningEffort:
-            options?.reasoningEffort,
-
-          includeReasoning:
-            options?.includeReasoning ??
-            false,
-
-          stream: true,
-        }
-      ),
-      {
-        timeoutMs:
-          options?.timeoutMs,
-
-        signal:
-          options?.signal,
-
-        // Stream bağlantısı kurulmadan
-        // oluşan geçici hatalarda retry yapılır.
-        retries:
-          DEFAULT_MAX_RETRIES,
+/**
+ * Returns a readable error message from
+ * an unknown API response.
+ */
+function getErrorMessage(
+  data: unknown
+): string {
+  if (
+    typeof data === "object" &&
+    data !== null &&
+    "error" in data
+  ) {
+    const error = (
+      data as {
+        error?: unknown;
       }
-    );
+    ).error;
 
-  if (!response.body) {
-    throw new GroqError({
-      status: 500,
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "message" in error
+    ) {
+      const message = (
+        error as {
+          message?: unknown;
+        }
+      ).message;
 
-      retryable: false,
-
-      message:
-        "AI stream body bulunamadı.",
-    });
+      if (typeof message === "string") {
+        return message;
+      }
+    }
   }
 
-  return response;
+  return "Groq API request failed.";
 }
 
-// ==================================================
-// CONVENIENCE HELPERS
-// ==================================================
+/**
+ * Groq AI client.
+ *
+ * Uses the OpenAI-compatible Groq API.
+ */
+export class GroqClient {
+  private readonly apiKey: string;
 
-export async function callGroqFast(
-  messages: AIChatMessage[],
-  options?: Omit<
-    GroqRequestOptions,
-    "model"
-  >
-): Promise<string> {
-  const fastModel =
-    process.env.GROQ_FAST_MODEL;
+  private readonly baseUrl: string;
 
-  return callGroq(
-    messages,
-    {
-      ...options,
+  private readonly defaultModel: string;
 
-      ...(fastModel
-        ? {
-            model:
-              fastModel,
-          }
-        : {}),
+  private readonly timeout: number;
+
+  private readonly maxRetries: number;
+
+  constructor(config: GroqConfig = {}) {
+    const apiKey =
+      config.apiKey ||
+      process.env.GROQ_API_KEY;
+
+    if (!apiKey) {
+      throw new GroqError(
+        "GROQ_API_KEY environment variable is not configured."
+      );
     }
+
+    this.apiKey = apiKey;
+
+    this.baseUrl =
+      config.baseUrl ||
+      DEFAULT_CONFIG.baseUrl;
+
+    this.defaultModel =
+      config.defaultModel ||
+      DEFAULT_CONFIG.defaultModel;
+
+    this.timeout =
+      config.timeout ??
+      DEFAULT_CONFIG.timeout;
+
+    this.maxRetries =
+      config.maxRetries ??
+      DEFAULT_CONFIG.maxRetries;
+  }
+
+  /**
+   * Returns the configured default model.
+   */
+  getModel(): string {
+    return this.defaultModel;
+  }
+
+  /**
+   * Executes a request against Groq.
+   */
+  private async request<T>(
+    path: string,
+    body: unknown
+  ): Promise<T> {
+    const url =
+      `${this.baseUrl.replace(/\/$/, "")}${path}`;
+
+    let lastError: unknown;
+
+    for (
+      let attempt = 0;
+      attempt <= this.maxRetries;
+      attempt += 1
+    ) {
+      const controller =
+        new AbortController();
+
+      const timeoutId = setTimeout(() => {
+        controller.abort();
+      }, this.timeout);
+
+      try {
+        const response = await fetch(url, {
+          method: "POST",
+
+          headers: {
+            Authorization:
+              `Bearer ${this.apiKey}`,
+
+            "Content-Type":
+              "application/json",
+          },
+
+          body: JSON.stringify(body),
+
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+
+        const data: unknown =
+          await response.json().catch(() => null);
+
+        if (!response.ok) {
+          const message =
+            getErrorMessage(data);
+
+          const error = new GroqError(
+            message,
+            {
+              status: response.status,
+              details: data,
+            }
+          );
+
+          const shouldRetry =
+            response.status === 429 ||
+            response.status >= 500;
+
+          if (
+            !shouldRetry ||
+            attempt === this.maxRetries
+          ) {
+            throw error;
+          }
+
+          lastError = error;
+
+          await sleep(
+            500 * Math.pow(2, attempt)
+          );
+
+          continue;
+        }
+
+        return data as T;
+      } catch (error) {
+        clearTimeout(timeoutId);
+
+        if (error instanceof GroqError) {
+          if (
+            attempt === this.maxRetries
+          ) {
+            throw error;
+          }
+
+          lastError = error;
+
+          continue;
+        }
+
+        if (
+          error instanceof DOMException &&
+          error.name === "AbortError"
+        ) {
+          lastError = new GroqError(
+            `Groq request timed out after ${this.timeout}ms.`
+          );
+        } else {
+          lastError = error;
+        }
+
+        if (
+          attempt === this.maxRetries
+        ) {
+          break;
+        }
+
+        await sleep(
+          500 * Math.pow(2, attempt)
+        );
+      }
+    }
+
+    if (lastError instanceof Error) {
+      throw lastError;
+    }
+
+    throw new GroqError(
+      "Groq API request failed after multiple attempts."
+    );
+  }
+
+  /**
+   * Creates a chat completion.
+   */
+  async chat(
+    messages: GroqMessage[],
+    options: GroqChatOptions = {}
+  ): Promise<GroqChatResult> {
+    if (messages.length === 0) {
+      throw new GroqError(
+        "At least one message is required."
+      );
+    }
+
+    const payload = {
+      model:
+        options.model ||
+        this.defaultModel,
+
+      messages,
+
+      temperature:
+        options.temperature ?? 0.7,
+
+      max_tokens:
+        options.maxTokens,
+
+      top_p:
+        options.topP,
+
+      stop:
+        options.stop,
+
+      stream: false,
+    };
+
+    interface GroqApiResponse {
+      id?: string;
+
+      model?: string;
+
+      choices?: Array<{
+        message?: {
+          content?: string | null;
+        };
+
+        finish_reason?: string | null;
+      }>;
+
+      usage?: {
+        prompt_tokens?: number;
+
+        completion_tokens?: number;
+
+        total_tokens?: number;
+      };
+    }
+
+    const response =
+      await this.request<GroqApiResponse>(
+        "/chat/completions",
+        payload
+      );
+
+    const choice =
+      response.choices?.[0];
+
+    const content =
+      choice?.message?.content ?? "";
+
+    if (!content) {
+      throw new GroqError(
+        "Groq returned an empty response.",
+        {
+          details: response,
+        }
+      );
+    }
+
+    return {
+      id:
+        response.id ||
+        crypto.randomUUID(),
+
+      model:
+        response.model ||
+        payload.model,
+
+      content,
+
+      finishReason:
+        choice?.finish_reason ||
+        undefined,
+
+      usage: response.usage
+        ? {
+            promptTokens:
+              response.usage.prompt_tokens,
+
+            completionTokens:
+              response.usage
+                .completion_tokens,
+
+            totalTokens:
+              response.usage.total_tokens,
+          }
+        : undefined,
+
+      raw: response,
+    };
+  }
+
+  /**
+   * Sends internal AI messages directly
+   * to the Groq API.
+   */
+  async chatWithContext(
+    messages: Array<
+      Pick<AIMessage, "role" | "content">
+    >,
+    options: GroqChatOptions = {}
+  ): Promise<GroqChatResult> {
+    return this.chat(
+      toGroqMessages(messages),
+      options
+    );
+  }
+
+  /**
+   * Simple completion helper.
+   */
+  async complete(
+    prompt: string,
+    options: GroqChatOptions = {}
+  ): Promise<GroqChatResult> {
+    return this.chat(
+      [
+        {
+          role: "user",
+          content: prompt,
+        },
+      ],
+      options
+    );
+  }
+}
+
+/**
+ * Singleton client instance.
+ *
+ * The instance is created lazily to avoid
+ * build-time failures when environment
+ * variables are unavailable.
+ */
+let groqClientInstance:
+  | GroqClient
+  | null = null;
+
+/**
+ * Returns the shared Groq client.
+ */
+export function getGroqClient(): GroqClient {
+  if (!groqClientInstance) {
+    groqClientInstance =
+      new GroqClient();
+  }
+
+  return groqClientInstance;
+}
+
+/**
+ * Convenience helper for creating
+ * a chat completion.
+ */
+export async function groqChat(
+  messages: GroqMessage[],
+  options: GroqChatOptions = {}
+): Promise<GroqChatResult> {
+  const client = getGroqClient();
+
+  return client.chat(
+    messages,
+    options
   );
 }
 
-// ==================================================
-// EXPORT CONFIG
-// ==================================================
+/**
+ * Convenience helper for sending
+ * a simple prompt.
+ */
+export async function groqComplete(
+  prompt: string,
+  options: GroqChatOptions = {}
+): Promise<GroqChatResult> {
+  const client = getGroqClient();
 
-export const groqConfig = {
-  apiUrl:
-    GROQ_API_URL,
+  return client.complete(
+    prompt,
+    options
+  );
+}
 
-  defaultModel:
-    DEFAULT_MODEL,
-
-  defaultMaxTokens:
-    DEFAULT_MAX_TOKENS,
-
-  defaultTimeoutMs:
-    DEFAULT_TIMEOUT_MS,
-};
+export default getGroqClient;

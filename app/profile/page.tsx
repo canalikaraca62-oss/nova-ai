@@ -61,9 +61,9 @@ export default function ProfilePage() {
 
   const [form, setForm] =
     useState<ProfileForm>({
-      fullName: "NOVA User",
-      email: "user@nova.ai",
-      username: "nova-user",
+      fullName: "SYRAVEN User",
+      email: "user@syraven.ai",
+      username: "syraven-user",
       bio: "Building the future with artificial intelligence.",
     });
 
@@ -199,7 +199,7 @@ export default function ProfilePage() {
                     </h2>
 
                     <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                      Update the information associated with your NOVA
+                      Update the information associated with your SYRAVEN
                       account.
                     </p>
                   </div>
@@ -233,7 +233,7 @@ export default function ProfilePage() {
                       </h3>
 
                       <p className="mt-1 text-sm text-muted-foreground">
-                        Upload a profile image for your NOVA account.
+                        Upload a profile image for your SYRAVEN account.
                       </p>
 
                       <button
@@ -494,7 +494,7 @@ export default function ProfilePage() {
                   </h2>
 
                   <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                    Choose how NOVA communicates important workspace
+                    Choose how SYRAVEN communicates important workspace
                     updates to you.
                   </p>
                 </div>
@@ -509,7 +509,7 @@ export default function ProfilePage() {
 
                   <NotificationPreference
                     title="Product updates"
-                    description="Stay informed about new NOVA capabilities and platform improvements."
+                    description="Stay informed about new SYRAVEN capabilities and platform improvements."
                     enabled={productUpdates}
                     onChange={setProductUpdates}
                   />

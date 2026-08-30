@@ -203,7 +203,7 @@ function NavbarActionButton({
 }
 
 export default function Navbar({
-  brandName = "NOVA",
+  brandName = "SYRAVEN",
   brandTagline,
   logoHref = "/",
   items = [],

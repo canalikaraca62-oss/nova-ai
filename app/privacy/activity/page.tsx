@@ -46,7 +46,7 @@ const ACTIVITIES: PrivacyActivity[] = [
     id: "activity-1",
     title: "Successful account sign in",
     description:
-      "Your NOVA account was successfully accessed.",
+      "Your SYRAVEN account was successfully accessed.",
     type: "security",
     timestamp: "Today, 10:42",
     location: "Current session",
@@ -243,7 +243,7 @@ export default function PrivacyActivityPage() {
 
               <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
                 Review important privacy, security, account and
-                workspace activity associated with your NOVA
+                workspace activity associated with your SYRAVEN
                 environment.
               </p>
             </div>
@@ -501,7 +501,7 @@ export default function PrivacyActivityPage() {
 
                 <p className="mt-2 text-sm leading-6 text-muted-foreground">
                   Review privacy principles, controls and information
-                  categories for your NOVA workspace.
+                  categories for your SYRAVEN workspace.
                 </p>
               </div>
 
@@ -549,7 +549,7 @@ export default function PrivacyActivityPage() {
 
               <p className="mt-2 max-w-xl text-sm leading-6 text-muted-foreground">
                 You can review privacy-related activity and manage your
-                workspace information from the NOVA Privacy Center.
+                workspace information from the SYRAVEN Privacy Center.
               </p>
             </div>
 

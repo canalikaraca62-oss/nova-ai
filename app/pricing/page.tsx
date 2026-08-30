@@ -32,7 +32,7 @@ const PLANS: PricingPlan[] = [
     id: "starter",
     name: "Starter",
     description:
-      "Essential AI capabilities for individuals exploring the NOVA ecosystem.",
+      "Essential AI capabilities for individuals exploring the SYRAVEN ecosystem.",
     monthlyPrice: 0,
     yearlyPrice: 0,
     icon: "sparkles",
@@ -128,7 +128,7 @@ export default function PricingPage() {
         <section className="mx-auto max-w-3xl text-center">
           <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-4 py-2 text-sm font-medium text-primary">
             <Sparkles className="h-4 w-4" />
-            NOVA Intelligence Platform
+            SYRAVEN Intelligence Platform
           </div>
 
           <h1 className="mt-6 text-4xl font-semibold tracking-tight text-foreground sm:text-5xl">
@@ -141,7 +141,7 @@ export default function PricingPage() {
           <p className="mx-auto mt-5 max-w-2xl text-base leading-7 text-muted-foreground">
             Choose the intelligence infrastructure that fits your
             workflow. Start simple, scale when you are ready, and
-            unlock increasingly powerful NOVA capabilities.
+            unlock increasingly powerful SYRAVEN capabilities.
           </p>
         </section>
 

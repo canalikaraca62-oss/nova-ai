@@ -27,8 +27,8 @@ type CanvasItem = {
 
 const INITIAL_CANVASES: CanvasItem[] = [
   {
-    id: "nova-product-strategy",
-    title: "NOVA Product Strategy",
+    id: "syraven-product-strategy",
+    title: "SYRAVEN Product Strategy",
     description:
       "Core product direction, priorities, milestones and strategic decisions.",
     type: "strategy",

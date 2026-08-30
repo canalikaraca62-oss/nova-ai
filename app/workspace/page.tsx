@@ -25,8 +25,8 @@ type WorkspaceMember = {
 
 const initialProjects: WorkspaceProject[] = [
   {
-    id: "nova-core",
-    name: "NOVA Core",
+    id: "syraven-core",
+    name: "SYRAVEN Core",
     description:
       "Core intelligence, orchestration and platform infrastructure.",
     status: "active",
@@ -124,7 +124,7 @@ export default function WorkspacePage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [showArchived, setShowArchived] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [workspaceName, setWorkspaceName] = useState("NOVA");
+  const [workspaceName, setWorkspaceName] = useState("SYRAVEN");
   const [workspaceDescription, setWorkspaceDescription] = useState(
     "The intelligent operating system for the future.",
   );
@@ -198,7 +198,7 @@ export default function WorkspacePage() {
                 href="/"
                 className="transition hover:text-white"
               >
-                NOVA
+                SYRAVEN
               </Link>
 
               <span>/</span>

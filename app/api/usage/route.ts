@@ -7,11 +7,11 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 /* ==================================================
-   NOVA USAGE API
+   SYRAVEN USAGE API
    app/api/usage/route.ts
 ================================================== */
 
-type NovaPlan =
+type SyravenPlan =
   | "free"
   | "premium"
   | "pro"
@@ -39,7 +39,7 @@ type UsageSnapshot = {
 ================================================== */
 
 const PLAN_LIMITS: Record<
-  NovaPlan,
+  SyravenPlan,
   UsageLimits
 > = {
   free: {
@@ -93,7 +93,7 @@ const PLAN_LIMITS: Record<
 
 function isPlan(
   value: unknown
-): value is NovaPlan {
+): value is SyravenPlan {
   return (
     value === "free" ||
     value === "premium" ||
@@ -105,7 +105,7 @@ function isPlan(
 
 function normalizePlan(
   value: unknown
-): NovaPlan {
+): SyravenPlan {
   if (typeof value !== "string") {
     return "free";
   }
@@ -594,7 +594,7 @@ export async function GET(
     });
   } catch (error) {
     console.error(
-      "NOVA USAGE GET ERROR:",
+      "SYRAVEN USAGE GET ERROR:",
       error
     );
 

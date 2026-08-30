@@ -372,7 +372,7 @@ export default function AudioStudioPage() {
           <div>
             <div className="mb-3 flex items-center gap-2 text-sm font-medium text-muted-foreground">
               <Music2 className="h-4 w-4" />
-              <span>Nova Studio</span>
+              <span>Syraven Studio</span>
               <span>/</span>
               <span>Audio Intelligence</span>
             </div>

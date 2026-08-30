@@ -152,7 +152,7 @@ export default function Message({
     role === "user"
       ? "You"
       : role === "assistant"
-        ? "NOVA"
+        ? "SYRAVEN"
         : "System";
 
   return (

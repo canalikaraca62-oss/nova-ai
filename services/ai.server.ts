@@ -1,748 +1,736 @@
-import { supabaseAdmin } from "@/lib/supabaseAdmin";
+/**
+ * SYRAVEN AI Server
+ *
+ * Central server-side AI orchestration layer.
+ *
+ * Responsibilities:
+ * - Server-only AI execution
+ * - Request validation
+ * - Model/provider abstraction
+ * - Timeout handling
+ * - Cancellation support
+ * - Structured execution results
+ * - Execution metrics
+ * - Safe error normalization
+ */
 
-type ChatMessage = {
-  role: "system" | "user" | "assistant";
+import type {
+  AgentExecutionResult,
+  AgentId,
+} from "./agents";
+
+/* -------------------------------------------------------------------------- */
+/*                                   TYPES                                    */
+/* -------------------------------------------------------------------------- */
+
+export type AIProvider =
+  | "groq"
+  | "openai"
+  | "anthropic"
+  | "google"
+  | "custom";
+
+export type AIMessageRole =
+  | "system"
+  | "user"
+  | "assistant"
+  | "tool";
+
+export interface AIMessage {
+  role: AIMessageRole;
   content: string;
-};
+  name?: string;
+  metadata?: Record<string, unknown>;
+}
 
-type GroqMessage = {
-  role: "system" | "user" | "assistant";
-  content: string;
-};
+export interface AIUsage {
+  inputTokens?: number;
+  outputTokens?: number;
+  totalTokens?: number;
+}
 
-type Memory = {
+export interface AIExecutionContext {
+  userId?: string;
+  organizationId?: string;
+  projectId?: string;
+  conversationId?: string;
+  requestId?: string;
+  agentId?: AgentId;
+  signal?: AbortSignal;
+  metadata?: Record<string, unknown>;
+}
+
+export interface AIRequest {
+  messages: AIMessage[];
+
+  model?: string;
+
+  provider?: AIProvider;
+
+  systemPrompt?: string;
+
+  temperature?: number;
+
+  maxTokens?: number;
+
+  timeoutMs?: number;
+
+  context?: AIExecutionContext;
+
+  metadata?: Record<string, unknown>;
+}
+
+export interface AIResponse {
   id: string;
+
+  provider: AIProvider;
+
+  model: string;
+
   content: string;
-  created_at: string | null;
-};
 
-// --------------------------------------------------
-// GROQ
-// --------------------------------------------------
+  usage?: AIUsage;
 
-const GROQ_API_URL =
-  "https://api.groq.com/openai/v1/chat/completions";
+  finishReason?: string;
 
-const DEFAULT_MODEL =
-  process.env.GROQ_MODEL ||
-  "openai/gpt-oss-20b";
+  metadata?: Record<string, unknown>;
+}
 
-// --------------------------------------------------
-// CONTEXT LIMITS
-// --------------------------------------------------
+export interface AIExecutionSuccess {
+  success: true;
 
-const MAX_MEMORIES = 10;
+  status: "completed";
 
-const MAX_CHAT_MESSAGES = 12;
+  data: AIResponse;
 
-const MAX_HISTORY_MESSAGE_CHARS = 3000;
+  startedAt: string;
 
-const MAX_LATEST_USER_MESSAGE_CHARS = 30000;
+  completedAt: string;
 
-const MAX_CONTEXT_CHARS = 30000;
+  durationMs: number;
 
-const MAX_MEMORY_CONTEXT_CHARS = 2500;
+  error?: never;
+}
 
-const DEFAULT_MAX_TOKENS = 2200;
+export interface AIExecutionFailure {
+  success: false;
 
-const CHAT_TITLE_MAX_TOKENS = 500;
+  status:
+    | "failed"
+    | "timeout"
+    | "cancelled";
 
-// --------------------------------------------------
-// TEXT HELPERS
-// --------------------------------------------------
+  data?: never;
 
-function truncateText(
-  text: string,
-  maxLength: number,
-  suffix =
-    "\n\n[İçeriğin devamı bağlam sınırı nedeniyle kısaltıldı.]"
-): string {
-  if (text.length <= maxLength) {
-    return text;
+  error: {
+    message: string;
+    code?: string;
+    details?: unknown;
+    retryable?: boolean;
+  };
+
+  startedAt: string;
+
+  completedAt: string;
+
+  durationMs: number;
+}
+
+export type AIExecutionResult =
+  | AIExecutionSuccess
+  | AIExecutionFailure;
+
+/* -------------------------------------------------------------------------- */
+/*                              PROVIDER TYPES                                */
+/* -------------------------------------------------------------------------- */
+
+export interface AIProviderRequest {
+  messages: AIMessage[];
+
+  model: string;
+
+  systemPrompt?: string;
+
+  temperature?: number;
+
+  maxTokens?: number;
+
+  signal?: AbortSignal;
+
+  metadata?: Record<string, unknown>;
+}
+
+export interface AIProviderResponse {
+  content: string;
+
+  model?: string;
+
+  usage?: AIUsage;
+
+  finishReason?: string;
+
+  metadata?: Record<string, unknown>;
+}
+
+export interface AIProviderAdapter {
+  readonly provider: AIProvider;
+
+  generate(
+    request: AIProviderRequest
+  ): Promise<AIProviderResponse>;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                 CONSTANTS                                  */
+/* -------------------------------------------------------------------------- */
+
+export const DEFAULT_AI_TIMEOUT_MS = 60_000;
+
+export const MAX_AI_TIMEOUT_MS = 300_000;
+
+export const DEFAULT_AI_TEMPERATURE = 0.7;
+
+export const DEFAULT_AI_MAX_TOKENS = 4_096;
+
+export const MAX_AI_MESSAGES = 200;
+
+export const MAX_MESSAGE_LENGTH = 100_000;
+
+/* -------------------------------------------------------------------------- */
+/*                                  ERRORS                                    */
+/* -------------------------------------------------------------------------- */
+
+export class AIServerError extends Error {
+  public readonly code: string;
+
+  public readonly details?: unknown;
+
+  public readonly retryable: boolean;
+
+  constructor(
+    message: string,
+    code: string,
+    options?: {
+      details?: unknown;
+      retryable?: boolean;
+    }
+  ) {
+    super(message);
+
+    this.name = "AIServerError";
+    this.code = code;
+    this.details = options?.details;
+    this.retryable =
+      options?.retryable ?? false;
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/*                              UTILITY FUNCTIONS                             */
+/* -------------------------------------------------------------------------- */
+
+function createAIRequestId(): string {
+  const uuid =
+    typeof globalThis.crypto !== "undefined" &&
+    typeof globalThis.crypto.randomUUID ===
+      "function"
+      ? globalThis.crypto.randomUUID()
+      : Math.random()
+          .toString(36)
+          .slice(2);
+
+  return `ai_${Date.now()}_${uuid}`;
+}
+
+function normalizeTimeout(
+  value?: number
+): number {
+  if (
+    typeof value !== "number" ||
+    !Number.isFinite(value) ||
+    value <= 0
+  ) {
+    return DEFAULT_AI_TIMEOUT_MS;
   }
 
-  if (suffix.length >= maxLength) {
-    return text.slice(
-      0,
-      maxLength
-    );
-  }
-
-  return (
-    text.slice(
-      0,
-      Math.max(
-        0,
-        maxLength - suffix.length
-      )
-    ) + suffix
+  return Math.min(
+    Math.floor(value),
+    MAX_AI_TIMEOUT_MS
   );
 }
 
-// --------------------------------------------------
-// CHAT CONTEXT
-// --------------------------------------------------
-
-function limitChatMessages(
-  messages: ChatMessage[]
-): ChatMessage[] {
-  const validMessages =
-    messages
-      .filter(
-        (message) =>
-          message &&
-          typeof message.content === "string" &&
-          message.content.trim()
-      )
-      .slice(
-        -MAX_CHAT_MESSAGES
-      );
-
+function normalizeTemperature(
+  value?: number
+): number {
   if (
-    validMessages.length === 0
+    typeof value !== "number" ||
+    !Number.isFinite(value)
   ) {
-    return [];
+    return DEFAULT_AI_TEMPERATURE;
   }
 
-  const result: ChatMessage[] = [];
+  return Math.max(
+    0,
+    Math.min(2, value)
+  );
+}
 
-  let totalChars = 0;
-
-  let latestUserIndex = -1;
-
-  for (
-    let i =
-      validMessages.length - 1;
-    i >= 0;
-    i--
+function normalizeMaxTokens(
+  value?: number
+): number {
+  if (
+    typeof value !== "number" ||
+    !Number.isFinite(value) ||
+    value <= 0
   ) {
-    if (
-      validMessages[i].role ===
-      "user"
-    ) {
-      latestUserIndex = i;
+    return DEFAULT_AI_MAX_TOKENS;
+  }
 
-      break;
+  return Math.floor(value);
+}
+
+function normalizeError(
+  error: unknown
+): {
+  message: string;
+  code?: string;
+  details?: unknown;
+  retryable?: boolean;
+} {
+  if (error instanceof AIServerError) {
+    return {
+      message: error.message,
+      code: error.code,
+      details: error.details,
+      retryable: error.retryable,
+    };
+  }
+
+  if (error instanceof Error) {
+    return {
+      message: error.message,
+      details: {
+        name: error.name,
+      },
+    };
+  }
+
+  if (typeof error === "string") {
+    return {
+      message: error,
+    };
+  }
+
+  return {
+    message: "Unknown AI server error",
+    details: error,
+  };
+}
+
+function validateMessages(
+  messages: AIMessage[]
+): void {
+  if (!Array.isArray(messages)) {
+    throw new AIServerError(
+      "Messages must be an array",
+      "INVALID_MESSAGES"
+    );
+  }
+
+  if (messages.length === 0) {
+    throw new AIServerError(
+      "At least one message is required",
+      "EMPTY_MESSAGES"
+    );
+  }
+
+  if (messages.length > MAX_AI_MESSAGES) {
+    throw new AIServerError(
+      `Too many messages. Maximum is ${MAX_AI_MESSAGES}`,
+      "TOO_MANY_MESSAGES"
+    );
+  }
+
+  for (const message of messages) {
+    if (
+      !message ||
+      typeof message !== "object"
+    ) {
+      throw new AIServerError(
+        "Invalid message",
+        "INVALID_MESSAGE"
+      );
+    }
+
+    if (
+      ![
+        "system",
+        "user",
+        "assistant",
+        "tool",
+      ].includes(message.role)
+    ) {
+      throw new AIServerError(
+        `Invalid message role: ${String(
+          message.role
+        )}`,
+        "INVALID_MESSAGE_ROLE"
+      );
+    }
+
+    if (
+      typeof message.content !== "string"
+    ) {
+      throw new AIServerError(
+        "Message content must be a string",
+        "INVALID_MESSAGE_CONTENT"
+      );
+    }
+
+    if (
+      message.content.length >
+      MAX_MESSAGE_LENGTH
+    ) {
+      throw new AIServerError(
+        `Message exceeds maximum length of ${MAX_MESSAGE_LENGTH}`,
+        "MESSAGE_TOO_LARGE"
+      );
     }
   }
+}
 
-  // ----------------------------------------------
-  // EN SON KULLANICI MESAJI
-  // ----------------------------------------------
+/* -------------------------------------------------------------------------- */
+/*                               AI SERVER                                    */
+/* -------------------------------------------------------------------------- */
 
-  if (
-    latestUserIndex !== -1
-  ) {
-    const latestUserMessage =
-      validMessages[
-        latestUserIndex
+export class AIServer {
+  private readonly providers =
+    new Map<
+      AIProvider,
+      AIProviderAdapter
+    >();
+
+  /**
+   * Register a provider adapter.
+   */
+  registerProvider(
+    adapter: AIProviderAdapter
+  ): this {
+    if (
+      !adapter ||
+      typeof adapter !== "object"
+    ) {
+      throw new AIServerError(
+        "Provider adapter is required",
+        "INVALID_PROVIDER"
+      );
+    }
+
+    if (
+      typeof adapter.provider !== "string" ||
+      !adapter.provider.trim()
+    ) {
+      throw new AIServerError(
+        "Provider name is required",
+        "INVALID_PROVIDER_NAME"
+      );
+    }
+
+    if (
+      typeof adapter.generate !== "function"
+    ) {
+      throw new AIServerError(
+        "Provider generate function is required",
+        "INVALID_PROVIDER_ADAPTER"
+      );
+    }
+
+    this.providers.set(
+      adapter.provider,
+      adapter
+    );
+
+    return this;
+  }
+
+  /**
+   * Remove a provider.
+   */
+  unregisterProvider(
+    provider: AIProvider
+  ): boolean {
+    return this.providers.delete(provider);
+  }
+
+  /**
+   * Check provider availability.
+   */
+  hasProvider(
+    provider: AIProvider
+  ): boolean {
+    return this.providers.has(provider);
+  }
+
+  /**
+   * Get provider.
+   */
+  getProvider(
+    provider: AIProvider
+  ): AIProviderAdapter | undefined {
+    return this.providers.get(provider);
+  }
+
+  /**
+   * List providers.
+   */
+  listProviders(): AIProvider[] {
+    return Array.from(
+      this.providers.keys()
+    );
+  }
+
+  /**
+   * Execute an AI request.
+   */
+  async generate(
+    request: AIRequest
+  ): Promise<AIExecutionResult> {
+    const startedAt =
+      new Date().toISOString();
+
+    const startedTimestamp =
+      Date.now();
+
+    let timeoutHandle:
+      | ReturnType<typeof setTimeout>
+      | undefined;
+
+    let externalAbortListener:
+      | (() => void)
+      | undefined;
+
+    try {
+      validateMessages(request.messages);
+
+      const providerName =
+        request.provider ?? "groq";
+
+      const provider =
+        this.providers.get(providerName);
+
+      if (!provider) {
+        throw new AIServerError(
+          `AI provider "${providerName}" is not registered`,
+          "PROVIDER_NOT_FOUND"
+        );
+      }
+
+      const model =
+        request.model?.trim();
+
+      if (!model) {
+        throw new AIServerError(
+          "AI model is required",
+          "MODEL_REQUIRED"
+        );
+      }
+
+      const controller =
+        new AbortController();
+
+      const timeoutMs =
+        normalizeTimeout(
+          request.timeoutMs
+        );
+
+      const externalSignal =
+        request.context?.signal;
+
+      if (externalSignal) {
+        externalAbortListener = () => {
+          controller.abort();
+        };
+
+        if (externalSignal.aborted) {
+          controller.abort();
+        } else {
+          externalSignal.addEventListener(
+            "abort",
+            externalAbortListener,
+            { once: true }
+          );
+        }
+      }
+
+      timeoutHandle = setTimeout(() => {
+        controller.abort();
+      }, timeoutMs);
+
+      const messages = [
+        ...(request.systemPrompt
+          ? [
+              {
+                role: "system" as const,
+                content:
+                  request.systemPrompt,
+              },
+            ]
+          : []),
+        ...request.messages,
       ];
 
-    const latestContent =
-      truncateText(
-        latestUserMessage.content.trim(),
-        MAX_LATEST_USER_MESSAGE_CHARS
-      );
-
-    result.unshift({
-      role: "user",
-      content: latestContent,
-    });
-
-    totalChars +=
-      latestContent.length;
-  }
-
-  // ----------------------------------------------
-  // DİĞER MESAJLAR
-  // ----------------------------------------------
-
-  for (
-    let i =
-      validMessages.length - 1;
-    i >= 0;
-    i--
-  ) {
-    if (
-      i === latestUserIndex
-    ) {
-      continue;
-    }
-
-    const message =
-      validMessages[i];
-
-    const content =
-      truncateText(
-        message.content.trim(),
-        MAX_HISTORY_MESSAGE_CHARS
-      );
-
-    if (
-      totalChars +
-        content.length >
-      MAX_CONTEXT_CHARS
-    ) {
-      continue;
-    }
-
-    result.unshift({
-      role: message.role,
-      content,
-    });
-
-    totalChars +=
-      content.length;
-  }
-
-  return result;
-}
-
-// --------------------------------------------------
-// GROQ API
-// --------------------------------------------------
-
-async function callGroq(
-  messages: GroqMessage[],
-  options?: {
-    temperature?: number;
-    maxTokens?: number;
-    reasoningEffort?:
-      | "none"
-      | "low"
-      | "medium"
-      | "high";
-  }
-): Promise<string> {
-  const apiKey =
-    process.env.GROQ_API_KEY;
-
-  if (!apiKey) {
-    throw new Error(
-      "GROQ_API_KEY bulunamadı."
-    );
-  }
-
-  const maxTokens =
-    options?.maxTokens ??
-    DEFAULT_MAX_TOKENS;
-
-  const response =
-    await fetch(
-      GROQ_API_URL,
-      {
-        method: "POST",
-
-        headers: {
-          "Content-Type":
-            "application/json",
-
-          Authorization:
-            `Bearer ${apiKey}`,
-        },
-
-        body: JSON.stringify({
-          model:
-            DEFAULT_MODEL,
-
+      const response =
+        await provider.generate({
           messages,
-
+          model,
           temperature:
-            options?.temperature ??
-            0.7,
-
-          max_completion_tokens:
-            maxTokens,
-
-          reasoning_effort:
-            options?.reasoningEffort ??
-            "low",
-
-          include_reasoning:
-            false,
-        }),
-      }
-    );
-
-  if (!response.ok) {
-    const errorText =
-      await response.text();
-
-    console.error(
-      "Groq API hatası:",
-      response.status,
-      errorText
-    );
-
-    if (
-      response.status === 400
-    ) {
-      throw new Error(
-        "AI isteği geçersiz. Model ayarlarını ve mesaj formatını kontrol edin."
-      );
-    }
-
-    if (
-      response.status === 401
-    ) {
-      throw new Error(
-        "AI servis yetkilendirmesi başarısız."
-      );
-    }
-
-    if (
-      response.status === 413
-    ) {
-      throw new Error(
-        "İstek çok büyük olduğu için AI modeli işleyemedi."
-      );
-    }
-
-    if (
-      response.status === 429
-    ) {
-      throw new Error(
-        "AI kullanım limiti geçici olarak aşıldı. Biraz sonra tekrar deneyin."
-      );
-    }
-
-    throw new Error(
-      `AI servisi kullanılamıyor. HTTP ${response.status}`
-    );
-  }
-
-  const data =
-    await response.json();
-
-  const choice =
-    data?.choices?.[0];
-
-  const content =
-    choice?.message?.content;
-
-  if (
-    typeof content === "string" &&
-    content.trim()
-  ) {
-    return content.trim();
-  }
-
-  console.error(
-    "Groq boş cevap:",
-    JSON.stringify(
-      {
-        model:
-          data?.model,
-
-        finish_reason:
-          choice?.finish_reason,
-
-        content,
-
-        reasoning:
-          choice?.message?.reasoning,
-
-        usage:
-          data?.usage,
-      },
-      null,
-      2
-    )
-  );
-
-  if (
-    choice?.finish_reason ===
-    "length"
-  ) {
-    throw new Error(
-      "AI cevap üretmeden önce token limitine ulaştı."
-    );
-  }
-
-  throw new Error(
-    "AI boş bir cevap döndürdü."
-  );
-}
-
-// --------------------------------------------------
-// MEMORY
-// --------------------------------------------------
-
-async function getUserMemories(
-  userId?: string
-): Promise<Memory[]> {
-  if (!userId) {
-    return [];
-  }
-
-  try {
-    const {
-      data,
-      error,
-    } =
-      await supabaseAdmin
-        .from("memories")
-        .select(
-          "id, content, created_at"
-        )
-        .eq(
-          "user_id",
-          userId
-        )
-        .order(
-          "created_at",
-          {
-            ascending: false,
-          }
-        )
-        .limit(
-          MAX_MEMORIES
-        );
-
-    if (error) {
-      console.error(
-        "Memory okuma hatası:",
-        error
-      );
-
-      return [];
-    }
-
-    if (!data) {
-      return [];
-    }
-
-    const memories: Memory[] =
-      data
-        .filter(
-          (
-            memory
-          ): memory is {
-            id: string;
-            content: string;
-            created_at: string | null;
-          } =>
-            typeof memory.id ===
-              "string" &&
-            typeof memory.content ===
-              "string"
-        )
-        .map(
-          (
-            memory
-          ) => ({
-            id:
-              memory.id,
-
-            content:
-              memory.content,
-
-            created_at:
-              typeof memory.created_at ===
-              "string"
-                ? memory.created_at
-                : null,
-          })
-        );
-
-    return memories;
-  } catch (error) {
-    console.error(
-      "Memory sistem hatası:",
-      error
-    );
-
-    return [];
-  }
-}
-
-function buildMemoryContext(
-  memories: Memory[]
-): string {
-  if (
-    memories.length === 0
-  ) {
-    return "";
-  }
-
-  const selectedMemories:
-    string[] = [];
-
-  let totalChars = 0;
-
-  for (
-    const memory of memories
-  ) {
-    const content =
-      memory.content.trim();
-
-    if (!content) {
-      continue;
-    }
-
-    if (
-      totalChars +
-        content.length >
-      MAX_MEMORY_CONTEXT_CHARS
-    ) {
-      break;
-    }
-
-    selectedMemories.push(
-      content
-    );
-
-    totalChars +=
-      content.length;
-  }
-
-  if (
-    selectedMemories.length === 0
-  ) {
-    return "";
-  }
-
-  const memoryText =
-    selectedMemories
-      .map(
-        (
-          memory,
-          index
-        ) =>
-          `${index + 1}. ${memory}`
-      )
-      .join(
-        "\n"
-      );
-
-  return `
-KULLANICI HAFIZASI
-
-Aşağıdaki bilgiler kullanıcı tarafından daha önce
-paylaşılmış kalıcı bilgilerdir.
-
-${memoryText}
-
-Kurallar:
-
-- Yalnızca gerçekten ilgili olduğunda kullan.
-- Mevcut kullanıcı mesajı hafızayla çelişirse mevcut mesajı esas al.
-- Hafızadan yeni bilgi veya tahmin üretme.
-- Hafızayı gereksiz yere kullanıcıya listeleme.
-- Hassas çıkarımlar yapma.
-`.trim();
-}
-
-// --------------------------------------------------
-// SYRAVEN
-// --------------------------------------------------
-
-export async function askSyraven(
-  messages: ChatMessage[],
-  userId?: string
-): Promise<string> {
-  const limitedMessages =
-    limitChatMessages(
-      messages
-    );
-
-  const memories =
-    await getUserMemories(
-      userId
-    );
-
-  const memoryContext =
-    buildMemoryContext(
-      memories
-    );
-
-  const systemPrompt = `
-Sen SYRAVEN isimli gelişmiş bir yapay zekâ asistanısın.
-
-Kimliğin:
-
-- Profesyonel
-- Zeki
-- Açık
-- Güvenilir
-- Kullanıcı odaklı
-- Yardımcı
-- Teknoloji konusunda güçlü
-
-Davranış kuralları:
-
-- Kullanıcının dilinde cevap ver.
-- Türkçe sorulara Türkçe cevap ver.
-- Gereksiz tekrar yapma.
-- Kullanıcı detay isterse kapsamlı cevap ver.
-- Karmaşık konuları anlaşılır şekilde açıkla.
-- Yazılım konusunda uzman davran.
-- Kod verirken temiz ve üretime uygun kod yaz.
-- Önceki konuşmanın mevcut bağlamını dikkate al.
-- Emin olmadığın bilgileri kesin gerçek gibi sunma.
-- Kullanıcı bir dosya sağladıysa verilen dosya içeriğini dikkate al.
-- Aynı bilgiyi tekrar tekrar sordurma.
-- Kullanıcı istemedikçe gereksiz yere uzun cevap verme.
-
-ÖNEMLİ UZUN MESAJ KURALLARI:
-
-- Kullanıcı uzun bir kod veya metin gönderirse mümkün olduğunca tamamını analiz et.
-- Kod incelerken sadece başlangıç kısmına odaklanma.
-- Hata varsa dosyanın farklı bölümlerini dikkate al.
-- Kullanıcının sorusuyla doğrudan ilgili kısımları önceliklendir.
-- Gönderilmeyen veya bağlam dışında kalan kısımlar hakkında tahmin yapma.
-${
-  memoryContext
-    ? `
-
-${memoryContext}`
-    : ""
-}
-`.trim();
-
-  return callGroq(
-    [
-      {
-        role: "system",
-        content:
-          systemPrompt,
-      },
-
-      ...limitedMessages,
-    ],
-    {
-      temperature:
-        0.7,
-
-      maxTokens:
-        DEFAULT_MAX_TOKENS,
-
-      reasoningEffort:
-        "low",
-    }
-  );
-}
-
-// --------------------------------------------------
-// CHAT TITLE
-// --------------------------------------------------
-
-export async function generateChatTitle(
-  firstMessage: string
-): Promise<string> {
-  const cleanMessage =
-    firstMessage.trim();
-
-  if (!cleanMessage) {
-    return "Yeni Sohbet";
-  }
-
-  const normalizedMessage =
-    cleanMessage
-      .toLocaleLowerCase(
-        "tr-TR"
-      )
-      .replace(
-        /[.!?,]+$/g,
-        ""
-      )
-      .trim();
-
-  const shortGreetings = [
-    "merhaba",
-    "selam",
-    "hey",
-    "sa",
-    "slm",
-    "günaydın",
-    "iyi akşamlar",
-    "iyi günler",
-  ];
-
-  if (
-    shortGreetings.includes(
-      normalizedMessage
-    )
-  ) {
-    return "Yeni Sohbet";
-  }
-
-  try {
-    const title =
-      await callGroq(
-        [
-          {
-            role: "system",
-
-            content: `
-Kullanıcının ilk mesajına göre kısa ve açıklayıcı
-bir Türkçe sohbet başlığı oluştur.
-
-Kurallar:
-
-- En fazla 5 kelime kullan.
-- Sadece başlığı yaz.
-- Açıklama yazma.
-- Markdown kullanma.
-- Tırnak işareti kullanma.
-- Başlık dışında hiçbir şey yazma.
-`.trim(),
-          },
-
-          {
-            role: "user",
-
-            content:
-              truncateText(
-                cleanMessage,
-                2000
-              ),
-          },
-        ],
-        {
-          temperature:
-            0.2,
-
+            normalizeTemperature(
+              request.temperature
+            ),
           maxTokens:
-            CHAT_TITLE_MAX_TOKENS,
+            normalizeMaxTokens(
+              request.maxTokens
+            ),
+          signal: controller.signal,
+          metadata: request.metadata,
+        });
 
-          reasoningEffort:
-            "low",
-        }
-      );
+      if (
+        typeof response.content !== "string"
+      ) {
+        throw new AIServerError(
+          "AI provider returned invalid content",
+          "INVALID_PROVIDER_RESPONSE"
+        );
+      }
 
-    const cleanedTitle =
-      title
-        .replace(
-          /^["']|["']$/g,
-          ""
-        )
-        .replace(
-          /[.!?]+$/g,
-          ""
-        )
-        .trim()
-        .split(
-          /\s+/
-        )
-        .slice(
-          0,
-          5
-        )
-        .join(
-          " "
+      const completedAt =
+        new Date().toISOString();
+
+      const durationMs =
+        Date.now() -
+        startedTimestamp;
+
+      return {
+        success: true,
+        status: "completed",
+        data: {
+          id: createAIRequestId(),
+          provider: providerName,
+          model:
+            response.model ?? model,
+          content: response.content,
+          usage: response.usage,
+          finishReason:
+            response.finishReason,
+          metadata:
+            response.metadata,
+        },
+        startedAt,
+        completedAt,
+        durationMs,
+      };
+    } catch (error) {
+      const completedAt =
+        new Date().toISOString();
+
+      const durationMs =
+        Date.now() -
+        startedTimestamp;
+
+      const normalized =
+        normalizeError(error);
+
+      const isAbortError =
+        error instanceof Error &&
+        (
+          error.name === "AbortError" ||
+          error.name === "TimeoutError"
         );
 
-    return (
-      cleanedTitle ||
-      "Yeni Sohbet"
-    );
-  } catch (error) {
-    console.error(
-      "CHAT TITLE HATASI:",
-      error
-    );
+      const status:
+        | "failed"
+        | "timeout"
+        | "cancelled" =
+        isAbortError
+          ? durationMs >=
+            normalizeTimeout(
+              request.timeoutMs
+            )
+            ? "timeout"
+            : "cancelled"
+          : "failed";
 
-    return "Yeni Sohbet";
+      return {
+        success: false,
+        status,
+        error: {
+          ...normalized,
+          code:
+            normalized.code ??
+            (
+              status === "timeout"
+                ? "AI_TIMEOUT"
+                : status === "cancelled"
+                  ? "AI_CANCELLED"
+                  : "AI_EXECUTION_FAILED"
+            ),
+          retryable:
+            normalized.retryable ??
+            status === "failed",
+        },
+        startedAt,
+        completedAt,
+        durationMs,
+      };
+    } finally {
+      if (timeoutHandle) {
+        clearTimeout(timeoutHandle);
+      }
+    }
+  }
+
+  /**
+   * Clear all registered providers.
+   */
+  clear(): void {
+    this.providers.clear();
   }
 }
+
+/* -------------------------------------------------------------------------- */
+/*                              SINGLETON INSTANCE                            */
+/* -------------------------------------------------------------------------- */
+
+export const aiServer =
+  new AIServer();
+
+export default aiServer;
+
+/* -------------------------------------------------------------------------- */
+/*                                TYPE GUARDS                                 */
+/* -------------------------------------------------------------------------- */
+
+export function isAIExecutionSuccess(
+  result: AIExecutionResult
+): result is AIExecutionSuccess {
+  return result.success === true;
+}
+
+export function isAIExecutionFailure(
+  result: AIExecutionResult
+): result is AIExecutionFailure {
+  return result.success === false;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                         OPTIONAL AGENT BRIDGE TYPE                         */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Utility type for systems that combine
+ * agent execution with AI execution.
+ */
+export type AIOrAgentExecutionResult<T = unknown> =
+  | AIExecutionResult
+  | AgentExecutionResult<T>;

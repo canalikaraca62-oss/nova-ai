@@ -176,7 +176,7 @@ export default function RegisterPage() {
                 </div>
 
                 <span className="text-xl font-semibold tracking-tight text-foreground">
-                  NOVA
+                  SYRAVEN
                 </span>
               </Link>
 
@@ -194,7 +194,7 @@ export default function RegisterPage() {
                 </h1>
 
                 <p className="mt-6 max-w-lg text-base leading-7 text-muted-foreground">
-                  Create your NOVA workspace and bring projects,
+                  Create your SYRAVEN workspace and bring projects,
                   intelligence, AI agents, knowledge and workflows
                   together in one powerful environment.
                 </p>
@@ -235,7 +235,7 @@ export default function RegisterPage() {
                 </div>
 
                 <span className="text-xl font-semibold text-foreground">
-                  NOVA
+                  SYRAVEN
                 </span>
               </Link>
 
@@ -250,7 +250,7 @@ export default function RegisterPage() {
 
                     <p className="mt-3 text-sm leading-6 text-muted-foreground">
                       Start building your next generation workspace
-                      with NOVA.
+                      with SYRAVEN.
                     </p>
                   </div>
 
@@ -501,7 +501,7 @@ export default function RegisterPage() {
 
             <p className="mt-6 text-center text-xs leading-5 text-muted-foreground">
               By creating an account, you can start building your
-              intelligent workspace with NOVA.
+              intelligent workspace with SYRAVEN.
             </p>
           </section>
         </div>
@@ -662,7 +662,7 @@ function SuccessState() {
       </div>
 
       <h2 className="mt-7 text-3xl font-semibold tracking-tight text-foreground">
-        Welcome to NOVA
+        Welcome to SYRAVEN
       </h2>
 
       <p className="mt-4 max-w-sm text-sm leading-6 text-muted-foreground">
