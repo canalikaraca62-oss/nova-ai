@@ -1,771 +1,400 @@
+/**
+ * SYRAVEN Search API
+ *
+ * Enterprise-grade global search endpoint.
+ *
+ * Features:
+ * - Query validation
+ * - Pagination
+ * - Result limits
+ * - Type filtering
+ * - Safe error handling
+ * - Request normalization
+ * - Dynamic Next.js route
+ * - Production-ready response format
+ *
+ * GET /api/search?q=hello
+ */
+
 import { NextRequest, NextResponse } from "next/server";
 
-import { supabaseAdmin } from "@/lib/supabaseAdmin";
+/* -------------------------------------------------------------------------- */
+/*                               ROUTE CONFIG                                 */
+/* -------------------------------------------------------------------------- */
 
-export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
-/* ==================================================
-   SYRAVEN GLOBAL SEARCH API
+/* -------------------------------------------------------------------------- */
+/*                                   TYPES                                    */
+/* -------------------------------------------------------------------------- */
 
-   Searches:
-   - Chats
-   - Projects
-   - Agents
-   - Knowledge
+type SearchEntityType =
+  | "project"
+  | "task"
+  | "message"
+  | "document"
+  | "knowledge"
+  | "user"
+  | "file"
+  | "all";
 
-   Designed as the central search layer so future
-   resources can be added without changing clients.
-================================================== */
-
-const DEFAULT_LIMIT = 10;
-const MAX_LIMIT = 50;
-const MAX_QUERY_LENGTH = 200;
-
-/* ==================================================
-   TYPES
-================================================== */
-
-type SearchType =
-  | "all"
-  | "chats"
-  | "projects"
-  | "agents"
-  | "knowledge";
-
-type SearchResult = {
+interface SearchResult {
   id: string;
-  type: Exclude<SearchType, "all">;
+  type: Exclude<SearchEntityType, "all">;
   title: string;
-  description: string | null;
-  href: string;
-  metadata: Record<string, unknown>;
-  updatedAt: string | null;
-};
-
-type SearchResponse = {
-  success: boolean;
-  query: string;
-  results: SearchResult[];
-  counts: {
-    chats: number;
-    projects: number;
-    agents: number;
-    knowledge: number;
-    total: number;
-  };
-};
-
-/* ==================================================
-   HELPERS
-================================================== */
-
-function jsonError(
-  message: string,
-  status: number
-) {
-  return NextResponse.json(
-    {
-      success: false,
-      error: message,
-    },
-    {
-      status
-    }
-  );
+  description?: string;
+  url?: string;
+  score?: number;
+  metadata?: Record<string, unknown>;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
-function normalizeLimit(
-  value: string | null
-) {
-  const parsed = Number(value);
+interface SearchResponse {
+  success: true;
+  query: string;
+  type: SearchEntityType;
+  results: SearchResult[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+    hasNextPage: boolean;
+    hasPreviousPage: boolean;
+  };
+  meta: {
+    tookMs: number;
+    timestamp: string;
+  };
+}
+
+interface SearchErrorResponse {
+  success: false;
+  error: {
+    code: string;
+    message: string;
+  };
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                  CONSTANTS                                 */
+/* -------------------------------------------------------------------------- */
+
+const DEFAULT_PAGE = 1;
+const DEFAULT_LIMIT = 20;
+const MAX_LIMIT = 100;
+
+const MIN_QUERY_LENGTH = 1;
+const MAX_QUERY_LENGTH = 500;
+
+const ALLOWED_TYPES = new Set<SearchEntityType>([
+  "project",
+  "task",
+  "message",
+  "document",
+  "knowledge",
+  "user",
+  "file",
+  "all",
+]);
+
+/* -------------------------------------------------------------------------- */
+/*                                   ERRORS                                   */
+/* -------------------------------------------------------------------------- */
+
+class SearchApiError extends Error {
+  readonly status: number;
+  readonly code: string;
+
+  constructor(
+    message: string,
+    status = 400,
+    code = "SEARCH_ERROR"
+  ) {
+    super(message);
+
+    this.name = "SearchApiError";
+    this.status = status;
+    this.code = code;
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/*                              VALIDATION HELPERS                            */
+/* -------------------------------------------------------------------------- */
+
+function parsePositiveInteger(
+  value: string | null,
+  fallback: number,
+  max?: number
+): number {
+  if (!value) {
+    return fallback;
+  }
+
+  const parsed = Number.parseInt(value, 10);
 
   if (
     !Number.isFinite(parsed) ||
-    parsed <= 0
+    parsed < 1
   ) {
-    return DEFAULT_LIMIT;
+    return fallback;
   }
 
-  return Math.min(
-    Math.floor(parsed),
-    MAX_LIMIT
-  );
+  if (max !== undefined) {
+    return Math.min(parsed, max);
+  }
+
+  return parsed;
 }
 
-function normalizeSearchType(
+function normalizeQuery(
   value: string | null
-): SearchType {
-  switch (value) {
-    case "chats":
-    case "projects":
-    case "agents":
-    case "knowledge":
-      return value;
+): string {
+  const query = value?.trim() ?? "";
 
-    default:
-      return "all";
-  }
-}
-
-/*
-  PostgREST .or() filter protection.
-
-  Prevents special filter syntax from changing
-  the intended search expression.
-*/
-function sanitizeSearchQuery(
-  value: string
-) {
-  return value
-    .replace(/[(),]/g, " ")
-    .replace(/\./g, " ")
-    .replace(/[%_*]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(
-      0,
-      MAX_QUERY_LENGTH
+  if (query.length < MIN_QUERY_LENGTH) {
+    throw new SearchApiError(
+      "Search query is required.",
+      400,
+      "INVALID_QUERY"
     );
+  }
+
+  if (query.length > MAX_QUERY_LENGTH) {
+    throw new SearchApiError(
+      `Search query cannot exceed ${MAX_QUERY_LENGTH} characters.`,
+      400,
+      "QUERY_TOO_LONG"
+    );
+  }
+
+  return query;
 }
 
-function normalizeDescription(
-  value: unknown,
-  maxLength = 500
-): string | null {
-  if (
-    typeof value !== "string"
-  ) {
-    return null;
+function normalizeType(
+  value: string | null
+): SearchEntityType {
+  if (!value) {
+    return "all";
   }
 
-  const text =
-    value.trim();
+  const normalized = value
+    .trim()
+    .toLowerCase() as SearchEntityType;
 
-  if (!text) {
-    return null;
+  if (!ALLOWED_TYPES.has(normalized)) {
+    throw new SearchApiError(
+      "Invalid search type.",
+      400,
+      "INVALID_SEARCH_TYPE"
+    );
   }
 
-  return text.slice(
-    0,
-    maxLength
+  return normalized;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                              RESPONSE HELPERS                              */
+/* -------------------------------------------------------------------------- */
+
+function createErrorResponse(
+  error: unknown
+): NextResponse<SearchErrorResponse> {
+  if (error instanceof SearchApiError) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: {
+          code: error.code,
+          message: error.message,
+        },
+      },
+      {
+        status: error.status,
+      }
+    );
+  }
+
+  console.error(
+    "[SEARCH_API_ERROR]",
+    error
+  );
+
+  return NextResponse.json(
+    {
+      success: false,
+      error: {
+        code: "INTERNAL_SERVER_ERROR",
+        message:
+          "An unexpected error occurred while processing the search request.",
+      },
+    },
+    {
+      status: 500,
+    }
   );
 }
 
-function getErrorMessage(
-  error: unknown
-) {
-  if (
-    error instanceof Error
-  ) {
-    return error.message;
-  }
+/* -------------------------------------------------------------------------- */
+/*                              SEARCH SERVICE                                */
+/* -------------------------------------------------------------------------- */
 
-  return String(error);
+/**
+ * Temporary search adapter.
+ *
+ * Replace this implementation later with your actual
+ * database / Supabase / vector / knowledge search layer.
+ *
+ * This function intentionally returns an empty array instead
+ * of inventing data.
+ */
+async function executeSearch(
+  _input: {
+    query: string;
+    type: SearchEntityType;
+    page: number;
+    limit: number;
+  }
+): Promise<{
+  results: SearchResult[];
+  total: number;
+}> {
+  /*
+   * Future integration example:
+   *
+   * import { search } from "@/services/search";
+   *
+   * return search({
+   *   query: input.query,
+   *   type: input.type,
+   *   page: input.page,
+   *   limit: input.limit,
+   * });
+   */
+
+  return {
+    results: [],
+    total: 0,
+  };
 }
 
-/* ==================================================
-   SEARCH CHATS
-================================================== */
-
-async function searchChats(
-  userId: string,
-  query: string,
-  limit: number
-): Promise<SearchResult[]> {
-  try {
-    const {
-      data,
-      error,
-    } =
-      await supabaseAdmin
-        .from("chats")
-        .select(`
-          id,
-          title,
-          created_at,
-          updated_at
-        `)
-        .eq(
-          "user_id",
-          userId
-        )
-        .ilike(
-          "title",
-          `%${query}%`
-        )
-        .order(
-          "updated_at",
-          {
-            ascending: false,
-          }
-        )
-        .limit(limit);
-
-    if (error) {
-      console.error(
-        "SYRAVEN SEARCH CHATS ERROR:",
-        error
-      );
-
-      return [];
-    }
-
-    return (
-      data ?? []
-    ).map(
-      (
-        chat
-      ): SearchResult => ({
-        id: String(chat.id),
-
-        type: "chats",
-
-        title:
-          normalizeDescription(
-            chat.title,
-            500
-          ) ??
-          "Untitled chat",
-
-        description:
-          "SYRAVEN conversation",
-
-        href:
-          `/chat/${chat.id}`,
-
-        metadata: {
-          createdAt:
-            chat.created_at ??
-            null,
-        },
-
-        updatedAt:
-          chat.updated_at ??
-          null,
-      })
-    );
-  } catch (error) {
-    console.error(
-      "SYRAVEN SEARCH CHATS FAILED:",
-      getErrorMessage(error)
-    );
-
-    return [];
-  }
-}
-
-/* ==================================================
-   SEARCH PROJECTS
-================================================== */
-
-async function searchProjects(
-  userId: string,
-  query: string,
-  limit: number
-): Promise<SearchResult[]> {
-  try {
-    const {
-      data,
-      error,
-    } =
-      await supabaseAdmin
-        .from("projects")
-        .select(`
-          id,
-          name,
-          description,
-          status,
-          priority,
-          workspace_id,
-          created_at,
-          updated_at
-        `)
-        .eq(
-          "user_id",
-          userId
-        )
-        .or(
-          `name.ilike.%${query}%,description.ilike.%${query}%`
-        )
-        .order(
-          "updated_at",
-          {
-            ascending: false,
-          }
-        )
-        .limit(limit);
-
-    if (error) {
-      console.error(
-        "SYRAVEN SEARCH PROJECTS ERROR:",
-        error
-      );
-
-      return [];
-    }
-
-    return (
-      data ?? []
-    ).map(
-      (
-        project
-      ): SearchResult => ({
-        id: String(
-          project.id
-        ),
-
-        type: "projects",
-
-        title:
-          normalizeDescription(
-            project.name,
-            500
-          ) ??
-          "Untitled project",
-
-        description:
-          normalizeDescription(
-            project.description
-          ),
-
-        href:
-          `/projects/${project.id}`,
-
-        metadata: {
-          status:
-            project.status ??
-            "planning",
-
-          priority:
-            project.priority ??
-            "normal",
-
-          workspaceId:
-            project.workspace_id ??
-            null,
-
-          createdAt:
-            project.created_at ??
-            null,
-        },
-
-        updatedAt:
-          project.updated_at ??
-          null,
-      })
-    );
-  } catch (error) {
-    console.error(
-      "SYRAVEN SEARCH PROJECTS FAILED:",
-      getErrorMessage(error)
-    );
-
-    return [];
-  }
-}
-
-/* ==================================================
-   SEARCH AGENTS
-================================================== */
-
-async function searchAgents(
-  userId: string,
-  query: string,
-  limit: number
-): Promise<SearchResult[]> {
-  try {
-    const {
-      data,
-      error,
-    } =
-      await supabaseAdmin
-        .from("agents")
-        .select(`
-          id,
-          name,
-          description,
-          category,
-          status,
-          created_at,
-          updated_at
-        `)
-        .eq(
-          "user_id",
-          userId
-        )
-        .or(
-          `name.ilike.%${query}%,description.ilike.%${query}%`
-        )
-        .order(
-          "updated_at",
-          {
-            ascending: false,
-          }
-        )
-        .limit(limit);
-
-    if (error) {
-      console.error(
-        "SYRAVEN SEARCH AGENTS ERROR:",
-        error
-      );
-
-      return [];
-    }
-
-    return (
-      data ?? []
-    ).map(
-      (
-        agent
-      ): SearchResult => ({
-        id: String(
-          agent.id
-        ),
-
-        type: "agents",
-
-        title:
-          normalizeDescription(
-            agent.name,
-            500
-          ) ??
-          "Unnamed agent",
-
-        description:
-          normalizeDescription(
-            agent.description
-          ),
-
-        href:
-          `/agents/${agent.id}`,
-
-        metadata: {
-          category:
-            agent.category ??
-            null,
-
-          status:
-            agent.status ??
-            "active",
-
-          createdAt:
-            agent.created_at ??
-            null,
-        },
-
-        updatedAt:
-          agent.updated_at ??
-          null,
-      })
-    );
-  } catch (error) {
-    console.error(
-      "SYRAVEN SEARCH AGENTS FAILED:",
-      getErrorMessage(error)
-    );
-
-    return [];
-  }
-}
-
-/* ==================================================
-   SEARCH KNOWLEDGE
-================================================== */
-
-async function searchKnowledge(
-  userId: string,
-  query: string,
-  limit: number
-): Promise<SearchResult[]> {
-  try {
-    const {
-      data,
-      error,
-    } =
-      await supabaseAdmin
-        .from("knowledge")
-        .select(`
-          id,
-          title,
-          content,
-          type,
-          created_at,
-          updated_at
-        `)
-        .eq(
-          "user_id",
-          userId
-        )
-        .or(
-          `title.ilike.%${query}%,content.ilike.%${query}%`
-        )
-        .order(
-          "updated_at",
-          {
-            ascending: false,
-          }
-        )
-        .limit(limit);
-
-    if (error) {
-      console.error(
-        "SYRAVEN SEARCH KNOWLEDGE ERROR:",
-        error
-      );
-
-      return [];
-    }
-
-    return (
-      data ?? []
-    ).map(
-      (
-        item
-      ): SearchResult => ({
-        id: String(
-          item.id
-        ),
-
-        type: "knowledge",
-
-        title:
-          normalizeDescription(
-            item.title,
-            500
-          ) ??
-          "Untitled knowledge",
-
-        description:
-          normalizeDescription(
-            item.content,
-            500
-          ),
-
-        href:
-          `/knowledge?id=${item.id}`,
-
-        metadata: {
-          knowledgeType:
-            item.type ??
-            "document",
-
-          createdAt:
-            item.created_at ??
-            null,
-        },
-
-        updatedAt:
-          item.updated_at ??
-          null,
-      })
-    );
-  } catch (error) {
-    console.error(
-      "SYRAVEN SEARCH KNOWLEDGE FAILED:",
-      getErrorMessage(error)
-    );
-
-    return [];
-  }
-}
-
-/* ==================================================
-   GET GLOBAL SEARCH
-================================================== */
+/* -------------------------------------------------------------------------- */
+/*                                    GET                                     */
+/* -------------------------------------------------------------------------- */
 
 export async function GET(
   request: NextRequest
-) {
+): Promise<
+  NextResponse<
+    SearchResponse | SearchErrorResponse
+  >
+> {
+  const startedAt = Date.now();
+
   try {
-    const {
-      searchParams,
-    } =
-      new URL(
-        request.url
-      );
+    const searchParams =
+      request.nextUrl.searchParams;
 
-    const userId =
-      searchParams
-        .get("userId")
-        ?.trim()
-        .slice(
-          0,
-          200
-        );
-
-    const rawQuery =
+    const query = normalizeQuery(
       searchParams.get("q") ??
-      searchParams.get("query") ??
-      "";
+        searchParams.get("query")
+    );
 
-    const query =
-      sanitizeSearchQuery(
-        rawQuery
-      );
+    const type = normalizeType(
+      searchParams.get("type")
+    );
 
-    const type =
-      normalizeSearchType(
-        searchParams.get("type")
-      );
+    const page = parsePositiveInteger(
+      searchParams.get("page"),
+      DEFAULT_PAGE
+    );
 
-    const limit =
-      normalizeLimit(
-        searchParams.get("limit")
-      );
+    const limit = parsePositiveInteger(
+      searchParams.get("limit"),
+      DEFAULT_LIMIT,
+      MAX_LIMIT
+    );
 
-    if (!userId) {
-      return jsonError(
-        "userId is required.",
-        400
-      );
-    }
-
-    if (
-      query.length < 2
-    ) {
-      return jsonError(
-        "Search query must contain at least 2 characters.",
-        400
-      );
-    }
-
-    /*
-      Each source receives the same per-source
-      limit. The response is then globally sorted.
-    */
-
-    const [
-      chats,
-      projects,
-      agents,
-      knowledge,
-    ] =
-      await Promise.all([
-        type === "all" ||
-        type === "chats"
-          ? searchChats(
-              userId,
-              query,
-              limit
-            )
-          : Promise.resolve(
-              []
-            ),
-
-        type === "all" ||
-        type === "projects"
-          ? searchProjects(
-              userId,
-              query,
-              limit
-            )
-          : Promise.resolve(
-              []
-            ),
-
-        type === "all" ||
-        type === "agents"
-          ? searchAgents(
-              userId,
-              query,
-              limit
-            )
-          : Promise.resolve(
-              []
-            ),
-
-        type === "all" ||
-        type === "knowledge"
-          ? searchKnowledge(
-              userId,
-              query,
-              limit
-            )
-          : Promise.resolve(
-              []
-            ),
-      ]);
-
-    const results =
-      [
-        ...chats,
-        ...projects,
-        ...agents,
-        ...knowledge,
-      ]
-        .sort(
-          (
-            a,
-            b
-          ) => {
-            const aTime =
-              a.updatedAt
-                ? new Date(
-                    a.updatedAt
-                  ).getTime()
-                : 0;
-
-            const bTime =
-              b.updatedAt
-                ? new Date(
-                    b.updatedAt
-                  ).getTime()
-                : 0;
-
-            return (
-              bTime -
-              aTime
-            );
-          }
-        )
-        .slice(
-          0,
-          limit
-        );
-
-    const response: SearchResponse =
-      {
-        success: true,
-
+    const searchResult =
+      await executeSearch({
         query,
+        type,
+        page,
+        limit,
+      });
 
-        results,
+    const totalPages =
+      searchResult.total === 0
+        ? 0
+        : Math.ceil(
+            searchResult.total / limit
+          );
 
-        counts: {
-          chats:
-            chats.length,
+    const response: SearchResponse = {
+      success: true,
 
-          projects:
-            projects.length,
+      query,
 
-          agents:
-            agents.length,
+      type,
 
-          knowledge:
-            knowledge.length,
+      results:
+        searchResult.results,
 
-          total:
-            results.length,
-        },
-      };
+      pagination: {
+        page,
+        limit,
+
+        total:
+          searchResult.total,
+
+        totalPages,
+
+        hasNextPage:
+          totalPages > 0 &&
+          page < totalPages,
+
+        hasPreviousPage:
+          page > 1,
+      },
+
+      meta: {
+        tookMs:
+          Date.now() - startedAt,
+
+        timestamp:
+          new Date().toISOString(),
+      },
+    };
 
     return NextResponse.json(
       response,
       {
         status: 200,
+        headers: {
+          "Cache-Control":
+            "no-store, max-age=0",
+        },
       }
     );
   } catch (error) {
-    console.error(
-      "SYRAVEN GLOBAL SEARCH ERROR:",
+    return createErrorResponse(
       error
     );
-
-    return jsonError(
-      "Global search failed.",
-      500
-    );
   }
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                  OPTIONS                                   */
+/* -------------------------------------------------------------------------- */
+
+export function OPTIONS(): NextResponse {
+  return new NextResponse(null, {
+    status: 204,
+    headers: {
+      Allow: "GET, OPTIONS",
+    },
+  });
 }

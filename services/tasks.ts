@@ -15,16 +15,15 @@
  * - Bounded concurrency
  * - Task history
  * - Typed handlers
- * - Provider abstraction ready
+ * - Strict TypeScript compatibility
  * - In-memory execution engine
- * - Strict TypeScript
  *
  * Production adapters can later include:
  * - BullMQ / Redis
  * - Temporal
  * - AWS SQS
  * - RabbitMQ
- * - Cloud Tasks
+ * - Google Cloud Tasks
  */
 
 /* -------------------------------------------------------------------------- */
@@ -47,12 +46,16 @@ export type TaskPriority =
   | "high"
   | "critical";
 
-export type TaskPayload =
-  | Record<string, unknown>
-  | unknown[];
+/**
+ * Task payloads intentionally use unknown.
+ *
+ * This allows strongly typed generic payloads without forcing
+ * every payload to extend Record<string, unknown> or unknown[].
+ */
+export type TaskPayload = unknown;
 
 export interface Task<
-  TPayload = TaskPayload,
+  TPayload extends TaskPayload = TaskPayload,
   TResult = unknown
 > {
   id: string;
@@ -103,7 +106,7 @@ export interface TaskError {
 }
 
 export interface CreateTaskInput<
-  TPayload = TaskPayload
+  TPayload extends TaskPayload = TaskPayload
 > {
   type: string;
 
@@ -131,7 +134,7 @@ export interface TaskHandlerContext {
 }
 
 export type TaskHandler<
-  TPayload = unknown,
+  TPayload extends TaskPayload = TaskPayload,
   TResult = unknown
 > = (
   payload: TPayload,
@@ -194,67 +197,43 @@ export interface TaskServiceOptions {
 /*                                   ERRORS                                   */
 /* -------------------------------------------------------------------------- */
 
-export class TaskServiceError
-  extends Error {
-  constructor(
-    message: string
-  ) {
+export class TaskServiceError extends Error {
+  constructor(message: string) {
     super(message);
 
-    this.name =
-      "TaskServiceError";
+    this.name = "TaskServiceError";
   }
 }
 
-export class TaskValidationError
-  extends TaskServiceError {
+export class TaskValidationError extends TaskServiceError {
   readonly errors: string[];
 
-  constructor(
-    errors: string[]
-  ) {
-    super(
-      errors.join(" ")
-    );
+  constructor(errors: string[]) {
+    super(errors.join(" "));
 
-    this.name =
-      "TaskValidationError";
+    this.name = "TaskValidationError";
 
-    this.errors =
-      errors;
+    this.errors = errors;
   }
 }
 
-export class TaskNotFoundError
-  extends TaskServiceError {
-  constructor(
-    taskId: string
-  ) {
-    super(
-      `Task not found: ${taskId}`
-    );
+export class TaskNotFoundError extends TaskServiceError {
+  constructor(taskId: string) {
+    super(`Task not found: ${taskId}`);
 
-    this.name =
-      "TaskNotFoundError";
+    this.name = "TaskNotFoundError";
   }
 }
 
-export class TaskHandlerNotFoundError
-  extends TaskServiceError {
-  constructor(
-    taskType: string
-  ) {
-    super(
-      `Task handler not found: ${taskType}`
-    );
+export class TaskHandlerNotFoundError extends TaskServiceError {
+  constructor(taskType: string) {
+    super(`Task handler not found: ${taskType}`);
 
-    this.name =
-      "TaskHandlerNotFoundError";
+    this.name = "TaskHandlerNotFoundError";
   }
 }
 
-export class TaskTimeoutError
-  extends TaskServiceError {
+export class TaskTimeoutError extends TaskServiceError {
   constructor(
     taskId: string,
     timeoutMs: number
@@ -263,22 +242,15 @@ export class TaskTimeoutError
       `Task "${taskId}" exceeded timeout of ${timeoutMs}ms.`
     );
 
-    this.name =
-      "TaskTimeoutError";
+    this.name = "TaskTimeoutError";
   }
 }
 
-export class TaskCancelledError
-  extends TaskServiceError {
-  constructor(
-    taskId: string
-  ) {
-    super(
-      `Task was cancelled: ${taskId}`
-    );
+export class TaskCancelledError extends TaskServiceError {
+  constructor(taskId: string) {
+    super(`Task was cancelled: ${taskId}`);
 
-    this.name =
-      "TaskCancelledError";
+    this.name = "TaskCancelledError";
   }
 }
 
@@ -286,96 +258,80 @@ export class TaskCancelledError
 /*                                 CONSTANTS                                  */
 /* -------------------------------------------------------------------------- */
 
-export const DEFAULT_TASK_CONCURRENCY =
-  5;
+export const DEFAULT_TASK_CONCURRENCY = 5;
 
-export const MAX_TASK_CONCURRENCY =
-  100;
+export const MAX_TASK_CONCURRENCY = 100;
 
-export const DEFAULT_MAX_ATTEMPTS =
-  3;
+export const DEFAULT_MAX_ATTEMPTS = 3;
 
-export const DEFAULT_POLL_INTERVAL_MS =
-  250;
+export const DEFAULT_POLL_INTERVAL_MS = 250;
 
-export const MIN_POLL_INTERVAL_MS =
-  50;
+export const MIN_POLL_INTERVAL_MS = 50;
 
 export const MAX_TASK_TIMEOUT_MS =
   60 * 60 * 1000;
 
-export const DEFAULT_TASK_LIST_LIMIT =
-  100;
+export const DEFAULT_TASK_LIST_LIMIT = 100;
 
-export const MAX_TASK_LIST_LIMIT =
-  1_000;
+export const MAX_TASK_LIST_LIMIT = 1_000;
 
-const PRIORITY_VALUES:
-  Record<TaskPriority, number> = {
-    low: 1,
-    normal: 2,
-    high: 3,
-    critical: 4,
-  };
+const PRIORITY_VALUES: Record<
+  TaskPriority,
+  number
+> = {
+  low: 1,
+  normal: 2,
+  high: 3,
+  critical: 4,
+};
 
 /* -------------------------------------------------------------------------- */
 /*                               TASK SERVICE                                 */
 /* -------------------------------------------------------------------------- */
 
 export class TaskService {
-  private readonly tasks =
-    new Map<
-      string,
-      Task
-    >();
+  private readonly tasks = new Map<
+    string,
+    Task
+  >();
 
-  private readonly handlers =
-    new Map<
-      string,
-      TaskHandler
-    >();
+  private readonly handlers = new Map<
+    string,
+    TaskHandler
+  >();
 
-  private readonly controllers =
-    new Map<
-      string,
-      AbortController
-    >();
+  private readonly controllers = new Map<
+    string,
+    AbortController
+  >();
 
-  private concurrency:
-    number;
+  private concurrency: number;
 
-  private runningCount =
-    0;
+  private runningCount = 0;
 
-  private started =
-    false;
+  private started = false;
 
-  private processing =
-    false;
+  private processing = false;
 
-  private pollIntervalMs:
-    number;
+  private pollIntervalMs: number;
 
   private pollTimer:
-    ReturnType<typeof setInterval> | null =
-      null;
+    | ReturnType<typeof setInterval>
+    | null = null;
 
   constructor(
     options: TaskServiceOptions = {}
   ) {
-    this.concurrency =
-      normalizeConcurrency(
-        options.concurrency
-      );
+    this.concurrency = normalizeConcurrency(
+      options.concurrency
+    );
 
     this.pollIntervalMs =
       normalizePollInterval(
         options.pollIntervalMs
       );
 
-    if (
-      options.autoStart !== false
-    ) {
+    if (options.autoStart !== false) {
       this.start();
     }
   }
@@ -385,24 +341,16 @@ export class TaskService {
   /* ------------------------------------------------------------------------ */
 
   registerHandler<
-    TPayload = unknown,
+    TPayload extends TaskPayload = TaskPayload,
     TResult = unknown
   >(
     type: string,
-    handler: TaskHandler<
-      TPayload,
-      TResult
-    >
+    handler: TaskHandler<TPayload, TResult>
   ): void {
     const normalizedType =
-      normalizeTaskType(
-        type
-      );
+      normalizeTaskType(type);
 
-    if (
-      typeof handler !==
-      "function"
-    ) {
+    if (typeof handler !== "function") {
       throw new TaskValidationError([
         "Task handler must be a function.",
       ]);
@@ -410,7 +358,7 @@ export class TaskService {
 
     this.handlers.set(
       normalizedType,
-      handler as TaskHandler
+      handler as unknown as TaskHandler
     );
   }
 
@@ -418,9 +366,7 @@ export class TaskService {
     type: string
   ): boolean {
     return this.handlers.delete(
-      normalizeTaskType(
-        type
-      )
+      normalizeTaskType(type)
     );
   }
 
@@ -428,9 +374,7 @@ export class TaskService {
     type: string
   ): boolean {
     return this.handlers.has(
-      normalizeTaskType(
-        type
-      )
+      normalizeTaskType(type)
     );
   }
 
@@ -439,48 +383,37 @@ export class TaskService {
   /* ------------------------------------------------------------------------ */
 
   create<
-    TPayload = TaskPayload
+    TPayload extends TaskPayload = TaskPayload
   >(
     input: CreateTaskInput<TPayload>
   ): Task<TPayload> {
-    this.validateCreateInput(
-      input
-    );
+    this.validateCreateInput(input);
 
-    const now =
-      new Date();
+    const now = new Date();
 
-    const runAt =
-      input.runAt
-        ? new Date(
-            input.runAt
-          )
-        : undefined;
+    const runAt = input.runAt
+      ? new Date(input.runAt)
+      : undefined;
 
     const task: Task<TPayload> = {
-      id:
-        generateTaskId(),
+      id: generateTaskId(),
 
-      type:
-        normalizeTaskType(
-          input.type
-        ),
+      type: normalizeTaskType(
+        input.type
+      ),
 
-      payload:
-        cloneValue(
-          input.payload
-        ),
+      payload: cloneValue(
+        input.payload
+      ),
 
       status:
         runAt &&
-        runAt.getTime() >
-          now.getTime()
+        runAt.getTime() > now.getTime()
           ? "scheduled"
           : "pending",
 
       priority:
-        input.priority ??
-        "normal",
+        input.priority ?? "normal",
 
       attempts: 0,
 
@@ -496,40 +429,34 @@ export class TaskService {
 
       runAt,
 
-      createdAt:
-        now,
+      createdAt: now,
 
-      updatedAt:
-        now,
+      updatedAt: now,
 
-      metadata:
-        input.metadata
-          ? cloneRecord(
-              input.metadata
-            )
-          : undefined,
+      metadata: input.metadata
+        ? cloneRecord(input.metadata)
+        : undefined,
     };
 
     this.tasks.set(
       task.id,
-      task
+      task as Task
     );
 
     void this.process();
 
     return this.cloneTask(
       task
-    ) as Task<TPayload>;
+    );
   }
 
-  createMany(
-    inputs: CreateTaskInput[]
-  ): Task[] {
+  createMany<
+    TPayload extends TaskPayload = TaskPayload
+  >(
+    inputs: CreateTaskInput<TPayload>[]
+  ): Task<TPayload>[] {
     return inputs.map(
-      (input) =>
-        this.create(
-          input
-        )
+      (input) => this.create(input)
     );
   }
 
@@ -540,25 +467,17 @@ export class TaskService {
   get(
     taskId: string
   ): Task | undefined {
-    const task =
-      this.tasks.get(
-        taskId
-      );
+    const task = this.tasks.get(taskId);
 
     return task
-      ? this.cloneTask(
-          task
-        )
+      ? this.cloneTask(task)
       : undefined;
   }
 
   require(
     taskId: string
   ): Task {
-    const task =
-      this.get(
-        taskId
-      );
+    const task = this.get(taskId);
 
     if (!task) {
       throw new TaskNotFoundError(
@@ -572,152 +491,99 @@ export class TaskService {
   list(
     options: TaskListOptions = {}
   ): TaskListResult {
-    const limit =
-      normalizeListLimit(
-        options.limit
-      );
-
-    const offset =
-      normalizeOffset(
-        options.offset
-      );
-
-    let tasks =
-      Array.from(
-        this.tasks.values()
-      );
-
-    if (
-      options.status
-    ) {
-      const statuses =
-        new Set(
-          Array.isArray(
-            options.status
-          )
-            ? options.status
-            : [options.status]
-        );
-
-      tasks =
-        tasks.filter(
-          (task) =>
-            statuses.has(
-              task.status
-            )
-        );
-    }
-
-    if (
-      options.type
-    ) {
-      const type =
-        normalizeTaskType(
-          options.type
-        );
-
-      tasks =
-        tasks.filter(
-          (task) =>
-            task.type === type
-        );
-    }
-
-    if (
-      options.priority
-    ) {
-      tasks =
-        tasks.filter(
-          (task) =>
-            task.priority ===
-            options.priority
-        );
-    }
-
-    tasks.sort(
-      (a, b) => {
-        const priorityDifference =
-          PRIORITY_VALUES[
-            b.priority
-          ] -
-          PRIORITY_VALUES[
-            a.priority
-          ];
-
-        if (
-          priorityDifference !==
-          0
-        ) {
-          return priorityDifference;
-        }
-
-        return (
-          b.createdAt.getTime() -
-          a.createdAt.getTime()
-        );
-      }
+    const limit = normalizeListLimit(
+      options.limit
     );
 
-    const total =
-      tasks.length;
+    const offset = normalizeOffset(
+      options.offset
+    );
 
-    const items =
-      tasks
-        .slice(
-          offset,
-          offset + limit
-        )
-        .map(
-          (task) =>
-            this.cloneTask(
-              task
-            )
-        );
+    let tasks = Array.from(
+      this.tasks.values()
+    );
+
+    if (options.status) {
+      const statuses = new Set(
+        Array.isArray(options.status)
+          ? options.status
+          : [options.status]
+      );
+
+      tasks = tasks.filter(
+        (task) =>
+          statuses.has(task.status)
+      );
+    }
+
+    if (options.type) {
+      const type = normalizeTaskType(
+        options.type
+      );
+
+      tasks = tasks.filter(
+        (task) => task.type === type
+      );
+    }
+
+    if (options.priority) {
+      tasks = tasks.filter(
+        (task) =>
+          task.priority ===
+          options.priority
+      );
+    }
+
+    tasks.sort((a, b) => {
+      const priorityDifference =
+        PRIORITY_VALUES[b.priority] -
+        PRIORITY_VALUES[a.priority];
+
+      if (priorityDifference !== 0) {
+        return priorityDifference;
+      }
+
+      return (
+        b.createdAt.getTime() -
+        a.createdAt.getTime()
+      );
+    });
+
+    const total = tasks.length;
+
+    const items = tasks
+      .slice(
+        offset,
+        offset + limit
+      )
+      .map((task) =>
+        this.cloneTask(task)
+      );
 
     return {
-      tasks:
-        items,
-
+      tasks: items,
       total,
-
       limit,
-
       offset,
-
-      hasMore:
-        offset + limit <
-        total,
+      hasMore: offset + limit < total,
     };
   }
 
   getStats(): TaskStats {
     const stats: TaskStats = {
-      total:
-        this.tasks.size,
-
+      total: this.tasks.size,
       pending: 0,
-
       scheduled: 0,
-
       running: 0,
-
       completed: 0,
-
       failed: 0,
-
       retrying: 0,
-
       cancelled: 0,
-
       paused: 0,
     };
 
-    for (
-      const task of this.tasks.values()
-    ) {
-      stats[
-        task.status
-      ] += 1;
+    for (const task of this.tasks.values()) {
+      stats[task.status] += 1;
     }
 
     return stats;
@@ -731,113 +597,70 @@ export class TaskService {
     taskId: string
   ): Task {
     const task =
-      this.requireInternal(
-        taskId
-      );
+      this.requireInternal(taskId);
 
     if (
-      task.status ===
-        "completed" ||
-      task.status ===
-        "failed" ||
-      task.status ===
-        "cancelled"
+      task.status === "completed" ||
+      task.status === "failed" ||
+      task.status === "cancelled"
     ) {
-      return this.cloneTask(
-        task
-      );
+      return this.cloneTask(task);
     }
 
-    const controller =
-      this.controllers.get(
-        taskId
-      );
+    this.controllers
+      .get(taskId)
+      ?.abort();
 
-    controller?.abort();
+    task.status = "cancelled";
 
-    task.status =
-      "cancelled";
+    task.cancelledAt = new Date();
 
-    task.cancelledAt =
-      new Date();
+    task.updatedAt = new Date();
 
-    task.updatedAt =
-      new Date();
-
-    task.error =
-      this.createTaskError(
-        new TaskCancelledError(
-          taskId
-        ),
-        false
-      );
-
-    this.tasks.set(
-      taskId,
-      task
+    task.error = this.createTaskError(
+      new TaskCancelledError(taskId),
+      false
     );
 
-    return this.cloneTask(
-      task
-    );
+    this.tasks.set(taskId, task);
+
+    return this.cloneTask(task);
   }
 
   pause(
     taskId: string
   ): Task {
     const task =
-      this.requireInternal(
-        taskId
-      );
+      this.requireInternal(taskId);
 
     if (
-      task.status !==
-        "pending" &&
-      task.status !==
-        "scheduled" &&
-      task.status !==
-        "retrying"
+      task.status !== "pending" &&
+      task.status !== "scheduled" &&
+      task.status !== "retrying"
     ) {
-      return this.cloneTask(
-        task
-      );
+      return this.cloneTask(task);
     }
 
-    task.status =
-      "paused";
+    task.status = "paused";
 
-    task.updatedAt =
-      new Date();
+    task.updatedAt = new Date();
 
-    this.tasks.set(
-      taskId,
-      task
-    );
+    this.tasks.set(taskId, task);
 
-    return this.cloneTask(
-      task
-    );
+    return this.cloneTask(task);
   }
 
   resume(
     taskId: string
   ): Task {
     const task =
-      this.requireInternal(
-        taskId
-      );
+      this.requireInternal(taskId);
 
-    if (
-      task.status !==
-      "paused"
-    ) {
-      return this.cloneTask(
-        task
-      );
+    if (task.status !== "paused") {
+      return this.cloneTask(task);
     }
 
-    const now =
-      new Date();
+    const now = new Date();
 
     task.status =
       task.runAt &&
@@ -846,132 +669,87 @@ export class TaskService {
         ? "scheduled"
         : "pending";
 
-    task.updatedAt =
-      now;
+    task.updatedAt = now;
 
-    this.tasks.set(
-      taskId,
-      task
-    );
+    this.tasks.set(taskId, task);
 
     void this.process();
 
-    return this.cloneTask(
-      task
-    );
+    return this.cloneTask(task);
   }
 
   retry(
     taskId: string
   ): Task {
     const task =
-      this.requireInternal(
-        taskId
-      );
+      this.requireInternal(taskId);
 
     if (
-      task.status !==
-        "failed" &&
-      task.status !==
-        "cancelled"
+      task.status !== "failed" &&
+      task.status !== "cancelled"
     ) {
       throw new TaskServiceError(
         `Task "${taskId}" cannot be retried from status "${task.status}".`
       );
     }
 
-    task.status =
-      "pending";
+    task.status = "pending";
 
-    task.error =
-      undefined;
+    task.error = undefined;
 
-    task.cancelledAt =
-      undefined;
+    task.cancelledAt = undefined;
 
-    task.completedAt =
-      undefined;
+    task.completedAt = undefined;
 
-    task.startedAt =
-      undefined;
+    task.startedAt = undefined;
 
-    task.updatedAt =
-      new Date();
+    task.updatedAt = new Date();
 
-    this.tasks.set(
-      taskId,
-      task
-    );
+    this.tasks.set(taskId, task);
 
     void this.process();
 
-    return this.cloneTask(
-      task
-    );
+    return this.cloneTask(task);
   }
 
   delete(
     taskId: string
   ): boolean {
-    const task =
-      this.tasks.get(
-        taskId
-      );
+    const task = this.tasks.get(taskId);
 
     if (!task) {
       return false;
     }
 
-    if (
-      task.status ===
-      "running"
-    ) {
-      this.cancel(
-        taskId
-      );
+    if (task.status === "running") {
+      this.cancel(taskId);
     }
 
-    this.controllers.delete(
-      taskId
-    );
+    this.controllers.delete(taskId);
 
-    return this.tasks.delete(
-      taskId
-    );
+    return this.tasks.delete(taskId);
   }
 
   clear(
     includeRunning = false
   ): void {
-    for (
-      const task of this.tasks.values()
-    ) {
+    for (const task of this.tasks.values()) {
       if (
-        task.status ===
-          "running" &&
+        task.status === "running" &&
         !includeRunning
       ) {
         continue;
       }
 
-      if (
-        task.status ===
-        "running"
-      ) {
+      if (task.status === "running") {
         this.controllers
-          .get(
-            task.id
-          )
+          .get(task.id)
           ?.abort();
       }
 
-      this.tasks.delete(
-        task.id
-      );
+      this.tasks.delete(task.id);
 
-      this.controllers.delete(
-        task.id
-      );
+      this.controllers.delete(task.id);
     }
   }
 
@@ -980,40 +758,32 @@ export class TaskService {
   /* ------------------------------------------------------------------------ */
 
   start(): void {
-    if (
-      this.started
-    ) {
+    if (this.started) {
       return;
     }
 
-    this.started =
-      true;
+    this.started = true;
 
-    this.pollTimer =
-      setInterval(
-        () => {
-          void this.process();
-        },
-        this.pollIntervalMs
-      );
+    this.pollTimer = setInterval(
+      () => {
+        void this.process();
+      },
+      this.pollIntervalMs
+    );
 
     void this.process();
   }
 
   stop(): void {
-    if (
-      this.pollTimer
-    ) {
+    if (this.pollTimer) {
       clearInterval(
         this.pollTimer
       );
     }
 
-    this.pollTimer =
-      null;
+    this.pollTimer = null;
 
-    this.started =
-      false;
+    this.started = false;
   }
 
   isRunning(): boolean {
@@ -1024,9 +794,7 @@ export class TaskService {
     value: number
   ): void {
     this.concurrency =
-      normalizeConcurrency(
-        value
-      );
+      normalizeConcurrency(value);
 
     void this.process();
   }
@@ -1051,8 +819,7 @@ export class TaskService {
       return;
     }
 
-    this.processing =
-      true;
+    this.processing = true;
 
     try {
       while (
@@ -1066,87 +833,65 @@ export class TaskService {
           break;
         }
 
-        this.runningCount +=
-          1;
+        this.runningCount += 1;
 
         void this.executeTask(
           task.id
-        ).finally(
-          () => {
-            this.runningCount =
-              Math.max(
-                0,
-                this.runningCount -
-                  1
-              );
+        ).finally(() => {
+          this.runningCount =
+            Math.max(
+              0,
+              this.runningCount - 1
+            );
 
-            void this.process();
-          }
-        );
+          void this.process();
+        });
       }
     } finally {
-      this.processing =
-        false;
+      this.processing = false;
     }
   }
 
   private getNextRunnableTask():
     | Task
     | undefined {
-    const now =
-      Date.now();
+    const now = Date.now();
 
-    const candidates =
-      Array.from(
-        this.tasks.values()
-      )
-        .filter(
-          (task) => {
-            if (
-              task.status !==
-                "pending" &&
-              task.status !==
-                "retrying" &&
-              task.status !==
-                "scheduled"
-            ) {
-              return false;
-            }
+    const candidates = Array.from(
+      this.tasks.values()
+    )
+      .filter((task) => {
+        if (
+          task.status !== "pending" &&
+          task.status !== "retrying" &&
+          task.status !== "scheduled"
+        ) {
+          return false;
+        }
 
-            if (
-              task.runAt &&
-              task.runAt.getTime() >
-                now
-            ) {
-              return false;
-            }
+        if (
+          task.runAt &&
+          task.runAt.getTime() > now
+        ) {
+          return false;
+        }
 
-            return true;
-          }
-        )
-        .sort(
-          (a, b) => {
-            const priorityDifference =
-              PRIORITY_VALUES[
-                b.priority
-              ] -
-              PRIORITY_VALUES[
-                a.priority
-              ];
+        return true;
+      })
+      .sort((a, b) => {
+        const priorityDifference =
+          PRIORITY_VALUES[b.priority] -
+          PRIORITY_VALUES[a.priority];
 
-            if (
-              priorityDifference !==
-              0
-            ) {
-              return priorityDifference;
-            }
+        if (priorityDifference !== 0) {
+          return priorityDifference;
+        }
 
-            return (
-              a.createdAt.getTime() -
-              b.createdAt.getTime()
-            );
-          }
+        return (
+          a.createdAt.getTime() -
+          b.createdAt.getTime()
         );
+      });
 
     return candidates[0];
   }
@@ -1155,25 +900,18 @@ export class TaskService {
     taskId: string
   ): Promise<void> {
     const task =
-      this.tasks.get(
-        taskId
-      );
+      this.tasks.get(taskId);
 
     if (!task) {
       return;
     }
 
-    if (
-      task.status ===
-      "cancelled"
-    ) {
+    if (task.status === "cancelled") {
       return;
     }
 
     const handler =
-      this.handlers.get(
-        task.type
-      );
+      this.handlers.get(task.type);
 
     if (!handler) {
       this.failTask(
@@ -1195,22 +933,15 @@ export class TaskService {
       controller
     );
 
-    task.status =
-      "running";
+    task.status = "running";
 
-    task.attempts +=
-      1;
+    task.attempts += 1;
 
-    task.startedAt =
-      new Date();
+    task.startedAt = new Date();
 
-    task.updatedAt =
-      new Date();
+    task.updatedAt = new Date();
 
-    this.tasks.set(
-      task.id,
-      task
-    );
+    this.tasks.set(task.id, task);
 
     try {
       const result =
@@ -1221,25 +952,19 @@ export class TaskService {
         );
 
       const current =
-        this.tasks.get(
-          task.id
-        );
+        this.tasks.get(task.id);
 
       if (
         !current ||
-        current.status ===
-          "cancelled"
+        current.status === "cancelled"
       ) {
         return;
       }
 
-      current.status =
-        "completed";
+      current.status = "completed";
 
       current.result =
-        cloneValue(
-          result
-        );
+        cloneValue(result);
 
       current.completedAt =
         new Date();
@@ -1247,32 +972,25 @@ export class TaskService {
       current.updatedAt =
         new Date();
 
-      current.error =
-        undefined;
+      current.error = undefined;
 
       this.tasks.set(
         current.id,
         current
       );
-    } catch (
-      error
-    ) {
+    } catch (error) {
       const current =
-        this.tasks.get(
-          task.id
-        );
+        this.tasks.get(task.id);
 
       if (!current) {
         return;
       }
 
       if (
-        current.status ===
-          "cancelled" ||
+        current.status === "cancelled" ||
         controller.signal.aborted
       ) {
-        current.status =
-          "cancelled";
+        current.status = "cancelled";
 
         current.cancelledAt =
           current.cancelledAt ??
@@ -1298,9 +1016,7 @@ export class TaskService {
       }
 
       const retryable =
-        this.isRetryableError(
-          error
-        );
+        this.isRetryableError(error);
 
       this.failTask(
         current,
@@ -1319,69 +1035,44 @@ export class TaskService {
     handler: TaskHandler,
     signal: AbortSignal
   ): Promise<unknown> {
-    const context:
-      TaskHandlerContext = {
-        taskId:
-          task.id,
+    const context: TaskHandlerContext = {
+      taskId: task.id,
+      taskType: task.type,
+      attempt: task.attempts,
+      signal,
+    };
 
-        taskType:
-          task.type,
+    const execution = Promise.resolve(
+      handler(
+        cloneValue(task.payload),
+        context
+      )
+    );
 
-        attempt:
-          task.attempts,
-
-        signal,
-      };
-
-    const execution =
-      Promise.resolve(
-        handler(
-          cloneValue(
-            task.payload
-          ),
-          context
-        )
-      );
-
-    if (
-      !task.timeoutMs
-    ) {
+    if (!task.timeoutMs) {
       return execution;
     }
 
     let timeoutId:
-      ReturnType<
-        typeof setTimeout
-      > | undefined;
+      | ReturnType<typeof setTimeout>
+      | undefined;
 
-    const timeout =
-      new Promise<
-        never
-      >(
-        (
-          _resolve,
-          reject
-        ) => {
-          timeoutId =
-            setTimeout(
-              () => {
-                this.controllers
-                  .get(
-                    task.id
-                  )
-                  ?.abort();
+    const timeout = new Promise<never>(
+      (_resolve, reject) => {
+        timeoutId = setTimeout(() => {
+          this.controllers
+            .get(task.id)
+            ?.abort();
 
-                reject(
-                  new TaskTimeoutError(
-                    task.id,
-                    task.timeoutMs!
-                  )
-                );
-              },
-              task.timeoutMs
-            );
-        }
-      );
+          reject(
+            new TaskTimeoutError(
+              task.id,
+              task.timeoutMs ?? 0
+            )
+          );
+        }, task.timeoutMs);
+      }
+    );
 
     try {
       return await Promise.race([
@@ -1389,12 +1080,8 @@ export class TaskService {
         timeout,
       ]);
     } finally {
-      if (
-        timeoutId
-      ) {
-        clearTimeout(
-          timeoutId
-        );
+      if (timeoutId !== undefined) {
+        clearTimeout(timeoutId);
       }
     }
   }
@@ -1410,63 +1097,51 @@ export class TaskService {
         retryable
       );
 
-    task.error =
-      taskError;
+    task.error = taskError;
 
-    task.updatedAt =
-      new Date();
+    task.updatedAt = new Date();
 
     const canRetry =
       retryable &&
       task.attempts <
         task.maxAttempts;
 
-    if (
-      canRetry
-    ) {
-      task.status =
-        "retrying";
+    if (canRetry) {
+      task.status = "retrying";
 
       this.tasks.set(
         task.id,
         task
       );
 
-      queueMicrotask(
-        () => {
-          const current =
-            this.tasks.get(
-              task.id
-            );
+      queueMicrotask(() => {
+        const current =
+          this.tasks.get(task.id);
 
-          if (
-            !current ||
-            current.status !==
-              "retrying"
-          ) {
-            return;
-          }
-
-          current.status =
-            "pending";
-
-          current.updatedAt =
-            new Date();
-
-          this.tasks.set(
-            current.id,
-            current
-          );
-
-          void this.process();
+        if (
+          !current ||
+          current.status !== "retrying"
+        ) {
+          return;
         }
-      );
+
+        current.status = "pending";
+
+        current.updatedAt =
+          new Date();
+
+        this.tasks.set(
+          current.id,
+          current
+        );
+
+        void this.process();
+      });
 
       return;
     }
 
-    task.status =
-      "failed";
+    task.status = "failed";
 
     this.tasks.set(
       task.id,
@@ -1482,9 +1157,7 @@ export class TaskService {
     taskId: string
   ): Task {
     const task =
-      this.tasks.get(
-        taskId
-      );
+      this.tasks.get(taskId);
 
     if (!task) {
       throw new TaskNotFoundError(
@@ -1498,23 +1171,24 @@ export class TaskService {
   private validateCreateInput(
     input: CreateTaskInput
   ): void {
-    const errors: string[] =
-      [];
+    const errors: string[] = [];
 
     if (
       !input ||
-      typeof input !==
-        "object"
+      typeof input !== "object"
     ) {
       errors.push(
         "Task input is required."
+      );
+
+      throw new TaskValidationError(
+        errors
       );
     }
 
     if (
       !input.type ||
-      typeof input.type !==
-        "string" ||
+      typeof input.type !== "string" ||
       !input.type.trim()
     ) {
       errors.push(
@@ -1523,8 +1197,7 @@ export class TaskService {
     }
 
     if (
-      input.maxAttempts !==
-        undefined &&
+      input.maxAttempts !== undefined &&
       (
         !Number.isFinite(
           input.maxAttempts
@@ -1538,8 +1211,7 @@ export class TaskService {
     }
 
     if (
-      input.timeoutMs !==
-        undefined &&
+      input.timeoutMs !== undefined &&
       (
         !Number.isFinite(
           input.timeoutMs
@@ -1565,9 +1237,7 @@ export class TaskService {
       );
     }
 
-    if (
-      errors.length > 0
-    ) {
+    if (errors.length > 0) {
       throw new TaskValidationError(
         errors
       );
@@ -1578,37 +1248,23 @@ export class TaskService {
     error: unknown,
     retryable: boolean
   ): TaskError {
-    if (
-      error instanceof Error
-    ) {
+    if (error instanceof Error) {
       return {
-        message:
-          error.message,
-
-        name:
-          error.name,
-
-        stack:
-          error.stack,
-
+        message: error.message,
+        name: error.name,
+        stack: error.stack,
         retryable,
-
-        timestamp:
-          new Date(),
+        timestamp: new Date(),
       };
     }
 
     return {
       message:
-        typeof error ===
-        "string"
+        typeof error === "string"
           ? error
           : "Unknown task execution error.",
-
       retryable,
-
-      timestamp:
-        new Date(),
+      timestamp: new Date(),
     };
   }
 
@@ -1616,10 +1272,8 @@ export class TaskService {
     error: unknown
   ): boolean {
     if (
-      error instanceof
-        TaskCancelledError ||
-      error instanceof
-        TaskHandlerNotFoundError
+      error instanceof TaskCancelledError ||
+      error instanceof TaskHandlerNotFoundError
     ) {
       return false;
     }
@@ -1627,81 +1281,60 @@ export class TaskService {
     return true;
   }
 
-  private cloneTask(
-    task: Task
-  ): Task {
+  private cloneTask<
+    TPayload extends TaskPayload = TaskPayload,
+    TResult = unknown
+  >(
+    task: Task<TPayload, TResult>
+  ): Task<TPayload, TResult> {
     return {
       ...task,
 
-      payload:
-        cloneValue(
-          task.payload
-        ),
+      payload: cloneValue(
+        task.payload
+      ),
 
       result:
-        task.result ===
-        undefined
+        task.result === undefined
           ? undefined
-          : cloneValue(
-              task.result
+          : cloneValue(task.result),
+
+      error: task.error
+        ? {
+            ...task.error,
+            timestamp: new Date(
+              task.error.timestamp
             ),
+          }
+        : undefined,
 
-      error:
-        task.error
-          ? {
-              ...task.error,
+      metadata: task.metadata
+        ? cloneRecord(task.metadata)
+        : undefined,
 
-              timestamp:
-                new Date(
-                  task.error.timestamp
-                ),
-            }
-          : undefined,
+      runAt: task.runAt
+        ? new Date(task.runAt)
+        : undefined,
 
-      metadata:
-        task.metadata
-          ? cloneRecord(
-              task.metadata
-            )
-          : undefined,
+      createdAt: new Date(
+        task.createdAt
+      ),
 
-      runAt:
-        task.runAt
-          ? new Date(
-              task.runAt
-            )
-          : undefined,
+      updatedAt: new Date(
+        task.updatedAt
+      ),
 
-      createdAt:
-        new Date(
-          task.createdAt
-        ),
+      startedAt: task.startedAt
+        ? new Date(task.startedAt)
+        : undefined,
 
-      updatedAt:
-        new Date(
-          task.updatedAt
-        ),
+      completedAt: task.completedAt
+        ? new Date(task.completedAt)
+        : undefined,
 
-      startedAt:
-        task.startedAt
-          ? new Date(
-              task.startedAt
-            )
-          : undefined,
-
-      completedAt:
-        task.completedAt
-          ? new Date(
-              task.completedAt
-            )
-          : undefined,
-
-      cancelledAt:
-        task.cancelledAt
-          ? new Date(
-              task.cancelledAt
-            )
-          : undefined,
+      cancelledAt: task.cancelledAt
+        ? new Date(task.cancelledAt)
+        : undefined,
     };
   }
 }
@@ -1714,8 +1347,7 @@ function normalizeTaskType(
   value: string
 ): string {
   if (
-    typeof value !==
-      "string" ||
+    typeof value !== "string" ||
     !value.trim()
   ) {
     throw new TaskValidationError([
@@ -1730,13 +1362,10 @@ function normalizeConcurrency(
   value?: number
 ): number {
   const concurrency =
-    value ??
-    DEFAULT_TASK_CONCURRENCY;
+    value ?? DEFAULT_TASK_CONCURRENCY;
 
   if (
-    !Number.isFinite(
-      concurrency
-    ) ||
+    !Number.isFinite(concurrency) ||
     concurrency <= 0
   ) {
     throw new TaskValidationError([
@@ -1745,9 +1374,7 @@ function normalizeConcurrency(
   }
 
   return Math.min(
-    Math.floor(
-      concurrency
-    ),
+    Math.floor(concurrency),
     MAX_TASK_CONCURRENCY
   );
 }
@@ -1756,13 +1383,10 @@ function normalizeMaxAttempts(
   value?: number
 ): number {
   const attempts =
-    value ??
-    DEFAULT_MAX_ATTEMPTS;
+    value ?? DEFAULT_MAX_ATTEMPTS;
 
   if (
-    !Number.isFinite(
-      attempts
-    ) ||
+    !Number.isFinite(attempts) ||
     attempts <= 0
   ) {
     throw new TaskValidationError([
@@ -1770,24 +1394,18 @@ function normalizeMaxAttempts(
     ]);
   }
 
-  return Math.floor(
-    attempts
-  );
+  return Math.floor(attempts);
 }
 
 function normalizeTimeout(
   value?: number
 ): number | undefined {
-  if (
-    value === undefined
-  ) {
+  if (value === undefined) {
     return undefined;
   }
 
   if (
-    !Number.isFinite(
-      value
-    ) ||
+    !Number.isFinite(value) ||
     value <= 0
   ) {
     throw new TaskValidationError([
@@ -1796,9 +1414,7 @@ function normalizeTimeout(
   }
 
   return Math.min(
-    Math.floor(
-      value
-    ),
+    Math.floor(value),
     MAX_TASK_TIMEOUT_MS
   );
 }
@@ -1807,13 +1423,10 @@ function normalizePollInterval(
   value?: number
 ): number {
   const interval =
-    value ??
-    DEFAULT_POLL_INTERVAL_MS;
+    value ?? DEFAULT_POLL_INTERVAL_MS;
 
   if (
-    !Number.isFinite(
-      interval
-    ) ||
+    !Number.isFinite(interval) ||
     interval <= 0
   ) {
     throw new TaskValidationError([
@@ -1823,25 +1436,19 @@ function normalizePollInterval(
 
   return Math.max(
     MIN_POLL_INTERVAL_MS,
-    Math.floor(
-      interval
-    )
+    Math.floor(interval)
   );
 }
 
 function normalizeListLimit(
   value?: number
 ): number {
-  if (
-    value === undefined
-  ) {
+  if (value === undefined) {
     return DEFAULT_TASK_LIST_LIMIT;
   }
 
   if (
-    !Number.isFinite(
-      value
-    ) ||
+    !Number.isFinite(value) ||
     value <= 0
   ) {
     throw new TaskValidationError([
@@ -1850,9 +1457,7 @@ function normalizeListLimit(
   }
 
   return Math.min(
-    Math.floor(
-      value
-    ),
+    Math.floor(value),
     MAX_TASK_LIST_LIMIT
   );
 }
@@ -1860,16 +1465,12 @@ function normalizeListLimit(
 function normalizeOffset(
   value?: number
 ): number {
-  if (
-    value === undefined
-  ) {
+  if (value === undefined) {
     return 0;
   }
 
   if (
-    !Number.isFinite(
-      value
-    ) ||
+    !Number.isFinite(value) ||
     value < 0
   ) {
     throw new TaskValidationError([
@@ -1877,29 +1478,20 @@ function normalizeOffset(
     ]);
   }
 
-  return Math.floor(
-    value
-  );
+  return Math.floor(value);
 }
 
 function generateTaskId(): string {
-  const random =
-    Math.random()
-      .toString(36)
-      .slice(2, 12);
+  const random = Math.random()
+    .toString(36)
+    .slice(2, 12);
 
   return `task_${Date.now()}_${random}`;
 }
 
 function cloneRecord(
-  value: Record<
-    string,
-    unknown
-  >
-): Record<
-  string,
-  unknown
-> {
+  value: Record<string, unknown>
+): Record<string, unknown> {
   return {
     ...value,
   };
@@ -1915,39 +1507,25 @@ function cloneValue<T>(
     return value;
   }
 
-  if (
-    value instanceof Date
-  ) {
+  if (value instanceof Date) {
     return new Date(
       value.getTime()
     ) as T;
   }
 
-  if (
-    value instanceof Uint8Array
-  ) {
+  if (value instanceof Uint8Array) {
     return new Uint8Array(
       value
     ) as T;
   }
 
-  if (
-    Array.isArray(
-      value
-    )
-  ) {
+  if (Array.isArray(value)) {
     return value.map(
-      (item) =>
-        cloneValue(
-          item
-        )
+      (item) => cloneValue(item)
     ) as T;
   }
 
-  if (
-    typeof value ===
-      "object"
-  ) {
+  if (typeof value === "object") {
     return {
       ...(value as Record<
         string,
@@ -1971,7 +1549,7 @@ export const taskService =
 /* -------------------------------------------------------------------------- */
 
 export function registerTaskHandler<
-  TPayload = unknown,
+  TPayload extends TaskPayload = TaskPayload,
   TResult = unknown
 >(
   type: string,
@@ -1995,18 +1573,18 @@ export function unregisterTaskHandler(
 }
 
 export function createTask<
-  TPayload = TaskPayload
+  TPayload extends TaskPayload = TaskPayload
 >(
   input: CreateTaskInput<TPayload>
 ): Task<TPayload> {
-  return taskService.create(
-    input
-  );
+  return taskService.create(input);
 }
 
-export function createTasks(
-  inputs: CreateTaskInput[]
-): Task[] {
+export function createTasks<
+  TPayload extends TaskPayload = TaskPayload
+>(
+  inputs: CreateTaskInput<TPayload>[]
+): Task<TPayload>[] {
   return taskService.createMany(
     inputs
   );
@@ -2015,25 +1593,19 @@ export function createTasks(
 export function getTask(
   taskId: string
 ): Task | undefined {
-  return taskService.get(
-    taskId
-  );
+  return taskService.get(taskId);
 }
 
 export function requireTask(
   taskId: string
 ): Task {
-  return taskService.require(
-    taskId
-  );
+  return taskService.require(taskId);
 }
 
 export function listTasks(
   options?: TaskListOptions
 ): TaskListResult {
-  return taskService.list(
-    options
-  );
+  return taskService.list(options);
 }
 
 export function getTaskStats(): TaskStats {
@@ -2043,49 +1615,37 @@ export function getTaskStats(): TaskStats {
 export function cancelTask(
   taskId: string
 ): Task {
-  return taskService.cancel(
-    taskId
-  );
+  return taskService.cancel(taskId);
 }
 
 export function pauseTask(
   taskId: string
 ): Task {
-  return taskService.pause(
-    taskId
-  );
+  return taskService.pause(taskId);
 }
 
 export function resumeTask(
   taskId: string
 ): Task {
-  return taskService.resume(
-    taskId
-  );
+  return taskService.resume(taskId);
 }
 
 export function retryTask(
   taskId: string
 ): Task {
-  return taskService.retry(
-    taskId
-  );
+  return taskService.retry(taskId);
 }
 
 export function deleteTask(
   taskId: string
 ): boolean {
-  return taskService.delete(
-    taskId
-  );
+  return taskService.delete(taskId);
 }
 
 export function clearTasks(
   includeRunning = false
 ): void {
-  taskService.clear(
-    includeRunning
-  );
+  taskService.clear(includeRunning);
 }
 
 export function startTaskService(): void {
