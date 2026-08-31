@@ -12,42 +12,93 @@ type ActionPayload = {
   action?: ActionRequest;
 };
 
+type ActionResultStatus =
+  | "completed"
+  | "pending_confirmation"
+  | "rejected"
+  | "unsupported";
+
 type ActionResult = {
   success: boolean;
-  status: "completed" | "pending_confirmation" | "rejected" | "unsupported";
+  status: ActionResultStatus;
   message: string;
   data?: Record<string, unknown>;
 };
 
+/*
+ * ActionRequest ana tipini değiştirmeden,
+ * endpoint seviyesinde confirmation desteği ekliyoruz.
+ *
+ * requiresConfirmation, mevcut ActionRequest tipinde
+ * henüz tanımlı olmayabilir. Bu nedenle güvenli bir
+ * genişletilmiş görünüm kullanıyoruz.
+ */
+type ConfirmableAction = ActionRequest & {
+  requiresConfirmation?: boolean;
+};
+
 /* ==================================================
- * HELPERS
+ * RESPONSE HELPER
  * ================================================== */
 
 function json(
   body: ActionResult,
   status = 200
-) {
-  return NextResponse.json(
-    body,
-    {
-      status,
-      headers: {
-        "Cache-Control": "no-store",
-      },
-    }
-  );
+): NextResponse<ActionResult> {
+  return NextResponse.json(body, {
+    status,
+    headers: {
+      "Cache-Control": "no-store",
+      "Content-Type": "application/json; charset=utf-8",
+    },
+  });
 }
 
 /* ==================================================
- * SAFE ACTION CHECK
+ * TYPE GUARDS
  * ================================================== */
+
+function isRecord(
+  value: unknown
+): value is Record<string, unknown> {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !Array.isArray(value)
+  );
+}
+
+function isActionRequest(
+  value: unknown
+): value is ActionRequest {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return typeof value.type === "string";
+}
+
+/* ==================================================
+ * ACTION HELPERS
+ * ================================================== */
+
+function requiresConfirmation(
+  action: ActionRequest
+): boolean {
+  const confirmableAction =
+    action as ConfirmableAction;
+
+  return (
+    confirmableAction.requiresConfirmation === true
+  );
+}
 
 function isSafeAction(
   action: ActionRequest
-) {
+): boolean {
   return (
     action.type === "none" ||
-    !action.requiresConfirmation
+    !requiresConfirmation(action)
   );
 }
 
@@ -59,13 +110,37 @@ export async function POST(
   request: NextRequest
 ) {
   try {
-    const body =
-      (await request.json()) as ActionPayload;
+    let body: unknown;
 
-    const action =
-      body.action;
+    try {
+      body = await request.json();
+    } catch {
+      return json(
+        {
+          success: false,
+          status: "rejected",
+          message:
+            "Geçersiz JSON request body gönderildi.",
+        },
+        400
+      );
+    }
 
-    if (!action) {
+    if (!isRecord(body)) {
+      return json(
+        {
+          success: false,
+          status: "rejected",
+          message:
+            "Geçerli bir request body gönderilmedi.",
+        },
+        400
+      );
+    }
+
+    const action = body.action;
+
+    if (!isActionRequest(action)) {
       return json(
         {
           success: false,
@@ -81,63 +156,48 @@ export async function POST(
      * NO ACTION
      * ============================================== */
 
-    if (
-      action.type === "none"
-    ) {
-      return json(
-        {
-          success: true,
-          status: "completed",
-          message:
-            "Gerçekleştirilecek bir işlem yok.",
-        }
-      );
+    if (action.type === "none") {
+      return json({
+        success: true,
+        status: "completed",
+        message:
+          "Gerçekleştirilecek bir işlem yok.",
+        data: {
+          actionType: action.type,
+        },
+      });
     }
 
     /* ==============================================
      * CONFIRMATION REQUIRED
      * ============================================== */
 
-    if (
-      action.requiresConfirmation
-    ) {
-      return json(
-        {
-          success: false,
-          status:
-            "pending_confirmation",
-          message:
-            "Bu işlem kullanıcı onayı gerektiriyor.",
-          data: {
-            actionType:
-              action.type,
-          },
-        }
-      );
+    if (requiresConfirmation(action)) {
+      return json({
+        success: false,
+        status: "pending_confirmation",
+        message:
+          "Bu işlem kullanıcı onayı gerektiriyor.",
+        data: {
+          actionType: action.type,
+        },
+      });
     }
 
     /* ==============================================
      * SAFE INTERNAL ACTIONS
      * ============================================== */
 
-    if (
-      isSafeAction(
-        action
-      )
-    ) {
-      return json(
-        {
-          success: true,
-          status:
-            "completed",
-          message:
-            "İşlem başarıyla tamamlandı.",
-          data: {
-            actionType:
-              action.type,
-          },
-        }
-      );
+    if (isSafeAction(action)) {
+      return json({
+        success: true,
+        status: "completed",
+        message:
+          "İşlem başarıyla tamamlandı.",
+        data: {
+          actionType: action.type,
+        },
+      });
     }
 
     /* ==============================================
@@ -147,32 +207,27 @@ export async function POST(
     return json(
       {
         success: false,
-        status:
-          "unsupported",
+        status: "unsupported",
         message:
           "Bu işlem şu anda desteklenmiyor.",
         data: {
-          actionType:
-            action.type,
+          actionType: action.type,
         },
       },
       400
     );
-  } catch (
-    error
-  ) {
+  } catch (error) {
     console.error(
-      "SYRAVEN ACTION API HATASI:",
+      "[SYRAVEN_ACTION_API_ERROR]",
       error
     );
 
     return json(
       {
         success: false,
-        status:
-          "rejected",
+        status: "rejected",
         message:
-          "Action işlenirken bir hata oluştu.",
+          "Action işlenirken beklenmeyen bir hata oluştu.",
       },
       500
     );
@@ -187,8 +242,7 @@ export async function GET() {
   return json(
     {
       success: false,
-      status:
-        "rejected",
+      status: "rejected",
       message:
         "Bu endpoint yalnızca POST isteklerini destekler.",
     },

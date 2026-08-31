@@ -38,47 +38,28 @@ export type AIModelStatus =
 
 export interface AIModel {
   id: string;
-
   name: string;
-
   provider: AIProvider;
-
   description: string;
-
   tier: AIModelTier;
-
   status: AIModelStatus;
-
   capabilities: AIModelCapability[];
-
   contextWindow?: number;
-
   maxOutputTokens?: number;
-
   supportsTools: boolean;
-
   supportsVision: boolean;
-
   supportsStreaming: boolean;
-
   recommendedFor: string[];
-
   priority: number;
 }
 
 export interface AIModelSelectionOptions {
   provider?: AIProvider;
-
   capability?: AIModelCapability;
-
   tier?: AIModelTier;
-
   preferredModel?: string;
-
   excludeModels?: string[];
-
   requireTools?: boolean;
-
   requireVision?: boolean;
 }
 
@@ -86,23 +67,17 @@ export interface AIModelSelectionOptions {
  * Groq models used by the current AI infrastructure.
  *
  * IMPORTANT:
- * Model IDs must match the IDs sent to the Groq API.
+ * Model IDs must match the IDs sent to the provider API.
  */
-export const AI_MODELS: AIModel[] = [
+export const AI_MODELS: readonly AIModel[] = [
   {
     id: "llama-3.3-70b-versatile",
-
     name: "Llama 3.3 70B Versatile",
-
     provider: "groq",
-
     description:
       "High-quality general-purpose model for complex reasoning, writing, analysis and multi-agent orchestration.",
-
     tier: "powerful",
-
     status: "active",
-
     capabilities: [
       "chat",
       "reasoning",
@@ -113,17 +88,11 @@ export const AI_MODELS: AIModel[] = [
       "structured-output",
       "long-context",
     ],
-
     contextWindow: 128000,
-
     maxOutputTokens: 8192,
-
     supportsTools: true,
-
     supportsVision: false,
-
     supportsStreaming: true,
-
     recommendedFor: [
       "complex reasoning",
       "multi-agent orchestration",
@@ -132,41 +101,28 @@ export const AI_MODELS: AIModel[] = [
       "long-form writing",
       "planning",
     ],
-
     priority: 100,
   },
 
   {
     id: "llama-3.1-8b-instant",
-
     name: "Llama 3.1 8B Instant",
-
     provider: "groq",
-
     description:
       "Fast and efficient model for lightweight chat, classification, extraction and high-volume workloads.",
-
     tier: "fast",
-
     status: "active",
-
     capabilities: [
       "chat",
       "writing",
       "analysis",
       "structured-output",
     ],
-
     contextWindow: 131072,
-
     maxOutputTokens: 8192,
-
     supportsTools: false,
-
     supportsVision: false,
-
     supportsStreaming: true,
-
     recommendedFor: [
       "fast responses",
       "classification",
@@ -174,24 +130,17 @@ export const AI_MODELS: AIModel[] = [
       "data extraction",
       "simple writing",
     ],
-
     priority: 80,
   },
 
   {
     id: "qwen/qwen3-32b",
-
     name: "Qwen 3 32B",
-
     provider: "groq",
-
     description:
       "Advanced reasoning model suitable for complex analysis, coding assistance and structured problem solving.",
-
     tier: "reasoning",
-
     status: "active",
-
     capabilities: [
       "chat",
       "reasoning",
@@ -201,17 +150,11 @@ export const AI_MODELS: AIModel[] = [
       "structured-output",
       "tool-use",
     ],
-
     contextWindow: 32768,
-
     maxOutputTokens: 8192,
-
     supportsTools: true,
-
     supportsVision: false,
-
     supportsStreaming: true,
-
     recommendedFor: [
       "complex reasoning",
       "coding",
@@ -219,24 +162,17 @@ export const AI_MODELS: AIModel[] = [
       "problem solving",
       "technical architecture",
     ],
-
     priority: 95,
   },
 
   {
     id: "meta-llama/llama-4-scout-17b-16e-instruct",
-
     name: "Llama 4 Scout",
-
     provider: "groq",
-
     description:
       "Multimodal-capable model designed for large-context analysis and advanced AI workflows.",
-
     tier: "balanced",
-
     status: "active",
-
     capabilities: [
       "chat",
       "reasoning",
@@ -246,17 +182,11 @@ export const AI_MODELS: AIModel[] = [
       "research",
       "long-context",
     ],
-
     contextWindow: 131072,
-
     maxOutputTokens: 8192,
-
     supportsTools: false,
-
     supportsVision: true,
-
     supportsStreaming: true,
-
     recommendedFor: [
       "image understanding",
       "document analysis",
@@ -264,7 +194,6 @@ export const AI_MODELS: AIModel[] = [
       "research",
       "multimodal workflows",
     ],
-
     priority: 90,
   },
 ];
@@ -322,7 +251,7 @@ export function getDefaultAIModel(): AIModel {
     DEFAULT_AI_MODEL_ID,
   );
 
-  if (!model) {
+  if (model === undefined) {
     throw new Error(
       `Default AI model "${DEFAULT_AI_MODEL_ID}" is not registered.`,
     );
@@ -339,7 +268,7 @@ export function getFastAIModel(): AIModel {
     FAST_AI_MODEL_ID,
   );
 
-  if (!model) {
+  if (model === undefined) {
     throw new Error(
       `Fast AI model "${FAST_AI_MODEL_ID}" is not registered.`,
     );
@@ -356,7 +285,7 @@ export function getReasoningAIModel(): AIModel {
     REASONING_AI_MODEL_ID,
   );
 
-  if (!model) {
+  if (model === undefined) {
     throw new Error(
       `Reasoning AI model "${REASONING_AI_MODEL_ID}" is not registered.`,
     );
@@ -376,28 +305,26 @@ export function findAIModels(
 
   return getActiveAIModels()
     .filter((model) => {
-      if (
-        excludedModels.includes(model.id)
-      ) {
+      if (excludedModels.includes(model.id)) {
         return false;
       }
 
       if (
-        options.provider &&
+        options.provider !== undefined &&
         model.provider !== options.provider
       ) {
         return false;
       }
 
       if (
-        options.tier &&
+        options.tier !== undefined &&
         model.tier !== options.tier
       ) {
         return false;
       }
 
       if (
-        options.capability &&
+        options.capability !== undefined &&
         !model.capabilities.includes(
           options.capability,
         )
@@ -406,14 +333,14 @@ export function findAIModels(
       }
 
       if (
-        options.requireTools &&
+        options.requireTools === true &&
         !model.supportsTools
       ) {
         return false;
       }
 
       if (
-        options.requireVision &&
+        options.requireVision === true &&
         !model.supportsVision
       ) {
         return false;
@@ -433,13 +360,13 @@ export function findAIModels(
 export function selectAIModel(
   options: AIModelSelectionOptions = {},
 ): AIModel {
-  if (options.preferredModel) {
+  if (options.preferredModel !== undefined) {
     const preferredModel = getAIModel(
       options.preferredModel,
     );
 
     if (
-      preferredModel &&
+      preferredModel !== undefined &&
       preferredModel.status === "active"
     ) {
       return preferredModel;
@@ -449,8 +376,11 @@ export function selectAIModel(
   const candidates =
     findAIModels(options);
 
-  if (candidates.length > 0) {
-    return candidates[0];
+  const bestCandidate =
+    candidates.at(0);
+
+  if (bestCandidate !== undefined) {
+    return bestCandidate;
   }
 
   return getDefaultAIModel();
@@ -464,25 +394,32 @@ export function selectFastModel(): AIModel {
     tier: "fast",
   });
 
-  return (
-    fastModels[0] ??
-    getFastAIModel()
-  );
+  const fastestModel =
+    fastModels.at(0);
+
+  if (fastestModel !== undefined) {
+    return fastestModel;
+  }
+
+  return getFastAIModel();
 }
 
 /**
  * Selects a model optimized for reasoning.
  */
 export function selectReasoningModel(): AIModel {
-  const reasoningModels =
-    findAIModels({
-      capability: "reasoning",
-    });
+  const reasoningModels = findAIModels({
+    capability: "reasoning",
+  });
 
-  return (
-    reasoningModels[0] ??
-    getReasoningAIModel()
-  );
+  const bestReasoningModel =
+    reasoningModels.at(0);
+
+  if (bestReasoningModel !== undefined) {
+    return bestReasoningModel;
+  }
+
+  return getReasoningAIModel();
 }
 
 /**
@@ -493,13 +430,16 @@ export function selectVisionModel(): AIModel {
     requireVision: true,
   });
 
-  if (models.length === 0) {
+  const visionModel =
+    models.at(0);
+
+  if (visionModel === undefined) {
     throw new Error(
       "No active vision-capable AI model is registered.",
     );
   }
 
-  return models[0];
+  return visionModel;
 }
 
 /**
@@ -510,13 +450,16 @@ export function selectToolModel(): AIModel {
     requireTools: true,
   });
 
-  if (models.length === 0) {
+  const toolModel =
+    models.at(0);
+
+  if (toolModel === undefined) {
     throw new Error(
       "No active tool-capable AI model is registered.",
     );
   }
 
-  return models[0];
+  return toolModel;
 }
 
 /**
@@ -630,7 +573,7 @@ export function getAIModelSummary(
     provider: model.provider,
     tier: model.tier,
     status: model.status,
-    capabilities: model.capabilities,
+    capabilities: [...model.capabilities],
     supportsTools: model.supportsTools,
     supportsVision: model.supportsVision,
     supportsStreaming:

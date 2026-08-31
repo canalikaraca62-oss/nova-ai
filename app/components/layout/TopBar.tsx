@@ -7,6 +7,7 @@ import {
   type KeyboardEvent,
   type ReactNode,
   useEffect,
+  useRef,
   useState,
 } from "react";
 
@@ -44,7 +45,7 @@ export type TopBarProps = {
   onMenuClick?: () => void;
 
   /**
-   * Controls global search.
+   * Called whenever the search query changes.
    */
   onSearch?: (query: string) => void;
 
@@ -108,88 +109,85 @@ export type TopBarProps = {
    HELPERS
 ================================================== */
 
-function formatSegment(
-  segment: string
+function cn(
+  ...classes: Array<string | false | null | undefined>
 ): string {
+  return classes.filter(Boolean).join(" ");
+}
+
+function formatSegment(segment: string): string {
   return segment
     .replace(/[-_]/g, " ")
-    .replace(
-      /\b\w/g,
-      (character: string): string =>
-        character.toUpperCase()
+    .replace(/\b\w/g, (character: string): string =>
+      character.toUpperCase()
     );
 }
 
-function getTitleFromPathname(
-  pathname: string | null
-): string {
+function getTitleFromPathname(pathname: string | null): string {
   if (!pathname || pathname === "/") {
     return "Workspace";
   }
 
-  const segments: string[] =
-    pathname
-      .split("/")
-      .filter(Boolean);
+  const segments = pathname
+    .split("/")
+    .filter((segment): segment is string => Boolean(segment));
 
-  const lastSegment: string | undefined =
-    segments.at(-1);
+  const lastSegment = segments.at(-1);
 
   if (!lastSegment) {
     return "Workspace";
   }
 
-  if (
-    lastSegment === "new" &&
-    segments.length > 1
-  ) {
-    const parentSegment: string =
-      segments[
-        segments.length - 2
-      ];
+  if (lastSegment === "new") {
+    const parentSegment = segments.at(-2);
 
-    return `New ${formatSegment(
-      parentSegment
-    ).replace(/s$/, "")}`;
+    if (parentSegment) {
+      return `New ${formatSegment(parentSegment).replace(/s$/, "")}`;
+    }
+
+    return "New";
   }
 
-  return formatSegment(
-    lastSegment
-  );
+  return formatSegment(lastSegment);
 }
 
 /* ==================================================
    ICON BUTTON
 ================================================== */
 
-type IconButtonProps = {
+export type IconButtonProps = {
   label: string;
   onClick?: () => void;
   children: ReactNode;
   badge?: number;
 };
 
-function IconButton({
+export function IconButton({
   label,
   onClick,
   children,
   badge,
 }: IconButtonProps): ReactNode {
+  const normalizedBadge =
+    typeof badge === "number" && Number.isFinite(badge)
+      ? Math.max(0, Math.floor(badge))
+      : 0;
+
   return (
     <button
       type="button"
       onClick={onClick}
       aria-label={label}
-      className="relative inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+      className="relative inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 disabled:pointer-events-none disabled:opacity-50"
     >
       {children}
 
-      {badge !== undefined &&
-      badge > 0 ? (
-        <span className="absolute right-1 top-1 flex min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-semibold leading-4 text-primary-foreground">
-          {badge > 99
-            ? "99+"
-            : badge}
+      {normalizedBadge > 0 ? (
+        <span
+          aria-label={`${normalizedBadge} notifications`}
+          className="absolute right-1 top-1 flex min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-semibold leading-4 text-primary-foreground"
+        >
+          {normalizedBadge > 99 ? "99+" : normalizedBadge}
         </span>
       ) : null}
     </button>
@@ -200,27 +198,71 @@ function IconButton({
    DEFAULT USER MENU
 ================================================== */
 
-function DefaultUserMenu(): ReactNode {
-  const [
-    open,
-    setOpen,
-  ] = useState<boolean>(
-    false
-  );
+export function DefaultUserMenu(): ReactNode {
+  const [open, setOpen] = useState<boolean>(false);
+
+  const menuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    const handlePointerDown = (event: PointerEvent): void => {
+      const target = event.target;
+
+      if (
+        target instanceof Node &&
+        !menuRef.current?.contains(target)
+      ) {
+        setOpen(false);
+      }
+    };
+
+    const handleKeyDown = (
+      event: globalThis.KeyboardEvent
+    ): void => {
+      if (event.key === "Escape") {
+        setOpen(false);
+      }
+    };
+
+    document.addEventListener(
+      "pointerdown",
+      handlePointerDown
+    );
+
+    document.addEventListener(
+      "keydown",
+      handleKeyDown
+    );
+
+    return () => {
+      document.removeEventListener(
+        "pointerdown",
+        handlePointerDown
+      );
+
+      document.removeEventListener(
+        "keydown",
+        handleKeyDown
+      );
+    };
+  }, [open]);
 
   return (
-    <div className="relative">
+    <div
+      ref={menuRef}
+      className="relative"
+    >
       <button
         type="button"
         onClick={(): void => {
-          setOpen(
-            (current: boolean): boolean =>
-              !current
-          );
+          setOpen((current) => !current);
         }}
         aria-expanded={open}
         aria-haspopup="menu"
-        className="flex h-10 items-center gap-2 rounded-xl px-2 text-sm transition-colors hover:bg-muted"
+        className="flex h-10 items-center gap-2 rounded-xl px-2 text-sm transition-colors hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
       >
         <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
           S
@@ -230,13 +272,19 @@ function DefaultUserMenu(): ReactNode {
           Workspace
         </span>
 
-        <ChevronDown className="hidden h-4 w-4 text-muted-foreground lg:block" />
+        <ChevronDown
+          className={cn(
+            "hidden h-4 w-4 text-muted-foreground transition-transform lg:block",
+            open && "rotate-180"
+          )}
+        />
       </button>
 
       {open ? (
         <div
           role="menu"
-          className="absolute right-0 top-full z-50 mt-2 w-52 rounded-xl border border-border/60 bg-background p-1 shadow-xl"
+          aria-label="User menu"
+          className="absolute right-0 top-full z-50 mt-2 w-52 overflow-hidden rounded-xl border border-border/60 bg-background p-1 shadow-xl"
         >
           <Link
             href="/settings"
@@ -244,10 +292,9 @@ function DefaultUserMenu(): ReactNode {
             onClick={(): void => {
               setOpen(false);
             }}
-            className="flex min-h-10 items-center gap-2 rounded-lg px-3 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            className="flex min-h-10 items-center gap-2 rounded-lg px-3 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus-visible:bg-muted"
           >
             <Settings className="h-4 w-4" />
-
             Settings
           </Link>
         </div>
@@ -263,57 +310,38 @@ function DefaultUserMenu(): ReactNode {
 export default function TopBar({
   title,
   subtitle,
-
   onMenuClick,
-
   onSearch,
   onSearchSubmit,
-
   onCommandClick,
-
   onNotificationsClick,
   notificationCount = 0,
-
   actions,
-
   user,
-
   showSearch = true,
   showCommand = true,
   showNotifications = true,
-
   searchPlaceholder = "Search everything...",
-
-  className = "",
+  className,
 }: TopBarProps): ReactNode {
-  const pathname: string | null =
-    usePathname();
+  const pathname = usePathname();
 
-  const [
-    query,
-    setQuery,
-  ] = useState<string>("");
+  const [query, setQuery] = useState<string>("");
+  const [searchOpen, setSearchOpen] =
+    useState<boolean>(false);
 
-  const [
-    searchOpen,
-    setSearchOpen,
-  ] = useState<boolean>(
-    false
-  );
+  const mobileSearchInputRef =
+    useRef<HTMLInputElement | null>(null);
 
-  const resolvedTitle: string =
-    title ??
-    getTitleFromPathname(
-      pathname
-    );
+  const resolvedTitle =
+    title ?? getTitleFromPathname(pathname);
 
-  useEffect((): (() => void) => {
+  useEffect(() => {
     const handleKeyDown = (
       event: globalThis.KeyboardEvent
     ): void => {
-      const isCommandShortcut: boolean =
-        (event.metaKey ||
-          event.ctrlKey) &&
+      const isCommandShortcut =
+        (event.metaKey || event.ctrlKey) &&
         event.key.toLowerCase() === "k";
 
       if (!isCommandShortcut) {
@@ -327,7 +355,9 @@ export default function TopBar({
         return;
       }
 
-      setSearchOpen(true);
+      if (showSearch) {
+        setSearchOpen(true);
+      }
     };
 
     window.addEventListener(
@@ -335,23 +365,39 @@ export default function TopBar({
       handleKeyDown
     );
 
-    return (): void => {
+    return () => {
       window.removeEventListener(
         "keydown",
         handleKeyDown
       );
     };
-  }, [onCommandClick]);
+  }, [onCommandClick, showSearch]);
+
+  useEffect(() => {
+    if (searchOpen) {
+      requestAnimationFrame(() => {
+        mobileSearchInputRef.current?.focus();
+      });
+    }
+  }, [searchOpen]);
 
   const handleSearchChange = (
     event: ChangeEvent<HTMLInputElement>
   ): void => {
-    const nextQuery: string =
-      event.target.value;
+    const nextQuery = event.target.value;
 
     setQuery(nextQuery);
-
     onSearch?.(nextQuery);
+  };
+
+  const submitSearch = (): void => {
+    const normalizedQuery = query.trim();
+
+    if (!normalizedQuery) {
+      return;
+    }
+
+    onSearchSubmit?.(normalizedQuery);
   };
 
   const handleSearchKeyDown = (
@@ -359,18 +405,21 @@ export default function TopBar({
   ): void => {
     if (event.key === "Enter") {
       event.preventDefault();
-
-      onSearchSubmit?.(
-        query.trim()
-      );
+      submitSearch();
+      return;
     }
 
     if (event.key === "Escape") {
+      event.preventDefault();
       setSearchOpen(false);
     }
   };
 
   const openSearch = (): void => {
+    if (!showSearch) {
+      return;
+    }
+
     setSearchOpen(true);
   };
 
@@ -380,12 +429,13 @@ export default function TopBar({
 
   return (
     <header
-      className={[
-        "sticky top-0 z-40 flex h-16 w-full items-center border-b border-border/60 bg-background/95 px-3 backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:px-4 lg:px-6",
-        className,
-      ]
-        .filter(Boolean)
-        .join(" ")}
+      className={cn(
+        "sticky top-0 z-40 flex h-16 w-full items-center border-b border-border/60",
+        "bg-background/95 px-3 backdrop-blur",
+        "supports-[backdrop-filter]:bg-background/80",
+        "sm:px-4 lg:px-6",
+        className
+      )}
     >
       {/* =========================================
           LEFT
@@ -396,7 +446,7 @@ export default function TopBar({
           type="button"
           onClick={onMenuClick}
           aria-label="Open navigation"
-          className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-muted hover:text-foreground lg:hidden"
+          className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 lg:hidden"
         >
           <Menu className="h-5 w-5" />
         </button>
@@ -407,9 +457,9 @@ export default function TopBar({
           <div className="flex min-w-0 items-center gap-2">
             <Sparkles className="hidden h-4 w-4 shrink-0 text-primary sm:block" />
 
-            <h2 className="truncate text-sm font-semibold sm:text-base">
+            <h1 className="truncate text-sm font-semibold sm:text-base">
               {resolvedTitle}
-            </h2>
+            </h1>
           </div>
 
           {subtitle ? (
@@ -442,11 +492,10 @@ export default function TopBar({
             <button
               type="button"
               onClick={openSearch}
-              className="absolute right-2 top-1/2 inline-flex -translate-y-1/2 items-center gap-1 rounded-md px-1.5 py-1 text-[10px] text-muted-foreground transition-colors hover:bg-muted"
+              className="absolute right-2 top-1/2 inline-flex -translate-y-1/2 items-center gap-1 rounded-md px-1.5 py-1 text-[10px] text-muted-foreground transition-colors hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
               aria-label="Open search"
             >
               <Command className="h-3 w-3" />
-
               <span>K</span>
             </button>
           </div>
@@ -467,7 +516,7 @@ export default function TopBar({
             type="button"
             onClick={openSearch}
             aria-label="Open search"
-            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-muted hover:text-foreground md:hidden"
+            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 md:hidden"
           >
             <Search className="h-5 w-5" />
           </button>
@@ -476,7 +525,10 @@ export default function TopBar({
         {showCommand ? (
           <IconButton
             label="Open command palette"
-            onClick={onCommandClick}
+            onClick={
+              onCommandClick ??
+              (showSearch ? openSearch : undefined)
+            }
           >
             <Command className="h-4 w-4" />
           </IconButton>
@@ -485,9 +537,7 @@ export default function TopBar({
         {showNotifications ? (
           <IconButton
             label="Notifications"
-            onClick={
-              onNotificationsClick
-            }
+            onClick={onNotificationsClick}
             badge={notificationCount}
           >
             <Bell className="h-4 w-4" />
@@ -497,9 +547,7 @@ export default function TopBar({
         <div className="ml-1 hidden h-8 w-px bg-border/60 sm:block" />
 
         <div className="ml-1">
-          {user ?? (
-            <DefaultUserMenu />
-          )}
+          {user ?? <DefaultUserMenu />}
         </div>
       </div>
 
@@ -508,12 +556,16 @@ export default function TopBar({
       ========================================== */}
 
       {searchOpen ? (
-        <div className="absolute inset-0 z-50 flex items-center gap-2 border-b border-border/60 bg-background px-3 sm:px-4">
+        <div
+          className="absolute inset-0 z-50 flex items-center gap-2 border-b border-border/60 bg-background px-3 sm:px-4"
+          role="dialog"
+          aria-label="Search"
+        >
           <div className="relative flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
 
             <input
-              autoFocus
+              ref={mobileSearchInputRef}
               type="search"
               value={query}
               onChange={handleSearchChange}
@@ -528,7 +580,7 @@ export default function TopBar({
             type="button"
             onClick={closeSearch}
             aria-label="Close search"
-            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
           >
             <X className="h-5 w-5" />
           </button>
@@ -543,8 +595,6 @@ export default function TopBar({
 ================================================== */
 
 export {
-  DefaultUserMenu,
-  IconButton,
   formatSegment,
   getTitleFromPathname,
 };

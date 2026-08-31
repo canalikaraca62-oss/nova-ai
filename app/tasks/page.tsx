@@ -123,12 +123,76 @@ const priorityOptions: Array<{
   },
 ];
 
-export default function TasksPage() {
-  const [tasks, setTasks] =
-    useState<Task[]>(initialTasks);
+function getTodayDate(): string {
+  return new Date().toISOString().slice(0, 10);
+}
 
-  const [searchQuery, setSearchQuery] =
-    useState("");
+function formatDate(date: string): string {
+  const parsedDate = new Date(`${date}T00:00:00`);
+
+  if (Number.isNaN(parsedDate.getTime())) {
+    return date;
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(parsedDate);
+}
+
+function getPriorityClass(priority: TaskPriority): string {
+  switch (priority) {
+    case "high":
+      return "border-red-500/20 bg-red-500/10 text-red-600 dark:text-red-400";
+
+    case "medium":
+      return "border-amber-500/20 bg-amber-500/10 text-amber-600 dark:text-amber-400";
+
+    case "low":
+      return "border-blue-500/20 bg-blue-500/10 text-blue-600 dark:text-blue-400";
+
+    default:
+      return "border-border bg-muted text-muted-foreground";
+  }
+}
+
+function getStatusLabel(status: TaskStatus): string {
+  switch (status) {
+    case "todo":
+      return "To Do";
+
+    case "in-progress":
+      return "In Progress";
+
+    case "completed":
+      return "Completed";
+
+    default:
+      return "Unknown";
+  }
+}
+
+function getStatusClass(status: TaskStatus): string {
+  switch (status) {
+    case "todo":
+      return "border-border bg-muted text-muted-foreground";
+
+    case "in-progress":
+      return "border-primary/20 bg-primary/10 text-primary";
+
+    case "completed":
+      return "border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400";
+
+    default:
+      return "border-border bg-muted text-muted-foreground";
+  }
+}
+
+export default function TasksPage() {
+  const [tasks, setTasks] = useState<Task[]>(initialTasks);
+
+  const [searchQuery, setSearchQuery] = useState("");
 
   const [selectedStatus, setSelectedStatus] =
     useState<"all" | TaskStatus>("all");
@@ -190,17 +254,23 @@ export default function TasksPage() {
   ]);
 
   const taskStats = useMemo(() => {
+    const todo = tasks.filter(
+      (task) => task.status === "todo",
+    ).length;
+
+    const inProgress = tasks.filter(
+      (task) => task.status === "in-progress",
+    ).length;
+
+    const completed = tasks.filter(
+      (task) => task.status === "completed",
+    ).length;
+
     return {
       total: tasks.length,
-      todo: tasks.filter(
-        (task) => task.status === "todo",
-      ).length,
-      inProgress: tasks.filter(
-        (task) => task.status === "in-progress",
-      ).length,
-      completed: tasks.filter(
-        (task) => task.status === "completed",
-      ).length,
+      todo,
+      inProgress,
+      completed,
     };
   }, [tasks]);
 
@@ -209,14 +279,16 @@ export default function TasksPage() {
     status: TaskStatus,
   ) => {
     setTasks((currentTasks) =>
-      currentTasks.map((task) =>
-        task.id === taskId
-          ? {
-              ...task,
-              status,
-            }
-          : task,
-      ),
+      currentTasks.map((task) => {
+        if (task.id !== taskId) {
+          return task;
+        }
+
+        return {
+          ...task,
+          status,
+        };
+      }),
     );
   };
 
@@ -228,25 +300,44 @@ export default function TasksPage() {
     );
   };
 
+  const resetCreateForm = () => {
+    setNewTaskTitle("");
+    setNewTaskDescription("");
+    setNewTaskPriority("medium");
+    setNewTaskDueDate("");
+  };
+
+  const closeCreateModal = () => {
+    resetCreateForm();
+    setIsCreateModalOpen(false);
+  };
+
   const createTask = () => {
-    if (!newTaskTitle.trim()) {
+    const title = newTaskTitle.trim();
+
+    if (!title) {
       return;
     }
 
+    const today = getTodayDate();
+
     const newTask: Task = {
-      id: crypto.randomUUID(),
-      title: newTaskTitle.trim(),
+      id:
+        typeof crypto !== "undefined" &&
+        typeof crypto.randomUUID === "function"
+          ? crypto.randomUUID()
+          : `task-${Date.now()}-${Math.random()
+              .toString(36)
+              .slice(2, 9)}`,
+      title,
       description:
         newTaskDescription.trim() ||
         "No description provided.",
       status: "todo",
       priority: newTaskPriority,
-      dueDate:
-        newTaskDueDate ||
-        new Date().toISOString().split("T")[0],
+      dueDate: newTaskDueDate || today,
       project: "General",
-      createdAt:
-        new Date().toISOString().split("T")[0],
+      createdAt: today,
     };
 
     setTasks((currentTasks) => [
@@ -254,64 +345,14 @@ export default function TasksPage() {
       ...currentTasks,
     ]);
 
-    setNewTaskTitle("");
-    setNewTaskDescription("");
-    setNewTaskPriority("medium");
-    setNewTaskDueDate("");
+    resetCreateForm();
     setIsCreateModalOpen(false);
   };
 
-  const getPriorityClass = (
-    priority: TaskPriority,
-  ) => {
-    switch (priority) {
-      case "high":
-        return "border-red-500/20 bg-red-500/10 text-red-600 dark:text-red-400";
-
-      case "medium":
-        return "border-amber-500/20 bg-amber-500/10 text-amber-600 dark:text-amber-400";
-
-      case "low":
-        return "border-blue-500/20 bg-blue-500/10 text-blue-600 dark:text-blue-400";
-    }
-  };
-
-  const getStatusLabel = (
-    status: TaskStatus,
-  ) => {
-    switch (status) {
-      case "todo":
-        return "To Do";
-
-      case "in-progress":
-        return "In Progress";
-
-      case "completed":
-        return "Completed";
-    }
-  };
-
-  const getStatusClass = (
-    status: TaskStatus,
-  ) => {
-    switch (status) {
-      case "todo":
-        return "border-border bg-muted text-muted-foreground";
-
-      case "in-progress":
-        return "border-primary/20 bg-primary/10 text-primary";
-
-      case "completed":
-        return "border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400";
-    }
-  };
-
-  const formatDate = (date: string) => {
-    return new Intl.DateTimeFormat("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    }).format(new Date(date));
+  const clearFilters = () => {
+    setSearchQuery("");
+    setSelectedStatus("all");
+    setSelectedPriority("all");
   };
 
   return (
@@ -486,7 +527,7 @@ export default function TasksPage() {
           </div>
         </section>
 
-        {/* STATUS TABS */}
+        {/* STATUS FILTERS */}
 
         <div className="mb-6 flex flex-wrap gap-2">
           {statusOptions.map((status) => {
@@ -527,8 +568,6 @@ export default function TasksPage() {
                   className="group rounded-2xl border border-border bg-card p-5 shadow-sm transition hover:border-primary/30 hover:shadow-md"
                 >
                   <div className="flex flex-col gap-5 lg:flex-row lg:items-center">
-                    {/* STATUS BUTTON */}
-
                     <button
                       type="button"
                       onClick={() =>
@@ -548,8 +587,6 @@ export default function TasksPage() {
                         <Circle className="h-5 w-5 text-muted-foreground" />
                       )}
                     </button>
-
-                    {/* CONTENT */}
 
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
@@ -597,8 +634,6 @@ export default function TasksPage() {
                       </div>
                     </div>
 
-                    {/* STATUS SELECT */}
-
                     <div className="flex items-center gap-2">
                       <select
                         value={task.status}
@@ -623,6 +658,13 @@ export default function TasksPage() {
                           Completed
                         </option>
                       </select>
+
+                      <Link
+                        href={`/tasks/${task.id}`}
+                        className="rounded-lg border border-border px-3 py-2 text-xs font-medium transition hover:bg-muted"
+                      >
+                        View
+                      </Link>
 
                       <button
                         type="button"
@@ -657,11 +699,7 @@ export default function TasksPage() {
 
             <button
               type="button"
-              onClick={() => {
-                setSearchQuery("");
-                setSelectedStatus("all");
-                setSelectedPriority("all");
-              }}
+              onClick={clearFilters}
               className="mt-5 rounded-xl border border-border px-4 py-2.5 text-sm font-medium transition hover:bg-muted"
             >
               Reset Filters
@@ -687,9 +725,7 @@ export default function TasksPage() {
 
                 <button
                   type="button"
-                  onClick={() =>
-                    setIsCreateModalOpen(false)
-                  }
+                  onClick={closeCreateModal}
                   className="rounded-lg p-2 text-muted-foreground transition hover:bg-muted hover:text-foreground"
                   aria-label="Close"
                 >
@@ -786,9 +822,7 @@ export default function TasksPage() {
               <div className="mt-7 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
                 <button
                   type="button"
-                  onClick={() =>
-                    setIsCreateModalOpen(false)
-                  }
+                  onClick={closeCreateModal}
                   className="rounded-xl border border-border px-4 py-2.5 text-sm font-medium transition hover:bg-muted"
                 >
                   Cancel

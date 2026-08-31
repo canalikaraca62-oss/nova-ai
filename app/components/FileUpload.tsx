@@ -70,15 +70,17 @@ function formatFileSize(bytes: number): string {
     return "0 B";
   }
 
-  const units = ["B", "KB", "MB", "GB"];
+  const units = ["B", "KB", "MB", "GB"] as const;
+
   const index = Math.min(
     Math.floor(Math.log(bytes) / Math.log(1024)),
     units.length - 1
   );
 
+  const unit = units[index] ?? "B";
   const value = bytes / Math.pow(1024, index);
 
-  return `${value.toFixed(index === 0 ? 0 : 1)} ${units[index]}`;
+  return `${value.toFixed(index === 0 ? 0 : 1)} ${unit}`;
 }
 
 function getFileId(file: File): string {
@@ -99,8 +101,15 @@ function matchesAccept(
 
   const rules = accept
     .split(",")
-    .map((rule) => rule.trim())
+    .map((rule) => rule.trim().toLowerCase())
     .filter(Boolean);
+
+  if (rules.length === 0) {
+    return true;
+  }
+
+  const fileName = file.name.toLowerCase();
+  const fileType = file.type.toLowerCase();
 
   return rules.some((rule) => {
     if (rule === "*/*") {
@@ -108,18 +117,16 @@ function matchesAccept(
     }
 
     if (rule.startsWith(".")) {
-      return file.name
-        .toLowerCase()
-        .endsWith(rule.toLowerCase());
+      return fileName.endsWith(rule);
     }
 
     if (rule.endsWith("/*")) {
       const baseType = rule.slice(0, -2);
 
-      return file.type.startsWith(`${baseType}/`);
+      return fileType.startsWith(`${baseType}/`);
     }
 
-    return file.type === rule;
+    return fileType === rule;
   });
 }
 
@@ -128,6 +135,8 @@ function FileIcon({
 }: {
   file: File;
 }) {
+  const fileName = file.name.toLowerCase();
+
   if (isImageFile(file)) {
     return (
       <span
@@ -140,11 +149,12 @@ function FileIcon({
   }
 
   if (
-    file.type.includes("pdf")
+    file.type.includes("pdf") ||
+    fileName.endsWith(".pdf")
   ) {
     return (
       <span
-        className="text-lg"
+        className="text-[10px] font-bold"
         aria-hidden="true"
       >
         PDF
@@ -154,15 +164,44 @@ function FileIcon({
 
   if (
     file.type.includes("text") ||
-    file.name.endsWith(".txt") ||
-    file.name.endsWith(".md")
+    fileName.endsWith(".txt") ||
+    fileName.endsWith(".md") ||
+    fileName.endsWith(".csv")
   ) {
     return (
       <span
-        className="text-lg"
+        className="text-[10px] font-bold"
         aria-hidden="true"
       >
         TXT
+      </span>
+    );
+  }
+
+  if (
+    fileName.endsWith(".doc") ||
+    fileName.endsWith(".docx")
+  ) {
+    return (
+      <span
+        className="text-[10px] font-bold"
+        aria-hidden="true"
+      >
+        DOC
+      </span>
+    );
+  }
+
+  if (
+    fileName.endsWith(".xls") ||
+    fileName.endsWith(".xlsx")
+  ) {
+    return (
+      <span
+        className="text-[10px] font-bold"
+        aria-hidden="true"
+      >
+        XLS
       </span>
     );
   }
@@ -211,22 +250,23 @@ export const FileUpload = forwardRef<
     useRef<number>(0);
 
   const [internalFiles, setInternalFiles] =
-    useState<File[]>(defaultValue);
+    useState<File[]>(() => [...defaultValue]);
 
   const [isDragging, setIsDragging] =
-    useState<boolean>(false);
+    useState(false);
 
   const isControlled = value !== undefined;
 
-  const files = isControlled
+  const files: File[] = isControlled
     ? value
     : internalFiles;
 
-  const previews = useMemo(() => {
+  const previews = useMemo<UploadedFile[]>(() => {
     return files.map((file) => {
-      const previewUrl = isImageFile(file)
-        ? URL.createObjectURL(file)
-        : undefined;
+      const previewUrl =
+        showPreview && isImageFile(file)
+          ? URL.createObjectURL(file)
+          : undefined;
 
       return {
         id: getFileId(file),
@@ -234,29 +274,30 @@ export const FileUpload = forwardRef<
         previewUrl,
       };
     });
-  }, [files]);
+  }, [files, showPreview]);
 
   useEffect(() => {
     return () => {
-      previews.forEach((item) => {
+      for (const item of previews) {
         if (item.previewUrl) {
           URL.revokeObjectURL(item.previewUrl);
         }
-      });
+      }
     };
   }, [previews]);
 
-  const isBusy =
-    disabled || loading;
+  const isBusy = disabled || loading;
 
   const updateFiles = (
     nextFiles: File[]
   ): void => {
+    const safeFiles = [...nextFiles];
+
     if (!isControlled) {
-      setInternalFiles(nextFiles);
+      setInternalFiles(safeFiles);
     }
 
-    onChange?.(nextFiles);
+    onChange?.(safeFiles);
   };
 
   const reportError = (
@@ -270,12 +311,14 @@ export const FileUpload = forwardRef<
   ): File[] => {
     const acceptedFiles: File[] = [];
 
-    const existingIds = new Set(
+    const existingIds = new Set<string>(
       files.map(getFileId)
     );
 
     for (const file of incomingFiles) {
-      if (existingIds.has(getFileId(file))) {
+      const fileId = getFileId(file);
+
+      if (existingIds.has(fileId)) {
         reportError({
           file,
           code: "duplicate-file",
@@ -296,7 +339,9 @@ export const FileUpload = forwardRef<
       }
 
       if (
-        maxSize !== undefined &&
+        typeof maxSize === "number" &&
+        Number.isFinite(maxSize) &&
+        maxSize >= 0 &&
         file.size > maxSize
       ) {
         reportError({
@@ -311,7 +356,7 @@ export const FileUpload = forwardRef<
       }
 
       acceptedFiles.push(file);
-      existingIds.add(getFileId(file));
+      existingIds.add(fileId);
     }
 
     return acceptedFiles;
@@ -324,21 +369,35 @@ export const FileUpload = forwardRef<
       return;
     }
 
-    let nextFiles = validateFiles(
-      multiple
-        ? incomingFiles
-        : incomingFiles.slice(0, 1)
-    );
+    const filesToValidate = multiple
+      ? incomingFiles
+      : incomingFiles.slice(0, 1);
 
-    if (maxFiles !== undefined) {
-      const availableSlots =
-        Math.max(0, maxFiles - files.length);
+    let nextFiles = validateFiles(filesToValidate);
+
+    if (
+      typeof maxFiles === "number" &&
+      Number.isFinite(maxFiles)
+    ) {
+      const normalizedMaxFiles = Math.max(
+        0,
+        Math.floor(maxFiles)
+      );
+
+      const availableSlots = multiple
+        ? Math.max(
+            0,
+            normalizedMaxFiles - files.length
+          )
+        : normalizedMaxFiles > 0
+          ? 1
+          : 0;
 
       if (nextFiles.length > availableSlots) {
         reportError({
           code: "too-many-files",
-          message: `You can upload a maximum of ${maxFiles} file${
-            maxFiles === 1 ? "" : "s"
+          message: `You can upload a maximum of ${normalizedMaxFiles} file${
+            normalizedMaxFiles === 1 ? "" : "s"
           }.`,
         });
 
@@ -349,30 +408,33 @@ export const FileUpload = forwardRef<
       }
     }
 
-    if (!multiple) {
-      const replacement =
-        nextFiles.length > 0
-          ? [nextFiles[0]]
-          : files;
-
-      updateFiles(replacement);
-
-      if (nextFiles.length > 0) {
-        onFilesAdded?.(nextFiles);
-      }
-
-      return;
-    }
-
     if (nextFiles.length === 0) {
       return;
     }
 
-    updateFiles([
+    if (!multiple) {
+      const replacementFile = nextFiles[0];
+
+      if (!replacementFile) {
+        return;
+      }
+
+      const replacement: File[] = [
+        replacementFile,
+      ];
+
+      updateFiles(replacement);
+      onFilesAdded?.(replacement);
+
+      return;
+    }
+
+    const mergedFiles: File[] = [
       ...files,
       ...nextFiles,
-    ]);
+    ];
 
+    updateFiles(mergedFiles);
     onFilesAdded?.(nextFiles);
   };
 
@@ -384,13 +446,16 @@ export const FileUpload = forwardRef<
       return;
     }
 
+    if (index < 0 || index >= files.length) {
+      return;
+    }
+
     const nextFiles = files.filter(
       (_, currentIndex) =>
         currentIndex !== index
     );
 
     updateFiles(nextFiles);
-
     onRemove?.(file, index);
   };
 
@@ -415,7 +480,7 @@ export const FileUpload = forwardRef<
     () => ({
       open: openFilePicker,
       clear: clearFiles,
-      getFiles: (): File[] => files,
+      getFiles: () => [...files],
     }),
     [files, isBusy]
   );
@@ -423,7 +488,7 @@ export const FileUpload = forwardRef<
   const handleInputChange = (
     event: React.ChangeEvent<HTMLInputElement>
   ): void => {
-    const selectedFiles = Array.from(
+    const selectedFiles: File[] = Array.from(
       event.target.files ?? []
     );
 
@@ -456,10 +521,12 @@ export const FileUpload = forwardRef<
       return;
     }
 
-    dragCounterRef.current -= 1;
+    dragCounterRef.current = Math.max(
+      0,
+      dragCounterRef.current - 1
+    );
 
-    if (dragCounterRef.current <= 0) {
-      dragCounterRef.current = 0;
+    if (dragCounterRef.current === 0) {
       setIsDragging(false);
     }
   };
@@ -488,7 +555,7 @@ export const FileUpload = forwardRef<
       return;
     }
 
-    const droppedFiles = Array.from(
+    const droppedFiles: File[] = Array.from(
       event.dataTransfer.files
     );
 
@@ -512,12 +579,7 @@ export const FileUpload = forwardRef<
   };
 
   return (
-    <div
-      className={cn(
-        "w-full",
-        className
-      )}
-    >
+    <div className={cn("w-full", className)}>
       <input
         ref={inputRef}
         id={inputId}
@@ -534,7 +596,7 @@ export const FileUpload = forwardRef<
       <div
         role="button"
         tabIndex={isBusy ? -1 : 0}
-        aria-disabled={isBusy || undefined}
+        aria-disabled={isBusy}
         aria-label={title}
         onClick={openFilePicker}
         onKeyDown={handleKeyDown}
@@ -557,7 +619,7 @@ export const FileUpload = forwardRef<
         <div
           className={cn(
             "flex h-14 w-14 items-center justify-center rounded-2xl",
-            "border border-border bg-muted text-2xl",
+            "border border-border bg-muted text-2xl transition-transform duration-200",
             isDragging &&
               "scale-110 border-primary/30 bg-primary/10"
           )}
@@ -580,17 +642,17 @@ export const FileUpload = forwardRef<
           Browse files
         </span>
 
-        {maxSize !== undefined ? (
+        {typeof maxSize === "number" ? (
           <p className="mt-3 text-xs text-muted-foreground">
             Maximum file size:{" "}
             {formatFileSize(maxSize)}
-            {maxFiles !== undefined
+            {typeof maxFiles === "number"
               ? ` · Maximum ${maxFiles} file${
                   maxFiles === 1 ? "" : "s"
                 }`
               : ""}
           </p>
-        ) : maxFiles !== undefined ? (
+        ) : typeof maxFiles === "number" ? (
           <p className="mt-3 text-xs text-muted-foreground">
             Maximum {maxFiles} file
             {maxFiles === 1 ? "" : "s"}
@@ -603,67 +665,63 @@ export const FileUpload = forwardRef<
           className="mt-4 space-y-2"
           aria-label="Selected files"
         >
-          {previews.map(
-            (item, index) => (
-              <div
-                key={item.id}
-                className="flex items-center gap-3 rounded-xl border border-border bg-card p-3"
-              >
-                {showPreview &&
-                item.previewUrl ? (
-                  <img
-                    src={item.previewUrl}
-                    alt=""
-                    className="h-12 w-12 shrink-0 rounded-lg border border-border object-cover"
-                  />
-                ) : (
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-border bg-muted text-xs font-semibold text-muted-foreground">
-                    <FileIcon
-                      file={item.file}
-                    />
-                  </div>
-                )}
-
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-foreground">
-                    {item.file.name}
-                  </p>
-
-                  <div className="mt-1 flex flex-wrap items-center gap-2">
-                    {showFileSize ? (
-                      <span className="text-xs text-muted-foreground">
-                        {formatFileSize(
-                          item.file.size
-                        )}
-                      </span>
-                    ) : null}
-
-                    {item.file.type ? (
-                      <span className="truncate text-xs text-muted-foreground">
-                        {item.file.type}
-                      </span>
-                    ) : null}
-                  </div>
+          {previews.map((item, index) => (
+            <div
+              key={item.id}
+              className="flex items-center gap-3 rounded-xl border border-border bg-card p-3"
+            >
+              {showPreview &&
+              item.previewUrl ? (
+                <img
+                  src={item.previewUrl}
+                  alt=""
+                  className="h-12 w-12 shrink-0 rounded-lg border border-border object-cover"
+                />
+              ) : (
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-border bg-muted text-xs font-semibold text-muted-foreground">
+                  <FileIcon file={item.file} />
                 </div>
+              )}
 
-                <button
-                  type="button"
-                  disabled={isBusy}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    removeFile(
-                      item.file,
-                      index
-                    );
-                  }}
-                  aria-label={`Remove ${item.file.name}`}
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  ×
-                </button>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-foreground">
+                  {item.file.name}
+                </p>
+
+                <div className="mt-1 flex flex-wrap items-center gap-2">
+                  {showFileSize ? (
+                    <span className="text-xs text-muted-foreground">
+                      {formatFileSize(
+                        item.file.size
+                      )}
+                    </span>
+                  ) : null}
+
+                  {item.file.type ? (
+                    <span className="truncate text-xs text-muted-foreground">
+                      {item.file.type}
+                    </span>
+                  ) : null}
+                </div>
               </div>
-            )
-          )}
+
+              <button
+                type="button"
+                disabled={isBusy}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  removeFile(
+                    item.file,
+                    index
+                  );
+                }}
+                aria-label={`Remove ${item.file.name}`}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                ×
+              </button>
+            </div>
+          ))}
 
           {files.length > 1 ? (
             <div className="flex justify-end">

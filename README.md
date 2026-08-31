@@ -1,125 +1,89 @@
 # SYRAVEN
 
-> The intelligent workspace for the future.
+Syraven, yapay zekâ destekli, workspace tabanlı, ölçeklenebilir ve kurumsal kullanıma uygun yeni nesil bir dijital çalışma platformudur.
 
-SYRAVEN is an AI-powered workspace designed to bring intelligent conversations, persistent memory, document interaction, coding assistance, and AI tools together in one unified environment.
-
-The project focuses on creating a clean and modern AI workspace where users can have conversations, manage chats, interact with AI-generated content, and build a more personalized experience through persistent memory.
+Platform; kullanıcıların, ekiplerin ve organizasyonların projelerini, görevlerini, bilgilerini, dosyalarını, konuşmalarını, aramalarını ve yapay zekâ destekli süreçlerini merkezi bir sistem üzerinden yönetmesini hedefler.
 
 ---
 
-## ✨ Features
+# İçindekiler
 
-### 💬 AI Chat
-
-Interact with advanced AI models through a modern chat interface.
-
-Features include:
-
-- Real-time streaming responses
-- Conversation history
-- Multiple chat sessions
-- Persistent messages
-- Markdown rendering
-- GitHub Flavored Markdown support
-- Syntax highlighting for code blocks
-- Long-form AI responses
-
----
-
-### 🧠 Persistent Memory
-
-SYRAVEN can store useful long-term information about a user to create more personalized conversations.
-
-Examples include:
-
-- Name
-- Location
-- Education
-- Career goals
-- Long-term plans
-- Interests
-- Preferences
-- Hobbies
-- Explicitly requested memories
-
-The memory system analyzes user messages and avoids storing temporary or sensitive information such as passwords, API keys, authentication tokens, banking information, or security codes.
-
-Users can enable or disable memory through their settings.
+- Proje Hakkında
+- Temel Özellikler
+- Mimari
+- Teknoloji Yığını
+- Proje Yapısı
+- Başlangıç
+- Ortam Değişkenleri
+- Geliştirme Komutları
+- Kodlama Standartları
+- Güvenlik
+- Workspace Mimarisi
+- Servis Katmanı
+- API Mimarisi
+- Görev Sistemi
+- Bilgi Sistemi
+- Dosya Sistemi
+- Yapay Zekâ Entegrasyonları
+- Supabase Kullanımı
+- Test ve Doğrulama
+- Production Hazırlığı
+- Katkı Kuralları
+- Lisans
 
 ---
 
-### 📄 Document Intelligence
+# Proje Hakkında
 
-The application includes document-related functionality and dependencies for working with multiple file formats.
+Syraven, modern ekiplerin ve organizasyonların dijital operasyonlarını tek bir platform içerisinde yönetebilmesi için tasarlanan kapsamlı bir yazılım altyapısıdır.
 
-Supported processing capabilities include:
+Platformun temel amacı:
 
-- PDF
-- DOCX
-- PPTX
+- Kullanıcı yönetimi
+- Workspace yönetimi
+- Proje yönetimi
+- Görev yönetimi
+- Dosya yönetimi
+- Bilgi yönetimi
+- Mesajlaşma
+- Bildirim sistemi
+- Gelişmiş arama
+- Kullanım analitiği
+- Yapay zekâ entegrasyonları
+- Ses işleme
+- Görsel işleme
+- Güvenli API altyapısı
+- Arka plan görevleri
 
-Users can upload files and interact with document content inside the workspace.
+gibi sistemleri ortak ve ölçeklenebilir bir mimari altında birleştirmektir.
 
----
-
-### 💻 AI Coding Experience
-
-SYRAVEN supports technical conversations and code-focused workflows.
-
-The interface includes:
-
-- Markdown rendering
-- Code block rendering
-- Syntax highlighting
-- Technical AI assistance
-
----
-
-### ⚡ Streaming Responses
-
-AI responses are streamed in real time.
-
-The application uses a streaming API route to send generated content to the client progressively instead of waiting for the complete response.
+Syraven, küçük bir uygulama olarak değil, uzun vadede büyüyebilecek bir platform altyapısı olarak tasarlanmıştır.
 
 ---
 
-### 🔐 Authentication
+# Temel Özellikler
 
-Authentication is handled with Supabase.
+## Workspace Tabanlı Mimari
 
-The application validates the authenticated user before processing protected AI requests.
+Syraven çoklu workspace mimarisini destekler.
 
-User-specific data such as chats, messages, memories, and settings are separated through user IDs.
+Her kullanıcı bir veya birden fazla workspace içerisinde bulunabilir.
 
----
-
-## 🏗️ Architecture
-
-The application is built using a modern full-stack architecture.
+Workspace yapısı:
 
 ```text
-┌─────────────────────┐
-│      Next.js App    │
-│                     │
-│  React + TypeScript │
-└──────────┬──────────┘
-           │
-           ▼
-┌─────────────────────┐
-│     API Routes      │
-│                     │
-│ /api/chat           │
-│ /api/stream         │
-└──────────┬──────────┘
-           │
-           ├──────────────────► Groq AI API
-           │
-           ▼
-┌─────────────────────┐
-│      Supabase       │
-│                     │
-│ Authentication      │
-│ Database            │
-│ Row Level Security  │
-└─────────────────────┘
+Organization
+      │
+      ├── Workspace A
+      │      ├── Members
+      │      ├── Projects
+      │      ├── Tasks
+      │      ├── Knowledge
+      │      └── Files
+      │
+      └── Workspace B
+             ├── Members
+             ├── Projects
+             ├── Tasks
+             ├── Knowledge
+             └── Files

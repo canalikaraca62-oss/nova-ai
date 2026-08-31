@@ -3,27 +3,28 @@
  *
  * Enterprise-grade usage tracking, metering and analytics.
  *
+ * Strict TypeScript compatible:
+ * - strict
+ * - noImplicitAny
+ * - strictNullChecks
+ * - noUncheckedIndexedAccess
+ * - exactOptionalPropertyTypes
+ * - useUnknownInCatchVariables
+ *
  * Features:
  * - Usage event tracking
+ * - Batch recording
  * - Metric aggregation
  * - Time-based queries
- * - User usage summaries
- * - Project usage summaries
- * - Workspace usage summaries
+ * - User/project/workspace summaries
  * - Custom dimensions
  * - Metadata support
  * - Period aggregation
- * - Usage limits compatibility
+ * - Time series
+ * - Capacity limits
+ * - Safe cloning
+ * - Strict validation
  * - In-memory implementation
- * - Strict TypeScript
- *
- * Production adapters can later include:
- * - PostgreSQL
- * - ClickHouse
- * - BigQuery
- * - Redis
- * - Kafka
- * - OpenTelemetry
  */
 
 /* -------------------------------------------------------------------------- */
@@ -65,21 +66,13 @@ export type UsageGroupBy =
 
 export interface UsageDimensions {
   userId?: string;
-
   projectId?: string;
-
   workspaceId?: string;
-
   organizationId?: string;
-
   sessionId?: string;
-
   agentId?: string;
-
   model?: string;
-
   provider?: string;
-
   region?: string;
 
   [key: string]: string | undefined;
@@ -90,7 +83,7 @@ export interface UsageEvent<
 > {
   id: string;
 
-  metric: UsageMetric | string;
+  metric: string;
 
   quantity: number;
 
@@ -223,48 +216,48 @@ export interface UsageServiceOptions {
 /*                                   ERRORS                                   */
 /* -------------------------------------------------------------------------- */
 
-export class UsageServiceError
-  extends Error {
-  constructor(
-    message: string
-  ) {
+export class UsageServiceError extends Error {
+  constructor(message: string) {
     super(message);
 
-    this.name =
-      "UsageServiceError";
-  }
-}
+    this.name = "UsageServiceError";
 
-export class UsageValidationError
-  extends UsageServiceError {
-  readonly errors: string[];
-
-  constructor(
-    errors: string[]
-  ) {
-    super(
-      errors.join(" ")
+    Object.setPrototypeOf(
+      this,
+      new.target.prototype
     );
-
-    this.name =
-      "UsageValidationError";
-
-    this.errors =
-      errors;
   }
 }
 
-export class UsageEventNotFoundError
-  extends UsageServiceError {
-  constructor(
-    eventId: string
-  ) {
+export class UsageValidationError extends UsageServiceError {
+  readonly errors: readonly string[];
+
+  constructor(errors: string[]) {
+    super(errors.join(" "));
+
+    this.name = "UsageValidationError";
+
+    this.errors = [...errors];
+
+    Object.setPrototypeOf(
+      this,
+      new.target.prototype
+    );
+  }
+}
+
+export class UsageEventNotFoundError extends UsageServiceError {
+  constructor(eventId: string) {
     super(
       `Usage event not found: ${eventId}`
     );
 
-    this.name =
-      "UsageEventNotFoundError";
+    this.name = "UsageEventNotFoundError";
+
+    Object.setPrototypeOf(
+      this,
+      new.target.prototype
+    );
   }
 }
 
@@ -272,36 +265,29 @@ export class UsageEventNotFoundError
 /*                                 CONSTANTS                                  */
 /* -------------------------------------------------------------------------- */
 
-export const DEFAULT_USAGE_LIST_LIMIT =
-  100;
+export const DEFAULT_USAGE_LIST_LIMIT = 100;
 
-export const MAX_USAGE_LIST_LIMIT =
-  1_000;
+export const MAX_USAGE_LIST_LIMIT = 1_000;
 
-export const DEFAULT_MAX_USAGE_EVENTS =
-  100_000;
+export const DEFAULT_MAX_USAGE_EVENTS = 100_000;
 
-export const MAX_USAGE_EVENTS =
-  1_000_000;
+export const MAX_USAGE_EVENTS = 1_000_000;
 
 /* -------------------------------------------------------------------------- */
 /*                               USAGE SERVICE                                */
 /* -------------------------------------------------------------------------- */
 
 export class UsageService {
-  private readonly events:
-    UsageEvent[] = [];
+  private readonly events: UsageEvent[] = [];
 
-  private readonly maxEvents:
-    number;
+  private readonly maxEvents: number;
 
   constructor(
     options: UsageServiceOptions = {}
   ) {
-    this.maxEvents =
-      normalizeMaxEvents(
-        options.maxEvents
-      );
+    this.maxEvents = normalizeMaxEvents(
+      options.maxEvents
+    );
   }
 
   /* ------------------------------------------------------------------------ */
@@ -313,83 +299,69 @@ export class UsageService {
   >(
     input: RecordUsageInput<TMetadata>
   ): UsageEvent<TMetadata> {
-    this.validateRecordInput(
-      input
-    );
-
-    const event: UsageEvent<TMetadata> = {
-      id:
-        generateUsageEventId(),
-
-      metric:
-        normalizeMetric(
-          input.metric
-        ),
-
-      quantity:
-        normalizeQuantity(
-          input.quantity
-        ),
-
-      timestamp:
-        input.timestamp
-          ? new Date(
-              input.timestamp
-            )
-          : new Date(),
-
-      dimensions:
-        input.dimensions
-          ? cloneDimensions(
-              input.dimensions
-            )
-          : {},
-
-      metadata:
-        input.metadata ===
-        undefined
-          ? undefined
-          : cloneValue(
-              input.metadata
-            ),
-    };
+    this.validateRecordInput(input);
 
     this.ensureCapacity();
+
+    const timestamp =
+      input.timestamp !== undefined
+        ? normalizeDate(
+            input.timestamp,
+            "Usage timestamp"
+          )
+        : new Date();
+
+    const event: UsageEvent<TMetadata> = {
+      id: generateUsageEventId(),
+
+      metric: normalizeMetric(
+        input.metric
+      ),
+
+      quantity: normalizeQuantity(
+        input.quantity
+      ),
+
+      timestamp,
+
+      dimensions: cloneDimensions(
+        input.dimensions ?? {}
+      ),
+    };
+
+    if (input.metadata !== undefined) {
+      event.metadata = cloneValue(
+        input.metadata
+      );
+    }
 
     this.events.push(
       event as UsageEvent
     );
 
-    return this.cloneEvent(
-      event
-    );
+    return this.cloneEvent(event);
   }
 
   recordMany<
     TMetadata = Record<string, unknown>
   >(
-    inputs: Array<
-      RecordUsageInput<TMetadata>
-    >
-  ): Array<
-    UsageEvent<TMetadata>
-  > {
-    if (
-      !Array.isArray(
-        inputs
-      )
-    ) {
+    inputs: readonly RecordUsageInput<TMetadata>[]
+  ): UsageEvent<TMetadata>[] {
+    if (!Array.isArray(inputs)) {
       throw new UsageValidationError([
         "Usage inputs must be an array.",
       ]);
     }
 
-    return inputs.map(
-      (input) =>
-        this.record(
-          input
-        )
-    );
+    const results: UsageEvent<TMetadata>[] = [];
+
+    for (const input of inputs) {
+      results.push(
+        this.record(input)
+      );
+    }
+
+    return results;
   }
 
   /* ------------------------------------------------------------------------ */
@@ -399,26 +371,23 @@ export class UsageService {
   get(
     eventId: string
   ): UsageEvent | undefined {
-    const event =
-      this.events.find(
-        (item) =>
-          item.id === eventId
-      );
+    validateEventId(eventId);
 
-    return event
-      ? this.cloneEvent(
-          event
-        )
-      : undefined;
+    const event = this.events.find(
+      (item) => item.id === eventId
+    );
+
+    if (!event) {
+      return undefined;
+    }
+
+    return this.cloneEvent(event);
   }
 
   require(
     eventId: string
   ): UsageEvent {
-    const event =
-      this.get(
-        eventId
-      );
+    const event = this.get(eventId);
 
     if (!event) {
       throw new UsageEventNotFoundError(
@@ -432,49 +401,36 @@ export class UsageService {
   list(
     query: UsageQuery = {}
   ): UsageListResult {
-    const limit =
-      normalizeListLimit(
-        query.limit
+    const limit = normalizeListLimit(
+      query.limit
+    );
+
+    const offset = normalizeOffset(
+      query.offset
+    );
+
+    const filtered = this.filterEvents(
+      query
+    );
+
+    const total = filtered.length;
+
+    const events = filtered
+      .slice(
+        offset,
+        offset + limit
+      )
+      .map((event) =>
+        this.cloneEvent(event)
       );
-
-    const offset =
-      normalizeOffset(
-        query.offset
-      );
-
-    const filtered =
-      this.filterEvents(
-        query
-      );
-
-    const total =
-      filtered.length;
-
-    const events =
-      filtered
-        .slice(
-          offset,
-          offset + limit
-        )
-        .map(
-          (event) =>
-            this.cloneEvent(
-              event
-            )
-        );
 
     return {
       events,
-
       total,
-
       limit,
-
       offset,
-
       hasMore:
-        offset + limit <
-        total,
+        offset + limit < total,
     };
   }
 
@@ -485,176 +441,122 @@ export class UsageService {
   getTotal(
     query: UsageQuery = {}
   ): number {
-    return this.filterEvents(
-      query
-    ).reduce(
-      (
-        total,
-        event
-      ) =>
-        total +
-        event.quantity,
-      0
-    );
+    let total = 0;
+
+    for (const event of this.filterEvents(query)) {
+      total += event.quantity;
+    }
+
+    return total;
   }
 
   count(
     query: UsageQuery = {}
   ): number {
-    return this.filterEvents(
-      query
-    ).length;
+    return this.filterEvents(query).length;
   }
 
   summarize(
     query: UsageQuery = {}
   ): UsageSummary {
-    const events =
-      this.filterEvents(
-        query
+    const events = this.filterEvents(query);
+
+    const metricMap = new Map<
+      string,
+      UsageAggregate
+    >();
+
+    let totalQuantity = 0;
+
+    for (const event of events) {
+      totalQuantity += event.quantity;
+
+      const existing = metricMap.get(
+        event.metric
       );
 
-    const metricMap =
-      new Map<
-        string,
-        UsageAggregate
-      >();
-
-    let totalQuantity =
-      0;
-
-    for (
-      const event of events
-    ) {
-      totalQuantity +=
-        event.quantity;
-
-      const existing =
-        metricMap.get(
-          event.metric
-        );
-
       if (!existing) {
-        metricMap.set(
-          event.metric,
-          {
-            metric:
-              event.metric,
-
-            quantity:
-              event.quantity,
-
-            count: 1,
-
-            firstTimestamp:
-              new Date(
-                event.timestamp
-              ),
-
-            lastTimestamp:
-              new Date(
-                event.timestamp
-              ),
-          }
-        );
+        metricMap.set(event.metric, {
+          metric: event.metric,
+          quantity: event.quantity,
+          count: 1,
+          firstTimestamp: new Date(
+            event.timestamp.getTime()
+          ),
+          lastTimestamp: new Date(
+            event.timestamp.getTime()
+          ),
+        });
 
         continue;
       }
 
-      existing.quantity +=
-        event.quantity;
-
-      existing.count +=
-        1;
+      existing.quantity += event.quantity;
+      existing.count += 1;
 
       if (
-        existing.firstTimestamp &&
-        event.timestamp <
-          existing.firstTimestamp
+        existing.firstTimestamp !== undefined &&
+        event.timestamp < existing.firstTimestamp
       ) {
-        existing.firstTimestamp =
-          new Date(
-            event.timestamp
-          );
+        existing.firstTimestamp = new Date(
+          event.timestamp.getTime()
+        );
       }
 
       if (
-        existing.lastTimestamp &&
-        event.timestamp >
-          existing.lastTimestamp
+        existing.lastTimestamp !== undefined &&
+        event.timestamp > existing.lastTimestamp
       ) {
-        existing.lastTimestamp =
-          new Date(
-            event.timestamp
-          );
+        existing.lastTimestamp = new Date(
+          event.timestamp.getTime()
+        );
       }
     }
 
-    const now =
-      new Date();
+    const range = resolveQueryRange(
+      events,
+      query
+    );
 
-    const start =
-      query.start
-        ? new Date(
-            query.start
-          )
-        : events.length > 0
-          ? new Date(
-              events[
-                events.length - 1
-              ].timestamp
-            )
-          : now;
+    const metrics = Array.from(
+      metricMap.values()
+    )
+      .sort(
+        (a, b) =>
+          b.quantity - a.quantity
+      )
+      .map((aggregate) => {
+        const result: UsageAggregate = {
+          metric: aggregate.metric,
+          quantity: aggregate.quantity,
+          count: aggregate.count,
+        };
 
-    const end =
-      query.end
-        ? new Date(
-            query.end
-          )
-        : events.length > 0
-          ? new Date(
-              events[0].timestamp
-            )
-          : now;
+        if (
+          aggregate.firstTimestamp !== undefined
+        ) {
+          result.firstTimestamp = new Date(
+            aggregate.firstTimestamp.getTime()
+          );
+        }
+
+        if (
+          aggregate.lastTimestamp !== undefined
+        ) {
+          result.lastTimestamp = new Date(
+            aggregate.lastTimestamp.getTime()
+          );
+        }
+
+        return result;
+      });
 
     return {
       totalQuantity,
-
-      totalEvents:
-        events.length,
-
-      metrics:
-        Array.from(
-          metricMap.values()
-        )
-          .sort(
-            (a, b) =>
-              b.quantity -
-              a.quantity
-          )
-          .map(
-            (aggregate) => ({
-              ...aggregate,
-
-              firstTimestamp:
-                aggregate.firstTimestamp
-                  ? new Date(
-                      aggregate.firstTimestamp
-                    )
-                  : undefined,
-
-              lastTimestamp:
-                aggregate.lastTimestamp
-                  ? new Date(
-                      aggregate.lastTimestamp
-                    )
-                  : undefined,
-            })
-          ),
-
-      start,
-
-      end,
+      totalEvents: events.length,
+      metrics,
+      start: range.start,
+      end: range.end,
     };
   }
 
@@ -662,61 +564,47 @@ export class UsageService {
     groupBy: UsageGroupBy,
     query: UsageQuery = {}
   ): UsageGroupedResult[] {
-    const groups =
-      new Map<
-        string,
-        UsageGroupedResult
-      >();
+    const groups = new Map<
+      string,
+      UsageGroupedResult
+    >();
 
-    const events =
-      this.filterEvents(
-        query
+    const events = this.filterEvents(
+      query
+    );
+
+    for (const event of events) {
+      const key = getGroupKey(
+        event,
+        groupBy
       );
 
-    for (
-      const event of events
-    ) {
-      const key =
-        getGroupKey(
-          event,
-          groupBy
-        );
+      const existing = groups.get(key);
 
-      const existing =
-        groups.get(
-          key
-        );
+      if (existing) {
+        existing.quantity += event.quantity;
+        existing.count += 1;
 
-      if (
-        existing
-      ) {
-        existing.quantity +=
-          event.quantity;
-
-        existing.count +=
-          1;
-      } else {
-        groups.set(
-          key,
-          {
-            key,
-
-            quantity:
-              event.quantity,
-
-            count: 1,
-          }
-        );
+        continue;
       }
+
+      groups.set(key, {
+        key,
+        quantity: event.quantity,
+        count: 1,
+      });
     }
 
-    return Array.from(
-      groups.values()
-    ).sort(
-      (a, b) =>
-        b.quantity -
-        a.quantity
-    );
+    return Array.from(groups.values())
+      .sort(
+        (a, b) =>
+          b.quantity - a.quantity
+      )
+      .map((item) => ({
+        key: item.key,
+        quantity: item.quantity,
+        count: item.count,
+      }));
   }
 
   /* ------------------------------------------------------------------------ */
@@ -727,115 +615,72 @@ export class UsageService {
     period: UsagePeriod,
     query: UsageQuery = {}
   ): UsageTimeSeries {
-    const events =
-      this.filterEvents(
-        query
+    const events = this.filterEvents(
+      query
+    );
+
+    const buckets = new Map<
+      string,
+      UsageTimeSeriesPoint
+    >();
+
+    for (const event of events) {
+      const bucket = getPeriodStart(
+        event.timestamp,
+        period
       );
 
-    const buckets =
-      new Map<
-        string,
-        UsageTimeSeriesPoint
-      >();
+      const key = bucket.toISOString();
 
-    for (
-      const event of events
-    ) {
-      const bucket =
-        getPeriodStart(
-          event.timestamp,
-          period
-        );
+      const existing = buckets.get(key);
 
-      const key =
-        bucket.toISOString();
+      if (existing) {
+        existing.quantity += event.quantity;
+        existing.count += 1;
 
-      const existing =
-        buckets.get(
-          key
-        );
-
-      if (
-        existing
-      ) {
-        existing.quantity +=
-          event.quantity;
-
-        existing.count +=
-          1;
-      } else {
-        buckets.set(
-          key,
-          {
-            timestamp:
-              bucket,
-
-            quantity:
-              event.quantity,
-
-            count: 1,
-          }
-        );
+        continue;
       }
+
+      buckets.set(key, {
+        timestamp: bucket,
+        quantity: event.quantity,
+        count: 1,
+      });
     }
 
-    const now =
-      new Date();
+    const range = resolveQueryRange(
+      events,
+      query
+    );
 
-    const start =
-      query.start
-        ? new Date(
-            query.start
-          )
-        : events.length > 0
-          ? new Date(
-              events[
-                events.length - 1
-              ].timestamp
-            )
-          : now;
-
-    const end =
-      query.end
-        ? new Date(
-            query.end
-          )
-        : events.length > 0
-          ? new Date(
-              events[0].timestamp
-            )
-          : now;
-
-    return {
-      metric:
-        query.metric,
-
+    const result: UsageTimeSeries = {
       period,
-
-      start,
-
-      end,
-
-      points:
-        Array.from(
-          buckets.values()
+      start: range.start,
+      end: range.end,
+      points: Array.from(
+        buckets.values()
+      )
+        .sort(
+          (a, b) =>
+            a.timestamp.getTime() -
+            b.timestamp.getTime()
         )
-          .sort(
-            (a, b) =>
-              a.timestamp.getTime() -
-              b.timestamp.getTime()
-          )
-          .map(
-            (point) => ({
-              ...point,
-
-              timestamp:
-                new Date(
-                  point.timestamp
-                ),
-            })
+        .map((point) => ({
+          timestamp: new Date(
+            point.timestamp.getTime()
           ),
+          quantity: point.quantity,
+          count: point.count,
+        })),
     };
+
+    if (query.metric !== undefined) {
+      result.metric = normalizeMetric(
+        query.metric
+      );
+    }
+
+    return result;
   }
 
   /* ------------------------------------------------------------------------ */
@@ -843,84 +688,64 @@ export class UsageService {
   /* ------------------------------------------------------------------------ */
 
   getStats(): UsageStats {
-    const metrics =
-      new Set<string>();
+    const metrics = new Set<string>();
+    const users = new Set<string>();
 
-    const users =
-      new Set<string>();
+    let totalQuantity = 0;
 
-    let totalQuantity =
-      0;
+    let oldestEvent: Date | undefined;
+    let newestEvent: Date | undefined;
 
-    let oldestEvent:
-      Date | undefined;
+    for (const event of this.events) {
+      metrics.add(event.metric);
 
-    let newestEvent:
-      Date | undefined;
+      totalQuantity += event.quantity;
 
-    for (
-      const event of this.events
-    ) {
-      metrics.add(
-        event.metric
-      );
-
-      totalQuantity +=
-        event.quantity;
+      const userId =
+        event.dimensions.userId;
 
       if (
-        event.dimensions.userId
+        userId !== undefined &&
+        userId.length > 0
       ) {
-        users.add(
-          event.dimensions.userId
-        );
+        users.add(userId);
       }
 
       if (
-        !oldestEvent ||
-        event.timestamp <
-          oldestEvent
+        oldestEvent === undefined ||
+        event.timestamp < oldestEvent
       ) {
-        oldestEvent =
-          event.timestamp;
+        oldestEvent = event.timestamp;
       }
 
       if (
-        !newestEvent ||
-        event.timestamp >
-          newestEvent
+        newestEvent === undefined ||
+        event.timestamp > newestEvent
       ) {
-        newestEvent =
-          event.timestamp;
+        newestEvent = event.timestamp;
       }
     }
 
-    return {
-      totalEvents:
-        this.events.length,
-
+    const result: UsageStats = {
+      totalEvents: this.events.length,
       totalQuantity,
-
-      uniqueMetrics:
-        metrics.size,
-
-      uniqueUsers:
-        users.size,
-
-      oldestEvent:
-        oldestEvent
-          ? new Date(
-              oldestEvent
-            )
-          : undefined,
-
-      newestEvent:
-        newestEvent
-          ? new Date(
-              newestEvent
-            )
-          : undefined,
+      uniqueMetrics: metrics.size,
+      uniqueUsers: users.size,
     };
+
+    if (oldestEvent !== undefined) {
+      result.oldestEvent = new Date(
+        oldestEvent.getTime()
+      );
+    }
+
+    if (newestEvent !== undefined) {
+      result.newestEvent = new Date(
+        newestEvent.getTime()
+      );
+    }
+
+    return result;
   }
 
   /* ------------------------------------------------------------------------ */
@@ -930,15 +755,15 @@ export class UsageService {
   delete(
     eventId: string
   ): boolean {
+    validateEventId(eventId);
+
     const index =
       this.events.findIndex(
         (event) =>
           event.id === eventId
       );
 
-    if (
-      index === -1
-    ) {
+    if (index < 0) {
       return false;
     }
 
@@ -953,54 +778,38 @@ export class UsageService {
   clear(
     query?: UsageQuery
   ): number {
-    if (!query) {
-      const count =
-        this.events.length;
+    if (query === undefined) {
+      const count = this.events.length;
 
-      this.events.length =
-        0;
+      this.events.length = 0;
 
       return count;
     }
 
-    const matchingIds =
-      new Set(
-        this.filterEvents(
-          query
-        ).map(
-          (event) =>
-            event.id
-        )
-      );
+    const matchingIds = new Set(
+      this.filterEvents(query).map(
+        (event) => event.id
+      )
+    );
 
-    if (
-      matchingIds.size === 0
-    ) {
+    if (matchingIds.size === 0) {
       return 0;
     }
 
-    let removed =
-      0;
+    let removed = 0;
 
     for (
-      let index =
-        this.events.length - 1;
+      let index = this.events.length - 1;
       index >= 0;
       index -= 1
     ) {
-      const event =
-        this.events[index];
+      const event = this.events[index];
 
       if (
-        event &&
-        matchingIds.has(
-          event.id
-        )
+        event !== undefined &&
+        matchingIds.has(event.id)
       ) {
-        this.events.splice(
-          index,
-          1
-        );
+        this.events.splice(index, 1);
 
         removed += 1;
       }
@@ -1016,27 +825,22 @@ export class UsageService {
   private filterEvents(
     query: UsageQuery
   ): UsageEvent[] {
+    const metric =
+      query.metric !== undefined
+        ? normalizeMetric(query.metric)
+        : undefined;
+
     const metrics =
-      query.metrics
+      query.metrics !== undefined
         ? new Set(
-            query.metrics.map(
-              (metric) =>
-                normalizeMetric(
-                  metric
-                )
+            query.metrics.map((item) =>
+              normalizeMetric(item)
             )
           )
         : undefined;
 
-    const metric =
-      query.metric
-        ? normalizeMetric(
-            query.metric
-          )
-        : undefined;
-
     const start =
-      query.start
+      query.start !== undefined
         ? normalizeDate(
             query.start,
             "Usage query start"
@@ -1044,7 +848,7 @@ export class UsageService {
         : undefined;
 
     const end =
-      query.end
+      query.end !== undefined
         ? normalizeDate(
             query.end,
             "Usage query end"
@@ -1052,86 +856,79 @@ export class UsageService {
         : undefined;
 
     if (
-      start &&
-      end &&
-      start > end
+      start !== undefined &&
+      end !== undefined &&
+      start.getTime() > end.getTime()
     ) {
       throw new UsageValidationError([
-        "Usage query start must be before end.",
+        "Usage query start must be before or equal to end.",
       ]);
     }
 
     return this.events
-      .filter(
-        (event) => {
-          if (
-            metric &&
-            event.metric !==
-              metric
-          ) {
-            return false;
-          }
-
-          if (
-            metrics &&
-            !metrics.has(
-              event.metric
-            )
-          ) {
-            return false;
-          }
-
-          if (
-            query.userId &&
-            event.dimensions.userId !==
-              query.userId
-          ) {
-            return false;
-          }
-
-          if (
-            query.projectId &&
-            event.dimensions.projectId !==
-              query.projectId
-          ) {
-            return false;
-          }
-
-          if (
-            query.workspaceId &&
-            event.dimensions.workspaceId !==
-              query.workspaceId
-          ) {
-            return false;
-          }
-
-          if (
-            query.organizationId &&
-            event.dimensions.organizationId !==
-              query.organizationId
-          ) {
-            return false;
-          }
-
-          if (
-            start &&
-            event.timestamp <
-              start
-          ) {
-            return false;
-          }
-
-          if (
-            end &&
-            event.timestamp >
-              end
-          ) {
-            return false;
-          }
-
-          return true;
+      .filter((event) => {
+        if (
+          metric !== undefined &&
+          event.metric !== metric
+        ) {
+          return false;
         }
-      )
+
+        if (
+          metrics !== undefined &&
+          !metrics.has(event.metric)
+        ) {
+          return false;
+        }
+
+        if (
+          query.userId !== undefined &&
+          event.dimensions.userId !==
+            query.userId
+        ) {
+          return false;
+        }
+
+        if (
+          query.projectId !== undefined &&
+          event.dimensions.projectId !==
+            query.projectId
+        ) {
+          return false;
+        }
+
+        if (
+          query.workspaceId !== undefined &&
+          event.dimensions.workspaceId !==
+            query.workspaceId
+        ) {
+          return false;
+        }
+
+        if (
+          query.organizationId !== undefined &&
+          event.dimensions.organizationId !==
+            query.organizationId
+        ) {
+          return false;
+        }
+
+        if (
+          start !== undefined &&
+          event.timestamp < start
+        ) {
+          return false;
+        }
+
+        if (
+          end !== undefined &&
+          event.timestamp > end
+        ) {
+          return false;
+        }
+
+        return true;
+      })
       .sort(
         (a, b) =>
           b.timestamp.getTime() -
@@ -1140,11 +937,23 @@ export class UsageService {
   }
 
   private ensureCapacity(): void {
-    while (
-      this.events.length >=
+    if (
+      this.events.length <
       this.maxEvents
     ) {
-      this.events.shift();
+      return;
+    }
+
+    const removeCount =
+      this.events.length -
+      this.maxEvents +
+      1;
+
+    if (removeCount > 0) {
+      this.events.splice(
+        0,
+        removeCount
+      );
     }
   }
 
@@ -1153,59 +962,45 @@ export class UsageService {
   >(
     input: RecordUsageInput<TMetadata>
   ): void {
-    const errors: string[] =
-      [];
-
     if (
-      !input ||
-      typeof input !==
-        "object"
+      input === null ||
+      typeof input !== "object" ||
+      Array.isArray(input)
     ) {
       throw new UsageValidationError([
         "Usage input is required.",
       ]);
     }
 
+    const errors: string[] = [];
+
     if (
-      !input.metric ||
-      typeof input.metric !==
-        "string" ||
-      !input.metric.trim()
+      typeof input.metric !== "string" ||
+      input.metric.trim().length === 0
     ) {
       errors.push(
         "Usage metric is required."
       );
     }
 
-    const quantity =
-      input.quantity ?? 1;
-
     if (
-      !Number.isFinite(
-        quantity
+      input.quantity !== undefined &&
+      (
+        !Number.isFinite(input.quantity) ||
+        input.quantity < 0
       )
     ) {
       errors.push(
-        "Usage quantity must be a finite number."
+        "Usage quantity must be a non-negative finite number."
       );
     }
 
     if (
-      quantity < 0
+      input.timestamp !== undefined
     ) {
-      errors.push(
-        "Usage quantity cannot be negative."
+      const timestamp = new Date(
+        input.timestamp
       );
-    }
-
-    if (
-      input.timestamp !==
-      undefined
-    ) {
-      const timestamp =
-        new Date(
-          input.timestamp
-        );
 
       if (
         Number.isNaN(
@@ -1219,13 +1014,12 @@ export class UsageService {
     }
 
     if (
-      input.dimensions !==
-      undefined
+      input.dimensions !== undefined
     ) {
       if (
+        input.dimensions === null ||
         typeof input.dimensions !==
           "object" ||
-        input.dimensions === null ||
         Array.isArray(
           input.dimensions
         )
@@ -1233,12 +1027,37 @@ export class UsageService {
         errors.push(
           "Usage dimensions must be an object."
         );
+      } else {
+        for (
+          const [
+            key,
+            value,
+          ] of Object.entries(
+            input.dimensions
+          )
+        ) {
+          if (
+            typeof key !== "string" ||
+            key.trim().length === 0
+          ) {
+            errors.push(
+              "Usage dimension keys must be non-empty strings."
+            );
+          }
+
+          if (
+            value !== undefined &&
+            typeof value !== "string"
+          ) {
+            errors.push(
+              `Usage dimension "${key}" must be a string.`
+            );
+          }
+        }
       }
     }
 
-    if (
-      errors.length > 0
-    ) {
+    if (errors.length > 0) {
       throw new UsageValidationError(
         errors
       );
@@ -1250,27 +1069,27 @@ export class UsageService {
   >(
     event: UsageEvent<TMetadata>
   ): UsageEvent<TMetadata> {
-    return {
-      ...event,
-
-      timestamp:
-        new Date(
-          event.timestamp
-        ),
-
-      dimensions:
-        cloneDimensions(
-          event.dimensions
-        ),
-
-      metadata:
-        event.metadata ===
-        undefined
-          ? undefined
-          : cloneValue(
-              event.metadata
-            ),
+    const cloned: UsageEvent<TMetadata> = {
+      id: event.id,
+      metric: event.metric,
+      quantity: event.quantity,
+      timestamp: new Date(
+        event.timestamp.getTime()
+      ),
+      dimensions: cloneDimensions(
+        event.dimensions
+      ),
     };
+
+    if (
+      event.metadata !== undefined
+    ) {
+      cloned.metadata = cloneValue(
+        event.metadata
+      );
+    }
+
+    return cloned;
   }
 }
 
@@ -1282,28 +1101,31 @@ function normalizeMetric(
   value: UsageMetric | string
 ): string {
   if (
-    typeof value !==
-      "string" ||
-    !value.trim()
+    typeof value !== "string"
   ) {
     throw new UsageValidationError([
       "Usage metric is required.",
     ]);
   }
 
-  return value.trim();
+  const metric = value.trim();
+
+  if (metric.length === 0) {
+    throw new UsageValidationError([
+      "Usage metric is required.",
+    ]);
+  }
+
+  return metric;
 }
 
 function normalizeQuantity(
   value?: number
 ): number {
-  const quantity =
-    value ?? 1;
+  const quantity = value ?? 1;
 
   if (
-    !Number.isFinite(
-      quantity
-    ) ||
+    !Number.isFinite(quantity) ||
     quantity < 0
   ) {
     throw new UsageValidationError([
@@ -1318,37 +1140,34 @@ function normalizeDate(
   value: Date,
   label: string
 ): Date {
-  const date =
-    new Date(
-      value
-    );
-
   if (
-    Number.isNaN(
-      date.getTime()
-    )
+    !(value instanceof Date)
   ) {
+    throw new UsageValidationError([
+      `${label} must be a Date instance.`,
+    ]);
+  }
+
+  const timestamp = value.getTime();
+
+  if (Number.isNaN(timestamp)) {
     throw new UsageValidationError([
       `${label} must be a valid date.`,
     ]);
   }
 
-  return date;
+  return new Date(timestamp);
 }
 
 function normalizeListLimit(
   value?: number
 ): number {
-  if (
-    value === undefined
-  ) {
+  if (value === undefined) {
     return DEFAULT_USAGE_LIST_LIMIT;
   }
 
   if (
-    !Number.isFinite(
-      value
-    ) ||
+    !Number.isFinite(value) ||
     value <= 0
   ) {
     throw new UsageValidationError([
@@ -1357,9 +1176,7 @@ function normalizeListLimit(
   }
 
   return Math.min(
-    Math.floor(
-      value
-    ),
+    Math.floor(value),
     MAX_USAGE_LIST_LIMIT
   );
 }
@@ -1367,16 +1184,12 @@ function normalizeListLimit(
 function normalizeOffset(
   value?: number
 ): number {
-  if (
-    value === undefined
-  ) {
+  if (value === undefined) {
     return 0;
   }
 
   if (
-    !Number.isFinite(
-      value
-    ) ||
+    !Number.isFinite(value) ||
     value < 0
   ) {
     throw new UsageValidationError([
@@ -1384,22 +1197,17 @@ function normalizeOffset(
     ]);
   }
 
-  return Math.floor(
-    value
-  );
+  return Math.floor(value);
 }
 
 function normalizeMaxEvents(
   value?: number
 ): number {
   const maxEvents =
-    value ??
-    DEFAULT_MAX_USAGE_EVENTS;
+    value ?? DEFAULT_MAX_USAGE_EVENTS;
 
   if (
-    !Number.isFinite(
-      maxEvents
-    ) ||
+    !Number.isFinite(maxEvents) ||
     maxEvents <= 0
   ) {
     throw new UsageValidationError([
@@ -1408,28 +1216,69 @@ function normalizeMaxEvents(
   }
 
   return Math.min(
-    Math.floor(
-      maxEvents
-    ),
+    Math.floor(maxEvents),
     MAX_USAGE_EVENTS
   );
 }
 
-function generateUsageEventId(): string {
-  const random =
-    Math.random()
-      .toString(36)
-      .slice(2, 12);
+function validateEventId(
+  eventId: string
+): void {
+  if (
+    typeof eventId !== "string" ||
+    eventId.trim().length === 0
+  ) {
+    throw new UsageValidationError([
+      "Usage event ID is required.",
+    ]);
+  }
+}
 
-  return `usage_${Date.now()}_${random}`;
+function generateUsageEventId(): string {
+  const timestamp = Date.now()
+    .toString(36);
+
+  const random =
+    typeof globalThis.crypto !==
+      "undefined" &&
+    typeof globalThis.crypto.randomUUID ===
+      "function"
+      ? globalThis.crypto
+          .randomUUID()
+          .replace(/-/g, "")
+      : createFallbackRandomId();
+
+  return `usage_${timestamp}_${random}`;
+}
+
+function createFallbackRandomId(): string {
+  const partOne = Math.random()
+    .toString(36)
+    .slice(2);
+
+  const partTwo = Math.random()
+    .toString(36)
+    .slice(2);
+
+  return `${partOne}${partTwo}`;
 }
 
 function cloneDimensions(
   dimensions: UsageDimensions
 ): UsageDimensions {
-  return {
-    ...dimensions,
-  };
+  const result: UsageDimensions = {};
+
+  for (
+    const [key, value] of Object.entries(
+      dimensions
+    )
+  ) {
+    if (value !== undefined) {
+      result[key] = value;
+    }
+  }
+
+  return result;
 }
 
 function cloneValue<T>(
@@ -1442,45 +1291,51 @@ function cloneValue<T>(
     return value;
   }
 
-  if (
-    value instanceof Date
-  ) {
+  if (value instanceof Date) {
     return new Date(
       value.getTime()
     ) as T;
   }
 
-  if (
-    value instanceof Uint8Array
-  ) {
+  if (value instanceof Uint8Array) {
     return new Uint8Array(
       value
     ) as T;
   }
 
-  if (
-    Array.isArray(
-      value
-    )
-  ) {
-    return value.map(
-      (item) =>
-        cloneValue(
-          item
-        )
+  if (value instanceof ArrayBuffer) {
+    return value.slice(0) as T;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) =>
+      cloneValue(item)
     ) as T;
   }
 
   if (
-    typeof value ===
-    "object"
+    typeof value === "object"
   ) {
-    return {
-      ...(value as Record<
-        string,
-        unknown
-      >),
-    } as T;
+    const result: Record<
+      string,
+      unknown
+    > = {};
+
+    for (
+      const [
+        key,
+        item,
+      ] of Object.entries(
+        value as Record<
+          string,
+          unknown
+        >
+      )
+    ) {
+      result[key] = cloneValue(item);
+    }
+
+    return result as T;
   }
 
   return value;
@@ -1490,9 +1345,7 @@ function getGroupKey(
   event: UsageEvent,
   groupBy: UsageGroupBy
 ): string {
-  switch (
-    groupBy
-  ) {
+  switch (groupBy) {
     case "metric":
       return event.metric;
 
@@ -1524,8 +1377,12 @@ function getGroupKey(
         event.timestamp
       );
 
-    default:
-      return "unknown";
+    default: {
+      const exhaustiveCheck: never =
+        groupBy;
+
+      return exhaustiveCheck;
+    }
   }
 }
 
@@ -1533,41 +1390,23 @@ function getPeriodStart(
   date: Date,
   period: UsagePeriod
 ): Date {
-  const value =
-    new Date(
-      date
-    );
+  const value = new Date(
+    date.getTime()
+  );
 
-  switch (
-    period
-  ) {
+  switch (period) {
     case "hour":
-      value.setMinutes(
-        0,
-        0,
-        0
-      );
+      value.setMinutes(0, 0, 0);
       return value;
 
     case "day":
-      value.setHours(
-        0,
-        0,
-        0,
-        0
-      );
+      value.setHours(0, 0, 0, 0);
       return value;
 
     case "week": {
-      value.setHours(
-        0,
-        0,
-        0,
-        0
-      );
+      value.setHours(0, 0, 0, 0);
 
-      const day =
-        value.getDay();
+      const day = value.getDay();
 
       const diff =
         day === 0
@@ -1575,45 +1414,33 @@ function getPeriodStart(
           : 1 - day;
 
       value.setDate(
-        value.getDate() +
-          diff
+        value.getDate() + diff
       );
 
       return value;
     }
 
     case "month":
-      value.setDate(
-        1
-      );
-
-      value.setHours(
-        0,
-        0,
-        0,
-        0
-      );
+      value.setDate(1);
+      value.setHours(0, 0, 0, 0);
 
       return value;
 
     case "year":
-      value.setMonth(
-        0,
-        1
-      );
-
-      value.setHours(
-        0,
-        0,
-        0,
-        0
-      );
+      value.setMonth(0, 1);
+      value.setHours(0, 0, 0, 0);
 
       return value;
 
     case "custom":
-    default:
       return value;
+
+    default: {
+      const exhaustiveCheck: never =
+        period;
+
+      return exhaustiveCheck;
+    }
   }
 }
 
@@ -1623,21 +1450,13 @@ function formatDay(
   const year =
     date.getFullYear();
 
-  const month =
-    String(
-      date.getMonth() + 1
-    ).padStart(
-      2,
-      "0"
-    );
+  const month = String(
+    date.getMonth() + 1
+  ).padStart(2, "0");
 
-  const day =
-    String(
-      date.getDate()
-    ).padStart(
-      2,
-      "0"
-    );
+  const day = String(
+    date.getDate()
+  ).padStart(2, "0");
 
   return `${year}-${month}-${day}`;
 }
@@ -1645,20 +1464,101 @@ function formatDay(
 function formatHour(
   date: Date
 ): string {
-  const day =
-    formatDay(
-      date
-    );
+  const day = formatDay(date);
 
-  const hour =
-    String(
-      date.getHours()
-    ).padStart(
-      2,
-      "0"
-    );
+  const hour = String(
+    date.getHours()
+  ).padStart(2, "0");
 
   return `${day}T${hour}:00`;
+}
+
+function resolveQueryRange(
+  events: readonly UsageEvent[],
+  query: UsageQuery
+): {
+  start: Date;
+  end: Date;
+} {
+  const explicitStart =
+    query.start !== undefined
+      ? normalizeDate(
+          query.start,
+          "Usage query start"
+        )
+      : undefined;
+
+  const explicitEnd =
+    query.end !== undefined
+      ? normalizeDate(
+          query.end,
+          "Usage query end"
+        )
+      : undefined;
+
+  if (
+    explicitStart !== undefined &&
+    explicitEnd !== undefined
+  ) {
+    return {
+      start: explicitStart,
+      end: explicitEnd,
+    };
+  }
+
+  if (events.length === 0) {
+    const now = new Date();
+
+    return {
+      start:
+        explicitStart ??
+        new Date(now.getTime()),
+
+      end:
+        explicitEnd ??
+        new Date(now.getTime()),
+    };
+  }
+
+  let oldest = events[0]?.timestamp;
+  let newest = events[0]?.timestamp;
+
+  if (
+    oldest === undefined ||
+    newest === undefined
+  ) {
+    const now = new Date();
+
+    return {
+      start:
+        explicitStart ??
+        new Date(now.getTime()),
+
+      end:
+        explicitEnd ??
+        new Date(now.getTime()),
+    };
+  }
+
+  for (const event of events) {
+    if (event.timestamp < oldest) {
+      oldest = event.timestamp;
+    }
+
+    if (event.timestamp > newest) {
+      newest = event.timestamp;
+    }
+  }
+
+  return {
+    start:
+      explicitStart ??
+      new Date(oldest.getTime()),
+
+    end:
+      explicitEnd ??
+      new Date(newest.getTime()),
+  };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1677,76 +1577,56 @@ export function recordUsage<
 >(
   input: RecordUsageInput<TMetadata>
 ): UsageEvent<TMetadata> {
-  return usageService.record(
-    input
-  );
+  return usageService.record(input);
 }
 
 export function recordUsageMany<
   TMetadata = Record<string, unknown>
 >(
-  inputs: Array<
-    RecordUsageInput<TMetadata>
-  >
-): Array<
-  UsageEvent<TMetadata>
-> {
-  return usageService.recordMany(
-    inputs
-  );
+  inputs: readonly RecordUsageInput<TMetadata>[]
+): UsageEvent<TMetadata>[] {
+  return usageService.recordMany(inputs);
 }
 
 export function getUsageEvent(
   eventId: string
 ): UsageEvent | undefined {
-  return usageService.get(
-    eventId
-  );
+  return usageService.get(eventId);
 }
 
 export function requireUsageEvent(
   eventId: string
 ): UsageEvent {
-  return usageService.require(
-    eventId
-  );
+  return usageService.require(eventId);
 }
 
 export function listUsage(
-  query?: UsageQuery
+  query: UsageQuery = {}
 ): UsageListResult {
-  return usageService.list(
-    query
-  );
+  return usageService.list(query);
 }
 
 export function getUsageTotal(
-  query?: UsageQuery
+  query: UsageQuery = {}
 ): number {
-  return usageService.getTotal(
-    query
-  );
+  return usageService.getTotal(query);
 }
 
 export function countUsage(
-  query?: UsageQuery
+  query: UsageQuery = {}
 ): number {
-  return usageService.count(
-    query
-  );
+  return usageService.count(query);
 }
 
 export function summarizeUsage(
-  query?: UsageQuery
+  query: UsageQuery = {}
 ): UsageSummary {
-  return usageService.summarize(
-    query
-  );
+  return usageService.summarize(query);
 }
 
 export function aggregateUsageBy(
   groupBy: UsageGroupBy,
-  query?: UsageQuery
+  query: UsageQuery = {}
 ): UsageGroupedResult[] {
   return usageService.aggregateBy(
     groupBy,
@@ -1756,7 +1636,7 @@ export function aggregateUsageBy(
 
 export function getUsageTimeSeries(
   period: UsagePeriod,
-  query?: UsageQuery
+  query: UsageQuery = {}
 ): UsageTimeSeries {
   return usageService.getTimeSeries(
     period,
@@ -1771,17 +1651,13 @@ export function getUsageStats(): UsageStats {
 export function deleteUsageEvent(
   eventId: string
 ): boolean {
-  return usageService.delete(
-    eventId
-  );
+  return usageService.delete(eventId);
 }
 
 export function clearUsage(
   query?: UsageQuery
 ): number {
-  return usageService.clear(
-    query
-  );
+  return usageService.clear(query);
 }
 
 export default usageService;

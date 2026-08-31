@@ -9,6 +9,10 @@ import React, {
   useState,
 } from "react";
 
+/* ==================================================
+   TYPES
+================================================== */
+
 export type UserRole =
   | "user"
   | "admin"
@@ -92,15 +96,163 @@ export interface AuthProviderProps {
   initialSession?: AuthSession | null;
 }
 
+/* ==================================================
+   CONSTANTS
+================================================== */
+
+const AUTH_STORAGE_KEY =
+  "syraven-auth-session";
+
+const DEFAULT_USER_ROLE: UserRole =
+  "user";
+
 const AuthContext = createContext<
   AuthContextValue | undefined
 >(undefined);
 
-const AUTH_STORAGE_KEY = "syraven-auth-session";
+/* ==================================================
+   ENVIRONMENT HELPERS
+================================================== */
 
 function isBrowser(): boolean {
   return typeof window !== "undefined";
 }
+
+/* ==================================================
+   STRING HELPERS
+================================================== */
+
+function normalizeEmail(
+  email: string
+): string {
+  return email.trim().toLowerCase();
+}
+
+function getNameFromEmail(
+  email: string
+): string {
+  const normalizedEmail =
+    normalizeEmail(email);
+
+  const separatorIndex =
+    normalizedEmail.indexOf("@");
+
+  const localPart =
+    separatorIndex >= 0
+      ? normalizedEmail.slice(
+          0,
+          separatorIndex
+        )
+      : normalizedEmail;
+
+  const readableName =
+    localPart
+      .replace(/[._-]+/g, " ")
+      .trim();
+
+  if (!readableName) {
+    return "User";
+  }
+
+  return readableName
+    .split(/\s+/)
+    .filter(Boolean)
+    .map(
+      (part: string): string =>
+        part.charAt(0).toUpperCase() +
+        part.slice(1)
+    )
+    .join(" ");
+}
+
+function isValidEmail(
+  email: string
+): boolean {
+  const normalizedEmail =
+    normalizeEmail(email);
+
+  return (
+    normalizedEmail.length > 3 &&
+    normalizedEmail.includes("@") &&
+    normalizedEmail.includes(".")
+  );
+}
+
+/* ==================================================
+   TYPE GUARDS
+================================================== */
+
+function isUserRole(
+  value: unknown
+): value is UserRole {
+  return (
+    value === "user" ||
+    value === "admin" ||
+    value === "owner"
+  );
+}
+
+function isAuthUser(
+  value: unknown
+): value is AuthUser {
+  if (
+    typeof value !== "object" ||
+    value === null
+  ) {
+    return false;
+  }
+
+  const user =
+    value as Record<string, unknown>;
+
+  return (
+    typeof user.id === "string" &&
+    user.id.trim().length > 0 &&
+    typeof user.email === "string" &&
+    user.email.trim().length > 0 &&
+    typeof user.name === "string" &&
+    user.name.trim().length > 0 &&
+    isUserRole(user.role)
+  );
+}
+
+function isAuthSession(
+  value: unknown
+): value is AuthSession {
+  if (
+    typeof value !== "object" ||
+    value === null
+  ) {
+    return false;
+  }
+
+  const session =
+    value as Record<string, unknown>;
+
+  if (!isAuthUser(session.user)) {
+    return false;
+  }
+
+  if (
+    session.accessToken !== undefined &&
+    typeof session.accessToken !== "string"
+  ) {
+    return false;
+  }
+
+  if (
+    session.expiresAt !== undefined &&
+    typeof session.expiresAt !== "string"
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+/* ==================================================
+   SESSION STORAGE
+================================================== */
 
 function getStoredSession(): AuthSession | null {
   if (!isBrowser()) {
@@ -108,9 +260,10 @@ function getStoredSession(): AuthSession | null {
   }
 
   try {
-    const storedValue = window.localStorage.getItem(
-      AUTH_STORAGE_KEY
-    );
+    const storedValue =
+      window.localStorage.getItem(
+        AUTH_STORAGE_KEY
+      );
 
     if (!storedValue) {
       return null;
@@ -119,25 +272,24 @@ function getStoredSession(): AuthSession | null {
     const parsedValue: unknown =
       JSON.parse(storedValue);
 
-    if (
-      typeof parsedValue !== "object" ||
-      parsedValue === null
-    ) {
+    if (!isAuthSession(parsedValue)) {
+      window.localStorage.removeItem(
+        AUTH_STORAGE_KEY
+      );
+
       return null;
     }
 
-    const session = parsedValue as AuthSession;
-
-    if (
-      !session.user ||
-      typeof session.user.id !== "string" ||
-      typeof session.user.email !== "string"
-    ) {
-      return null;
-    }
-
-    return session;
+    return parsedValue;
   } catch {
+    try {
+      window.localStorage.removeItem(
+        AUTH_STORAGE_KEY
+      );
+    } catch {
+      // Ignore storage cleanup failures.
+    }
+
     return null;
   }
 }
@@ -163,29 +315,56 @@ function saveSession(
       JSON.stringify(session)
     );
   } catch {
-    // Storage failures should not break authentication state.
+    // Storage failures must not crash auth state.
   }
 }
+
+/* ==================================================
+   ID HELPERS
+================================================== */
+
+function createUserId(): string {
+  if (
+    typeof crypto !== "undefined" &&
+    typeof crypto.randomUUID === "function"
+  ) {
+    return `user_${crypto.randomUUID()}`;
+  }
+
+  return [
+    "user",
+    Date.now().toString(36),
+    Math.random()
+      .toString(36)
+      .slice(2, 10),
+  ].join("_");
+}
+
+/* ==================================================
+   AUTH PROVIDER
+================================================== */
 
 export function AuthProvider({
   children,
   initialUser = null,
   initialSession = null,
 }: AuthProviderProps): React.ReactElement {
+  const resolvedInitialSession =
+    initialSession ??
+    (initialUser
+      ? {
+          user: initialUser,
+        }
+      : null);
+
   const [user, setUser] =
     useState<AuthUser | null>(
-      initialSession?.user ??
-        initialUser
+      resolvedInitialSession?.user ?? null
     );
 
   const [session, setSession] =
     useState<AuthSession | null>(
-      initialSession ??
-        (initialUser
-          ? {
-              user: initialUser,
-            }
-          : null)
+      resolvedInitialSession
     );
 
   const [isLoading, setIsLoading] =
@@ -197,11 +376,16 @@ export function AuthProvider({
   const [error, setError] =
     useState<string | null>(null);
 
+  /* ==================================================
+     SESSION STATE
+  ================================================== */
+
   const setAuthSession = useCallback(
     (
       nextSession: AuthSession | null
     ): void => {
       setSession(nextSession);
+
       setUser(
         nextSession?.user ?? null
       );
@@ -215,6 +399,10 @@ export function AuthProvider({
     setError(null);
   }, []);
 
+  /* ==================================================
+     REFRESH SESSION
+  ================================================== */
+
   const refreshSession =
     useCallback(async (): Promise<void> => {
       setIsLoading(true);
@@ -222,21 +410,42 @@ export function AuthProvider({
 
       try {
         /*
-         * Production integration point:
+         * ==================================================
+         * PRODUCTION API EXAMPLE
+         * ==================================================
          *
-         * const response = await fetch("/api/auth/session", {
-         *   method: "GET",
-         *   credentials: "include",
-         * });
+         * const response = await fetch(
+         *   "/api/auth/session",
+         *   {
+         *     method: "GET",
+         *     credentials: "include",
+         *     headers: {
+         *       "Accept": "application/json",
+         *     },
+         *   }
+         * );
          *
-         * if (!response.ok) {
-         *   throw new Error("Unable to restore session");
+         * if (response.status === 401) {
+         *   setAuthSession(null);
+         *   return;
          * }
          *
-         * const nextSession =
-         *   (await response.json()) as AuthSession;
+         * if (!response.ok) {
+         *   throw new Error(
+         *     "Unable to restore session"
+         *   );
+         * }
          *
-         * setAuthSession(nextSession);
+         * const data: unknown =
+         *   await response.json();
+         *
+         * if (!isAuthSession(data)) {
+         *   throw new Error(
+         *     "Invalid session response"
+         *   );
+         * }
+         *
+         * setAuthSession(data);
          */
 
         const storedSession =
@@ -252,6 +461,7 @@ export function AuthProvider({
             : "Unable to restore authentication session";
 
         setError(message);
+
         setAuthSession(null);
       } finally {
         setIsLoading(false);
@@ -259,9 +469,17 @@ export function AuthProvider({
       }
     }, [setAuthSession]);
 
+  /* ==================================================
+     INITIAL SESSION LOAD
+  ================================================== */
+
   useEffect(() => {
     void refreshSession();
   }, [refreshSession]);
+
+  /* ==================================================
+     SIGN IN
+  ================================================== */
 
   const signIn = useCallback(
     async (
@@ -271,49 +489,86 @@ export function AuthProvider({
       setError(null);
 
       try {
-        if (
-          !credentials.email.trim() ||
-          !credentials.password
-        ) {
+        const email =
+          normalizeEmail(
+            credentials.email
+          );
+
+        if (!email) {
           throw new Error(
-            "Email and password are required"
+            "Email is required"
+          );
+        }
+
+        if (!isValidEmail(email)) {
+          throw new Error(
+            "Please enter a valid email address"
+          );
+        }
+
+        if (!credentials.password) {
+          throw new Error(
+            "Password is required"
           );
         }
 
         /*
-         * Production integration point:
+         * ==================================================
+         * PRODUCTION API EXAMPLE
+         * ==================================================
          *
-         * const response = await fetch("/api/auth/sign-in", {
-         *   method: "POST",
-         *   headers: {
-         *     "Content-Type": "application/json",
-         *   },
-         *   credentials: "include",
-         *   body: JSON.stringify(credentials),
-         * });
+         * const response = await fetch(
+         *   "/api/auth/sign-in",
+         *   {
+         *     method: "POST",
+         *     headers: {
+         *       "Content-Type":
+         *         "application/json",
+         *       "Accept":
+         *         "application/json",
+         *     },
+         *     credentials: "include",
+         *     body: JSON.stringify({
+         *       email,
+         *       password: credentials.password,
+         *     }),
+         *   }
+         * );
+         *
+         * const body: unknown =
+         *   await response.json();
          *
          * if (!response.ok) {
-         *   const body = await response.json();
+         *   const message =
+         *     typeof body === "object" &&
+         *     body !== null &&
+         *     "message" in body &&
+         *     typeof body.message === "string"
+         *       ? body.message
+         *       : "Unable to sign in";
+         *
+         *   throw new Error(message);
+         * }
+         *
+         * if (!isAuthSession(body)) {
          *   throw new Error(
-         *     body.message ?? "Unable to sign in"
+         *     "Invalid authentication response"
          *   );
          * }
          *
-         * const nextSession =
-         *   (await response.json()) as AuthSession;
+         * setAuthSession(body);
+         *
+         * return {
+         *   success: true,
+         *   user: body.user,
+         * };
          */
 
         const nextUser: AuthUser = {
-          id: `user_${Date.now()}`,
-          email: credentials.email.trim(),
-          name: credentials.email
-            .split("@")[0]
-            .replace(
-              /^[a-z]/,
-              (character: string) =>
-                character.toUpperCase()
-            ),
-          role: "user",
+          id: createUserId(),
+          email,
+          name: getNameFromEmail(email),
+          role: DEFAULT_USER_ROLE,
         };
 
         const nextSession: AuthSession = {
@@ -345,6 +600,10 @@ export function AuthProvider({
     [setAuthSession]
   );
 
+  /* ==================================================
+     SIGN UP
+  ================================================== */
+
   const signUp = useCallback(
     async (
       credentials: SignUpCredentials
@@ -353,13 +612,35 @@ export function AuthProvider({
       setError(null);
 
       try {
-        if (
-          !credentials.name.trim() ||
-          !credentials.email.trim() ||
-          !credentials.password
-        ) {
+        const name =
+          credentials.name.trim();
+
+        const email =
+          normalizeEmail(
+            credentials.email
+          );
+
+        if (!name) {
           throw new Error(
-            "Name, email and password are required"
+            "Name is required"
+          );
+        }
+
+        if (!email) {
+          throw new Error(
+            "Email is required"
+          );
+        }
+
+        if (!isValidEmail(email)) {
+          throw new Error(
+            "Please enter a valid email address"
+          );
+        }
+
+        if (!credentials.password) {
+          throw new Error(
+            "Password is required"
           );
         }
 
@@ -372,34 +653,67 @@ export function AuthProvider({
         }
 
         /*
-         * Production integration point:
+         * ==================================================
+         * PRODUCTION API EXAMPLE
+         * ==================================================
          *
-         * const response = await fetch("/api/auth/sign-up", {
-         *   method: "POST",
-         *   headers: {
-         *     "Content-Type": "application/json",
-         *   },
-         *   body: JSON.stringify(credentials),
-         * });
+         * const response = await fetch(
+         *   "/api/auth/sign-up",
+         *   {
+         *     method: "POST",
+         *     headers: {
+         *       "Content-Type":
+         *         "application/json",
+         *       "Accept":
+         *         "application/json",
+         *     },
+         *     body: JSON.stringify({
+         *       name,
+         *       email,
+         *       password: credentials.password,
+         *     }),
+         *   }
+         * );
+         *
+         * const body: unknown =
+         *   await response.json();
          *
          * if (!response.ok) {
-         *   const body = await response.json();
+         *   const message =
+         *     typeof body === "object" &&
+         *     body !== null &&
+         *     "message" in body &&
+         *     typeof body.message === "string"
+         *       ? body.message
+         *       : "Unable to create account";
+         *
+         *   throw new Error(message);
+         * }
+         *
+         * if (!isAuthSession(body)) {
          *   throw new Error(
-         *     body.message ?? "Unable to create account"
+         *     "Invalid authentication response"
          *   );
          * }
          *
-         * const nextSession =
-         *   (await response.json()) as AuthSession;
+         * setAuthSession(body);
+         *
+         * return {
+         *   success: true,
+         *   user: body.user,
+         * };
          */
 
+        const now =
+          new Date().toISOString();
+
         const nextUser: AuthUser = {
-          id: `user_${Date.now()}`,
-          email: credentials.email.trim(),
-          name: credentials.name.trim(),
-          role: "user",
-          createdAt:
-            new Date().toISOString(),
+          id: createUserId(),
+          email,
+          name,
+          role: DEFAULT_USER_ROLE,
+          createdAt: now,
+          updatedAt: now,
         };
 
         const nextSession: AuthSession = {
@@ -431,6 +745,10 @@ export function AuthProvider({
     [setAuthSession]
   );
 
+  /* ==================================================
+     SIGN OUT
+  ================================================== */
+
   const signOut =
     useCallback(async (): Promise<void> => {
       setIsLoading(true);
@@ -438,12 +756,23 @@ export function AuthProvider({
 
       try {
         /*
-         * Production integration point:
+         * ==================================================
+         * PRODUCTION API EXAMPLE
+         * ==================================================
          *
-         * await fetch("/api/auth/sign-out", {
-         *   method: "POST",
-         *   credentials: "include",
-         * });
+         * const response = await fetch(
+         *   "/api/auth/sign-out",
+         *   {
+         *     method: "POST",
+         *     credentials: "include",
+         *   }
+         * );
+         *
+         * if (!response.ok) {
+         *   throw new Error(
+         *     "Unable to sign out"
+         *   );
+         * }
          */
 
         setAuthSession(null);
@@ -458,6 +787,10 @@ export function AuthProvider({
         setIsLoading(false);
       }
     }, [setAuthSession]);
+
+  /* ==================================================
+     UPDATE USER
+  ================================================== */
 
   const updateUser = useCallback(
     async (
@@ -484,29 +817,107 @@ export function AuthProvider({
       setError(null);
 
       try {
+        const normalizedUpdates: Partial<
+          Pick<
+            AuthUser,
+            "name" | "email" | "image"
+          >
+        > = {};
+
+        if (
+          updates.name !== undefined
+        ) {
+          const name =
+            updates.name.trim();
+
+          if (!name) {
+            throw new Error(
+              "Name cannot be empty"
+            );
+          }
+
+          normalizedUpdates.name =
+            name;
+        }
+
+        if (
+          updates.email !== undefined
+        ) {
+          const email =
+            normalizeEmail(
+              updates.email
+            );
+
+          if (!isValidEmail(email)) {
+            throw new Error(
+              "Please enter a valid email address"
+            );
+          }
+
+          normalizedUpdates.email =
+            email;
+        }
+
+        if (
+          updates.image !== undefined
+        ) {
+          normalizedUpdates.image =
+            updates.image;
+        }
+
         /*
-         * Production integration point:
+         * ==================================================
+         * PRODUCTION API EXAMPLE
+         * ==================================================
          *
-         * const response = await fetch("/api/auth/profile", {
-         *   method: "PATCH",
-         *   headers: {
-         *     "Content-Type": "application/json",
-         *   },
-         *   credentials: "include",
-         *   body: JSON.stringify(updates),
-         * });
+         * const response = await fetch(
+         *   "/api/auth/profile",
+         *   {
+         *     method: "PATCH",
+         *     headers: {
+         *       "Content-Type":
+         *         "application/json",
+         *       "Accept":
+         *         "application/json",
+         *     },
+         *     credentials: "include",
+         *     body: JSON.stringify(
+         *       normalizedUpdates
+         *     ),
+         *   }
+         * );
+         *
+         * const body: unknown =
+         *   await response.json();
          *
          * if (!response.ok) {
-         *   throw new Error("Unable to update profile");
+         *   throw new Error(
+         *     "Unable to update profile"
+         *   );
          * }
          *
-         * const updatedUser =
-         *   (await response.json()) as AuthUser;
+         * if (!isAuthUser(body)) {
+         *   throw new Error(
+         *     "Invalid profile response"
+         *   );
+         * }
+         *
+         * const updatedSession: AuthSession = {
+         *   ...session,
+         *   user: body,
+         * };
+         *
+         * setAuthSession(updatedSession);
+         *
+         * return {
+         *   success: true,
+         *   user: body,
+         * };
          */
 
         const updatedUser: AuthUser = {
           ...user,
-          ...updates,
+          ...normalizedUpdates,
           updatedAt:
             new Date().toISOString(),
         };
@@ -538,22 +949,41 @@ export function AuthProvider({
         setIsLoading(false);
       }
     },
-    [session, setAuthSession, user]
+    [
+      session,
+      setAuthSession,
+      user,
+    ]
   );
+
+  /* ==================================================
+     CONTEXT VALUE
+  ================================================== */
 
   const value = useMemo<AuthContextValue>(
     () => ({
       user,
       session,
-      isAuthenticated: user !== null,
+
+      isAuthenticated:
+        user !== null,
+
       isLoading,
+
       isInitialized,
+
       error,
+
       signIn,
+
       signUp,
+
       signOut,
+
       refreshSession,
+
       updateUser,
+
       clearError,
     }),
     [
@@ -578,8 +1008,13 @@ export function AuthProvider({
   );
 }
 
+/* ==================================================
+   HOOKS
+================================================== */
+
 export function useAuthContext(): AuthContextValue {
-  const context = useContext(AuthContext);
+  const context =
+    useContext(AuthContext);
 
   if (!context) {
     throw new Error(
@@ -593,3 +1028,19 @@ export function useAuthContext(): AuthContextValue {
 export function useAuth(): AuthContextValue {
   return useAuthContext();
 }
+
+/* ==================================================
+   EXPORTS
+================================================== */
+
+export {
+  AUTH_STORAGE_KEY,
+  getNameFromEmail,
+  getStoredSession,
+  isAuthSession,
+  isAuthUser,
+  isBrowser,
+  isValidEmail,
+  normalizeEmail,
+  saveSession,
+};

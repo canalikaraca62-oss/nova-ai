@@ -96,7 +96,7 @@ function normalizeText(
     normalizeWhitespace: boolean;
     preserveLineBreaks: boolean;
     trim: boolean;
-  }
+  },
 ): string {
   let text = value
     .replace(/\r\n/g, "\n")
@@ -132,9 +132,7 @@ function isSupportedEncoding(encoding: string): boolean {
   ].includes(normalized);
 }
 
-function normalizeEncoding(
-  encoding: string
-): string {
+function normalizeEncoding(encoding: string): string {
   const normalized = encoding.toLowerCase();
 
   switch (normalized) {
@@ -154,7 +152,7 @@ function normalizeEncoding(
 /* -------------------------------------------------------------------------- */
 
 async function responseToBuffer(
-  response: Response
+  response: Response,
 ): Promise<Buffer> {
   const arrayBuffer = await response.arrayBuffer();
 
@@ -172,7 +170,7 @@ async function responseToBuffer(
  */
 export async function readText(
   input: Response,
-  options: ReadTextOptions = {}
+  options: ReadTextOptions = {},
 ): Promise<ReadTextResult> {
   const {
     maxFileSize = DEFAULT_MAX_FILE_SIZE,
@@ -184,7 +182,7 @@ export async function readText(
 
   if (!(input instanceof Response)) {
     throw new TypeError(
-      "readText expects a Response object."
+      "readText expects a Response object.",
     );
   }
 
@@ -193,42 +191,36 @@ export async function readText(
     maxFileSize <= 0
   ) {
     throw new TypeError(
-      "maxFileSize must be a positive number."
+      "maxFileSize must be a positive number.",
     );
   }
 
-  const normalizedEncoding =
-    normalizeEncoding(encoding);
+  const normalizedEncoding = normalizeEncoding(encoding);
 
   if (!isSupportedEncoding(normalizedEncoding)) {
     throw new TypeError(
-      `Unsupported text encoding: ${encoding}`
+      `Unsupported text encoding: ${encoding}`,
     );
   }
 
   const contentType =
-    input.headers.get("content-type") ??
-    undefined;
+    input.headers.get("content-type") ?? undefined;
 
   const buffer = await responseToBuffer(input);
 
   if (buffer.length > maxFileSize) {
     throw new Error(
       `Text file exceeds maximum allowed size of ${Math.round(
-        maxFileSize / 1024 / 1024
-      )} MB.`
+        maxFileSize / 1024 / 1024,
+      )} MB.`,
     );
   }
 
   let rawText: string;
 
   try {
-    /**
-     * Buffer.toString supports Node.js encodings.
-     * Cast is used because user input is validated above.
-     */
     rawText = buffer.toString(
-      normalizedEncoding as BufferEncoding
+      normalizedEncoding as BufferEncoding,
     );
   } catch (error) {
     const message =
@@ -237,27 +229,22 @@ export async function readText(
         : "Unknown decoding error.";
 
     throw new Error(
-      `Failed to decode text document: ${message}`
+      `Failed to decode text document: ${message}`,
     );
   }
 
-  const text = normalizeText(
-    rawText,
-    {
-      normalizeWhitespace,
-      preserveLineBreaks,
-      trim,
-    }
-  );
+  const text = normalizeText(rawText, {
+    normalizeWhitespace,
+    preserveLineBreaks,
+    trim,
+  });
 
   return {
     text,
     fileSize: buffer.length,
     characterCount: text.length,
     wordCount: countWords(text),
-    ...(contentType
-      ? { contentType }
-      : {}),
+    ...(contentType ? { contentType } : {}),
     encoding: normalizedEncoding,
   };
 }
@@ -270,7 +257,7 @@ export async function readText(
  * Extract only text from a Response.
  */
 export async function extractText(
-  input: Response
+  input: Response,
 ): Promise<string> {
   const result = await readText(input);
 
@@ -281,7 +268,7 @@ export async function extractText(
  * Checks whether a Response appears to contain text.
  */
 export function isTextResponse(
-  input: Response
+  input: Response,
 ): boolean {
   const contentType =
     input.headers
@@ -300,7 +287,7 @@ export function isTextResponse(
  * Estimates whether binary data is likely text.
  */
 export function isLikelyTextBuffer(
-  input: Buffer | Uint8Array | ArrayBuffer
+  input: Buffer | Uint8Array | ArrayBuffer,
 ): boolean {
   let bytes: Uint8Array;
 
@@ -310,7 +297,7 @@ export function isLikelyTextBuffer(
     bytes = new Uint8Array(
       input.buffer,
       input.byteOffset,
-      input.byteLength
+      input.byteLength,
     );
   }
 
@@ -320,7 +307,7 @@ export function isLikelyTextBuffer(
 
   const sampleSize = Math.min(
     bytes.length,
-    4096
+    4096,
   );
 
   let suspiciousBytes = 0;
@@ -329,16 +316,17 @@ export function isLikelyTextBuffer(
     const value = bytes[index];
 
     if (
-      value === 0 ||
-      (value < 7 && value !== 0)
+      value !== undefined &&
+      (
+        value === 0 ||
+        (value < 7 && value !== 0)
+      )
     ) {
       suspiciousBytes++;
     }
   }
 
-  return (
-    suspiciousBytes / sampleSize < 0.05
-  );
+  return suspiciousBytes / sampleSize < 0.05;
 }
 
 /* -------------------------------------------------------------------------- */

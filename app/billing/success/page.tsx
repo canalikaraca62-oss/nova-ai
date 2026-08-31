@@ -1,14 +1,13 @@
 "use client";
 
 import Link from "next/link";
-
 import {
+  Suspense,
   useCallback,
   useEffect,
   useMemo,
   useState,
 } from "react";
-
 import {
   useRouter,
   useSearchParams,
@@ -32,7 +31,7 @@ type Plan =
   | "enterprise";
 
 type BillingResponse = {
-  plan?: Plan;
+  plan?: Plan | string | null;
   subscription_status?: string | null;
   status?: string | null;
 };
@@ -49,10 +48,7 @@ const PLAN_LABELS: Record<Plan, string> = {
   enterprise: "Enterprise",
 };
 
-const PLAN_DESCRIPTIONS: Record<
-  Plan,
-  string
-> = {
+const PLAN_DESCRIPTIONS: Record<Plan, string> = {
   free:
     "Your SYRAVEN workspace is ready to use.",
 
@@ -210,13 +206,9 @@ function AgentIcon() {
  * ================================================== */
 
 function normalizePlan(
-  value: string | null | undefined
+  value: string | null | undefined,
 ): Plan {
-  switch (
-    value
-      ?.trim()
-      .toLowerCase()
-  ) {
+  switch (value?.trim().toLowerCase()) {
     case "premium":
     case "plus":
       return "premium";
@@ -237,171 +229,122 @@ function normalizePlan(
 }
 
 function getBillingStatus(
-  value: string | null | undefined
-) {
-  const status =
-    value
-      ?.trim()
-      .toLowerCase() ?? "";
-
-  return status;
+  value: string | null | undefined,
+): string {
+  return value?.trim().toLowerCase() ?? "";
 }
 
 /* ==================================================
- * PAGE
+ * LOADING FALLBACK
  * ================================================== */
 
-export default function BillingSuccessPage() {
-  const router =
-    useRouter();
+function BillingSuccessLoading() {
+  return (
+    <main className="min-h-screen bg-zinc-950 text-white">
+      <div className="mx-auto flex min-h-screen w-full max-w-7xl items-center justify-center px-6">
+        <div className="flex items-center gap-3 text-sm text-white/60">
+          <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-white/70" />
+          Loading your SYRAVEN workspace...
+        </div>
+      </div>
+    </main>
+  );
+}
 
-  const searchParams =
-    useSearchParams();
+/* ==================================================
+ * INNER PAGE
+ *
+ * useSearchParams MUST live inside Suspense.
+ * ================================================== */
 
-  const sessionId =
-    searchParams.get(
-      "session_id"
-    );
+function BillingSuccessContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
 
-  const [
-    syncStatus,
-    setSyncStatus,
-  ] =
-    useState<SyncStatus>(
-      "checking"
-    );
+  const sessionId = searchParams.get("session_id");
 
-  const [
-    plan,
-    setPlan,
-  ] =
-    useState<Plan>(
-      "free"
-    );
+  const [syncStatus, setSyncStatus] =
+    useState<SyncStatus>("checking");
+
+  const [plan, setPlan] =
+    useState<Plan>("free");
 
   const [
     subscriptionStatus,
     setSubscriptionStatus,
-  ] =
-    useState<string>(
-      ""
-    );
+  ] = useState("");
 
   const [
     isContinuing,
     setIsContinuing,
-  ] =
-    useState(false);
+  ] = useState(false);
 
   /* ==================================================
    * LOAD BILLING STATUS
-   *
-   * Billing route hazır olduğunda
-   * GET /api/billing üzerinden
-   * güncel profile bilgisi okunur.
    * ================================================== */
 
-  const syncBilling =
-    useCallback(
-      async () => {
-        try {
-          setSyncStatus(
-            "checking"
-          );
+  const syncBilling = useCallback(async () => {
+    try {
+      setSyncStatus("checking");
 
-          const response =
-            await fetch(
-              "/api/billing",
-              {
-                method:
-                  "GET",
-                cache:
-                  "no-store",
-                headers: {
-                  Accept:
-                    "application/json",
-                  },
-              }
-            );
+      const response = await fetch(
+        "/api/billing",
+        {
+          method: "GET",
+          cache: "no-store",
+          headers: {
+            Accept: "application/json",
+          },
+        },
+      );
 
-          if (
-            !response.ok
-          ) {
-            throw new Error(
-              "Billing status could not be loaded."
-            );
-          }
+      if (!response.ok) {
+        throw new Error(
+          "Billing status could not be loaded.",
+        );
+      }
 
-          const data:
-            BillingResponse =
-            await response.json();
+      const data =
+        (await response.json()) as BillingResponse;
 
-          const nextPlan =
-            normalizePlan(
-              data.plan
-            );
+      const nextPlan = normalizePlan(
+        data.plan,
+      );
 
-          const nextStatus =
-            getBillingStatus(
-              data.subscription_status ??
-                data.status
-            );
+      const nextStatus = getBillingStatus(
+        data.subscription_status ??
+          data.status,
+      );
 
-          setPlan(
-            nextPlan
-          );
+      setPlan(nextPlan);
+      setSubscriptionStatus(nextStatus);
 
-          setSubscriptionStatus(
-            nextStatus
-          );
+      /*
+       * Stripe webhook may arrive shortly
+       * after the success redirect.
+       */
+      if (
+        nextPlan === "free" &&
+        sessionId
+      ) {
+        setSyncStatus("pending");
+        return;
+      }
 
-          /*
-           * Stripe webhook bazen
-           * success redirect'inden
-           * birkaç saniye sonra gelir.
-           *
-           * Bu yüzden plan Free görünüyorsa
-           * ekran hata vermeden pending kalır.
-           */
+      setSyncStatus("success");
+    } catch (error) {
+      console.error(
+        "SYRAVEN BILLING SUCCESS SYNC ERROR:",
+        error,
+      );
 
-          if (
-            nextPlan === "free" &&
-            sessionId
-          ) {
-            setSyncStatus(
-              "pending"
-            );
-
-            return;
-          }
-
-          setSyncStatus(
-            "success"
-          );
-        } catch (
-          error
-        ) {
-          console.error(
-            "SYRAVEN BILLING SUCCESS SYNC ERROR:",
-            error
-          );
-
-          /*
-           * Ödeme başarılı sayfasında
-           * backend geçici olarak
-           * cevap veremese bile kullanıcıyı
-           * korkutmuyoruz.
-           */
-
-          setSyncStatus(
-            "pending"
-          );
-        }
-      },
-      [
-        sessionId,
-      ]
-    );
+      /*
+       * Payment success page should remain usable
+       * even if billing synchronization is delayed.
+       */
+      setSyncStatus("pending");
+    }
+  }, [sessionId]);
 
   /* ==================================================
    * INITIAL SYNC
@@ -409,56 +352,32 @@ export default function BillingSuccessPage() {
 
   useEffect(() => {
     void syncBilling();
-  }, [
-    syncBilling,
-  ]);
+  }, [syncBilling]);
 
   /* ==================================================
    * RETRY WEBHOOK SYNC
-   *
-   * Stripe webhook redirect'ten
-   * sonra gelebileceği için kısa süreli
-   * kontrollü tekrar deneme.
    * ================================================== */
 
   useEffect(() => {
-    if (
-      syncStatus !==
-      "pending"
-    ) {
+    if (syncStatus !== "pending") {
       return;
     }
 
-    let attempts =
-      0;
+    let attempts = 0;
+    const maxAttempts = 5;
 
-    const maxAttempts =
-      5;
+    const interval = window.setInterval(() => {
+      attempts += 1;
 
-    const interval =
-      window.setInterval(
-        () => {
-          attempts +=
-            1;
+      void syncBilling();
 
-          void syncBilling();
-
-          if (
-            attempts >=
-            maxAttempts
-          ) {
-            window.clearInterval(
-              interval
-            );
-          }
-        },
-        2500
-      );
+      if (attempts >= maxAttempts) {
+        window.clearInterval(interval);
+      }
+    }, 2500);
 
     return () => {
-      window.clearInterval(
-        interval
-      );
+      window.clearInterval(interval);
     };
   }, [
     syncBilling,
@@ -469,130 +388,80 @@ export default function BillingSuccessPage() {
    * CONTINUE
    * ================================================== */
 
-  const handleContinue =
-    useCallback(
-      () => {
-        if (
-          isContinuing
-        ) {
-          return;
-        }
+  const handleContinue = useCallback(() => {
+    if (isContinuing) {
+      return;
+    }
 
-        setIsContinuing(
-          true
-        );
+    setIsContinuing(true);
 
-        router.push(
-          "/chat"
-        );
-      },
-      [
-        isContinuing,
-        router,
-      ]
-    );
+    router.push("/chat");
+  }, [
+    isContinuing,
+    router,
+  ]);
 
   /* ==================================================
    * UI DATA
    * ================================================== */
 
-  const statusLabel =
-    useMemo(
-      () => {
-        if (
-          syncStatus ===
-          "checking"
-        ) {
-          return "Verifying subscription";
-        }
+  const statusLabel = useMemo(() => {
+    switch (syncStatus) {
+      case "checking":
+        return "Verifying subscription";
 
-        if (
-          syncStatus ===
-          "pending"
-        ) {
-          return "Activating your workspace";
-        }
+      case "pending":
+        return "Activating your workspace";
 
-        if (
-          syncStatus ===
-          "error"
-        ) {
-          return "Activation needs attention";
-        }
+      case "error":
+        return "Activation needs attention";
 
+      default:
         return "Subscription activated";
-      },
-      [
-        syncStatus,
-      ]
-    );
+    }
+  }, [syncStatus]);
 
-  const subscriptionText =
-    useMemo(
-      () => {
-        if (
-          syncStatus ===
-          "checking"
-        ) {
-          return "We are securely verifying your billing information.";
-        }
+  const subscriptionText = useMemo(() => {
+    if (syncStatus === "checking") {
+      return "We are securely verifying your billing information.";
+    }
 
-        if (
-          syncStatus ===
-          "pending"
-        ) {
-          return "Your payment was completed. SYRAVEN is finalizing your subscription access.";
-        }
+    if (syncStatus === "pending") {
+      return "Your payment was completed. SYRAVEN is finalizing your subscription access.";
+    }
 
-        if (
-          subscriptionStatus
-        ) {
-          return `Subscription status: ${subscriptionStatus}.`;
-        }
+    if (subscriptionStatus) {
+      return `Subscription status: ${subscriptionStatus}.`;
+    }
 
-        return "Your SYRAVEN plan is active and ready.";
-      },
-      [
-        subscriptionStatus,
-        syncStatus,
-      ]
-    );
+    return "Your SYRAVEN plan is active and ready.";
+  }, [
+    subscriptionStatus,
+    syncStatus,
+  ]);
 
-  const activatedFeatures =
-    useMemo(
-      () => {
-        const features =
-          [
-            "Advanced SYRAVEN intelligence",
-            "Expanded workspace capabilities",
-            "AI agents and intelligent workflows",
-            "Priority access to premium tools",
-          ];
+  const activatedFeatures = useMemo(() => {
+    const features = [
+      "Advanced SYRAVEN intelligence",
+      "Expanded workspace capabilities",
+      "AI agents and intelligent workflows",
+      "Priority access to premium tools",
+    ];
 
-        if (
-          plan ===
-          "business"
-        ) {
-          features.push(
-            "Business collaboration and shared workflows"
-          );
-        }
+    if (plan === "business") {
+      features.push(
+        "Business collaboration and shared workflows",
+      );
+    }
 
-        if (
-          plan ===
-          "enterprise"
-        ) {
-          features.push(
-            "Enterprise controls and advanced organization features"
-          );
-        }
+    if (plan === "enterprise") {
+      features.push(
+        "Enterprise controls and advanced organization features",
+      );
+    }
 
-        return features;
-      },
-      [
-        plan,
-      ]
-    );
+    return features;
+  }, [plan]);
 
   /* ==================================================
    * RENDER
@@ -760,7 +629,6 @@ export default function BillingSuccessPage() {
           "
         >
           <ShieldIcon />
-
           Secure activation
         </div>
       </header>
@@ -834,8 +702,7 @@ export default function BillingSuccessPage() {
                   text-white
                 "
               >
-                {syncStatus ===
-                "checking" ? (
+                {syncStatus === "checking" ? (
                   <span
                     className="
                       h-2
@@ -880,9 +747,7 @@ export default function BillingSuccessPage() {
                 sm:text-lg
               "
             >
-              {PLAN_DESCRIPTIONS[
-                plan
-              ]}
+              {PLAN_DESCRIPTIONS[plan]}
             </p>
 
             <p
@@ -908,12 +773,8 @@ export default function BillingSuccessPage() {
             >
               <button
                 type="button"
-                onClick={
-                  handleContinue
-                }
-                disabled={
-                  isContinuing
-                }
+                onClick={handleContinue}
+                disabled={isContinuing}
                 className="
                   group
                   inline-flex
@@ -1100,11 +961,7 @@ export default function BillingSuccessPage() {
                         tracking-tight
                       "
                     >
-                      {
-                        PLAN_LABELS[
-                          plan
-                        ]
-                      }
+                      {PLAN_LABELS[plan]}
                     </h2>
                   </div>
 
@@ -1134,13 +991,9 @@ export default function BillingSuccessPage() {
                   "
                 >
                   {activatedFeatures.map(
-                    (
-                      feature
-                    ) => (
+                    (feature) => (
                       <div
-                        key={
-                          feature
-                        }
+                        key={feature}
                         className="
                           flex
                           items-center
@@ -1180,7 +1033,7 @@ export default function BillingSuccessPage() {
                           {feature}
                         </span>
                       </div>
-                    )
+                    ),
                   )}
                 </div>
 
@@ -1315,5 +1168,21 @@ export default function BillingSuccessPage() {
         </div>
       </section>
     </main>
+  );
+}
+
+/* ==================================================
+ * PAGE EXPORT
+ *
+ * Critical:
+ * useSearchParams is inside BillingSuccessContent,
+ * which is wrapped by Suspense.
+ * ================================================== */
+
+export default function BillingSuccessPage() {
+  return (
+    <Suspense fallback={<BillingSuccessLoading />}>
+      <BillingSuccessContent />
+    </Suspense>
   );
 }

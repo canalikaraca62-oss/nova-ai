@@ -37,6 +37,29 @@ type AgentCapability =
   | "vision"
   | "data";
 
+const MODEL_OPTIONS = [
+  "auto",
+  "gpt-4.1",
+  "gpt-4.1-mini",
+  "gpt-4o",
+  "gpt-4o-mini",
+] as const;
+
+type AgentModel = (typeof MODEL_OPTIONS)[number];
+
+interface RoleOption {
+  value: AgentRole;
+  label: string;
+  description: string;
+  icon: string;
+}
+
+interface CapabilityOption {
+  value: AgentCapability;
+  label: string;
+  description: string;
+}
+
 interface AgentBuilderProps {
   initialAgent?: {
     id?: string;
@@ -45,7 +68,7 @@ interface AgentBuilderProps {
     instructions?: string;
     role?: AgentRole;
     capabilities?: AgentCapability[];
-    model?: string;
+    model?: AgentModel;
     temperature?: number;
     isPublic?: boolean;
   };
@@ -60,24 +83,21 @@ export interface BuiltAgent {
   instructions: string;
   role: AgentRole;
   capabilities: AgentCapability[];
-  model: string;
+  model: AgentModel;
   temperature: number;
   isPublic: boolean;
   createdAt: string;
 }
 
-const ROLE_OPTIONS: Array<{
-  value: AgentRole;
-  label: string;
-  description: string;
-  icon: string;
-}> = [
-  {
-    value: "general",
-    label: "General",
-    description: "Flexible assistant for everyday work.",
-    icon: "✦",
-  },
+const DEFAULT_ROLE_OPTION: RoleOption = {
+  value: "general",
+  label: "General",
+  description: "Flexible assistant for everyday work.",
+  icon: "✦",
+};
+
+const ROLE_OPTIONS: readonly RoleOption[] = [
+  DEFAULT_ROLE_OPTION,
   {
     value: "research",
     label: "Research",
@@ -134,11 +154,7 @@ const ROLE_OPTIONS: Array<{
   },
 ];
 
-const CAPABILITY_OPTIONS: Array<{
-  value: AgentCapability;
-  label: string;
-  description: string;
-}> = [
+const CAPABILITY_OPTIONS: readonly CapabilityOption[] = [
   {
     value: "research",
     label: "Research",
@@ -186,15 +202,7 @@ const CAPABILITY_OPTIONS: Array<{
   },
 ];
 
-const MODEL_OPTIONS = [
-  "auto",
-  "gpt-4.1",
-  "gpt-4.1-mini",
-  "gpt-4o",
-  "gpt-4o-mini",
-];
-
-function createId() {
+function createId(): string {
   if (
     typeof crypto !== "undefined" &&
     typeof crypto.randomUUID === "function"
@@ -207,20 +215,24 @@ function createId() {
     .slice(2, 10)}`;
 }
 
+function isAgentModel(value: string): value is AgentModel {
+  return MODEL_OPTIONS.includes(value as AgentModel);
+}
+
 export default function AgentBuilder({
   initialAgent,
   onCreated,
   onCancel,
 }: AgentBuilderProps) {
-  const [name, setName] = useState(
+  const [name, setName] = useState<string>(
     initialAgent?.name ?? ""
   );
 
-  const [description, setDescription] = useState(
+  const [description, setDescription] = useState<string>(
     initialAgent?.description ?? ""
   );
 
-  const [instructions, setInstructions] = useState(
+  const [instructions, setInstructions] = useState<string>(
     initialAgent?.instructions ?? ""
   );
 
@@ -236,18 +248,18 @@ export default function AgentBuilder({
       ]
     );
 
-  const [model, setModel] = useState(
+  const [model, setModel] = useState<AgentModel>(
     initialAgent?.model ?? "auto"
   );
 
   const [temperature, setTemperature] =
-    useState(
+    useState<number>(
       typeof initialAgent?.temperature === "number"
         ? initialAgent.temperature
         : 0.7
     );
 
-  const [isPublic, setIsPublic] = useState(
+  const [isPublic, setIsPublic] = useState<boolean>(
     initialAgent?.isPublic ?? false
   );
 
@@ -259,7 +271,7 @@ export default function AgentBuilder({
   );
 
   const [isPreviewOpen, setIsPreviewOpen] =
-    useState(false);
+    useState<boolean>(false);
 
   useEffect(() => {
     if (!initialAgent) {
@@ -267,21 +279,26 @@ export default function AgentBuilder({
     }
 
     setName(initialAgent.name ?? "");
+
     setDescription(
       initialAgent.description ?? ""
     );
+
     setInstructions(
       initialAgent.instructions ?? ""
     );
+
     setRole(
       initialAgent.role ?? "general"
     );
+
     setCapabilities(
       initialAgent.capabilities ?? [
         "research",
         "analysis",
       ]
     );
+
     setModel(
       initialAgent.model ?? "auto"
     );
@@ -297,13 +314,22 @@ export default function AgentBuilder({
     );
   }, [initialAgent]);
 
-  const selectedRole = useMemo(
-    () =>
+  /*
+   * IMPORTANT:
+   *
+   * ROLE_OPTIONS[0] can be undefined when
+   * noUncheckedIndexedAccess is enabled.
+   *
+   * Therefore we use DEFAULT_ROLE_OPTION.
+   * selectedRole is now guaranteed to be RoleOption.
+   */
+  const selectedRole: RoleOption = useMemo(() => {
+    return (
       ROLE_OPTIONS.find(
         (item) => item.value === role
-      ) ?? ROLE_OPTIONS[0],
-    [role]
-  );
+      ) ?? DEFAULT_ROLE_OPTION
+    );
+  }, [role]);
 
   const completionScore = useMemo(() => {
     let score = 0;
@@ -374,10 +400,12 @@ export default function AgentBuilder({
     setDescription("");
     setInstructions("");
     setRole("general");
+
     setCapabilities([
       "research",
       "analysis",
     ]);
+
     setModel("auto");
     setTemperature(0.7);
     setIsPublic(false);
@@ -387,7 +415,7 @@ export default function AgentBuilder({
 
   async function handleSubmit(
     event: FormEvent<HTMLFormElement>
-  ) {
+  ): Promise<void> {
     event.preventDefault();
 
     setError(null);
@@ -422,10 +450,12 @@ export default function AgentBuilder({
           method: initialAgent?.id
             ? "PATCH"
             : "POST",
+
           headers: {
             "Content-Type":
               "application/json",
           },
+
           body: JSON.stringify({
             ...(initialAgent?.id
               ? {
@@ -454,35 +484,66 @@ export default function AgentBuilder({
         );
       }
 
+      const returnedModel =
+        result?.agent?.model;
+
+      const safeModel: AgentModel =
+        returnedModel &&
+        isAgentModel(returnedModel)
+          ? returnedModel
+          : payload.model;
+
+      const returnedRole =
+        result?.agent?.role;
+
+      const safeRole: AgentRole =
+        returnedRole ?? payload.role;
+
+      const returnedCapabilities =
+        result?.agent?.capabilities;
+
+      const safeCapabilities:
+        AgentCapability[] =
+        returnedCapabilities ??
+        payload.capabilities;
+
       const agent: BuiltAgent = {
         id:
           result?.agent?.id ??
           initialAgent?.id ??
           createId(),
+
         name:
           result?.agent?.name ??
           payload.name,
+
         description:
           result?.agent?.description ??
           payload.description,
+
         instructions:
           result?.agent?.instructions ??
           payload.instructions,
-        role:
-          result?.agent?.role ??
-          payload.role,
+
+        role: safeRole,
+
         capabilities:
-          result?.agent?.capabilities ??
-          payload.capabilities,
-        model:
-          result?.agent?.model ??
-          payload.model,
+          safeCapabilities,
+
+        model: safeModel,
+
         temperature:
-          result?.agent?.temperature ??
-          payload.temperature,
+          typeof result?.agent?.temperature ===
+          "number"
+            ? result.agent.temperature
+            : payload.temperature,
+
         isPublic:
-          result?.agent?.isPublic ??
-          payload.isPublic,
+          typeof result?.agent?.isPublic ===
+          "boolean"
+            ? result.agent.isPublic
+            : payload.isPublic,
+
         createdAt:
           result?.agent?.createdAt ??
           new Date().toISOString(),
@@ -800,9 +861,7 @@ Your responsibilities:
                           </span>
 
                           <span className="mt-1 block text-xs leading-5 text-white/40">
-                            {
-                              capability.description
-                            }
+                            {capability.description}
                           </span>
                         </span>
                       </button>
@@ -832,11 +891,14 @@ Your responsibilities:
 
                   <select
                     value={model}
-                    onChange={(event) =>
-                      setModel(
-                        event.target.value
-                      )
-                    }
+                    onChange={(event) => {
+                      const value =
+                        event.target.value;
+
+                      if (isAgentModel(value)) {
+                        setModel(value);
+                      }
+                    }}
                     className="h-12 rounded-xl border border-white/10 bg-black/30 px-4 text-sm text-white outline-none transition focus:border-white/30"
                   >
                     {MODEL_OPTIONS.map(

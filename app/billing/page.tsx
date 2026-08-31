@@ -1,21 +1,18 @@
 "use client";
 
 import Link from "next/link";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
+/* =========================================================
+ * SYRAVEN BILLING CENTER
+ * Production-grade billing UI
+ * Strict TypeScript compatible
+ * ========================================================= */
 
-import {
-  useRouter,
-} from "next/navigation";
-
-/* ==================================================
+/* =========================================================
  * TYPES
- * ================================================== */
+ * ========================================================= */
 
 type SyravenPlan =
   | "free"
@@ -24,10 +21,16 @@ type SyravenPlan =
   | "business"
   | "enterprise";
 
-type BillingStatus =
-  | "loading"
-  | "ready"
-  | "error";
+type BillingStatus = "loading" | "ready" | "error";
+
+type BillingInterval = "month" | "year";
+
+type UsageData = {
+  messages?: number | null;
+  agents?: number | null;
+  projects?: number | null;
+  storage_bytes?: number | null;
+};
 
 type BillingResponse = {
   plan?: string | null;
@@ -36,12 +39,7 @@ type BillingResponse = {
   stripe_subscription_id?: string | null;
   current_period_end?: string | null;
   cancel_at_period_end?: boolean | null;
-  usage?: {
-    messages?: number | null;
-    agents?: number | null;
-    projects?: number | null;
-    storage_bytes?: number | null;
-  } | null;
+  usage?: UsageData | null;
 };
 
 type PlanConfig = {
@@ -51,19 +49,20 @@ type PlanConfig = {
   description: string;
   monthlyPrice: string;
   yearlyPrice: string;
-  featured?: boolean;
-  features: string[];
+  featured: boolean;
+  features: readonly string[];
 };
 
-/* ==================================================
- * PLAN CONFIG
- *
- * UI tarafındaki fiyatlar ve özellikler burada.
- * Gerçek checkout fiyatlandırması backend/Stripe
- * üzerinden doğrulanmalıdır.
- * ================================================== */
+type CheckoutResponse = {
+  url?: string;
+  error?: string;
+};
 
-const PLANS: PlanConfig[] = [
+/* =========================================================
+ * PLAN CONFIGURATION
+ * ========================================================= */
+
+const PLANS: readonly PlanConfig[] = [
   {
     id: "free",
     name: "Free",
@@ -72,6 +71,7 @@ const PLANS: PlanConfig[] = [
       "Experience the core SYRAVEN intelligence platform.",
     monthlyPrice: "€0",
     yearlyPrice: "€0",
+    featured: false,
     features: [
       "Core AI chat",
       "Basic workspace",
@@ -79,6 +79,7 @@ const PLANS: PlanConfig[] = [
       "Personal memory",
     ],
   },
+
   {
     id: "premium",
     name: "Premium",
@@ -87,6 +88,7 @@ const PLANS: PlanConfig[] = [
       "More intelligence, more creation and more room to work.",
     monthlyPrice: "€19",
     yearlyPrice: "€190",
+    featured: false,
     features: [
       "Everything in Free",
       "Advanced AI models",
@@ -95,6 +97,7 @@ const PLANS: PlanConfig[] = [
       "Priority processing",
     ],
   },
+
   {
     id: "pro",
     name: "Pro",
@@ -114,6 +117,7 @@ const PLANS: PlanConfig[] = [
       "Priority support",
     ],
   },
+
   {
     id: "business",
     name: "Business",
@@ -122,6 +126,7 @@ const PLANS: PlanConfig[] = [
       "A powerful AI operating environment for ambitious teams.",
     monthlyPrice: "€99",
     yearlyPrice: "€990",
+    featured: false,
     features: [
       "Everything in Pro",
       "Team workspace",
@@ -131,6 +136,7 @@ const PLANS: PlanConfig[] = [
       "Business controls",
     ],
   },
+
   {
     id: "enterprise",
     name: "Enterprise",
@@ -139,6 +145,7 @@ const PLANS: PlanConfig[] = [
       "Custom AI infrastructure, governance and enterprise capabilities.",
     monthlyPrice: "Custom",
     yearlyPrice: "Custom",
+    featured: false,
     features: [
       "Everything in Business",
       "Enterprise controls",
@@ -150,18 +157,30 @@ const PLANS: PlanConfig[] = [
   },
 ];
 
-/* ==================================================
+/* =========================================================
+ * CONSTANTS
+ * ========================================================= */
+
+const DEFAULT_PLAN_CONFIG: PlanConfig = PLANS[0] ?? {
+  id: "free",
+  name: "Free",
+  badge: "Explore",
+  description:
+    "Experience the core SYRAVEN intelligence platform.",
+  monthlyPrice: "€0",
+  yearlyPrice: "€0",
+  featured: false,
+  features: [],
+};
+
+/* =========================================================
  * HELPERS
- * ================================================== */
+ * ========================================================= */
 
 function normalizePlan(
-  value: string | null | undefined
+  value: string | null | undefined,
 ): SyravenPlan {
-  switch (
-    value
-      ?.trim()
-      .toLowerCase()
-  ) {
+  switch (value?.trim().toLowerCase()) {
     case "premium":
     case "plus":
       return "premium";
@@ -176,68 +195,67 @@ function normalizePlan(
     case "enterprise":
       return "enterprise";
 
+    case "free":
     default:
       return "free";
   }
 }
 
 function formatDate(
-  value: string | null | undefined
-) {
+  value: string | null | undefined,
+): string {
   if (!value) {
     return "Not available";
   }
 
-  const date =
-    new Date(value);
+  const date = new Date(value);
 
-  if (
-    Number.isNaN(
-      date.getTime()
-    )
-  ) {
+  if (Number.isNaN(date.getTime())) {
     return "Not available";
   }
 
-  return new Intl.DateTimeFormat(
-    "en",
-    {
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-    }
-  ).format(date);
+  return new Intl.DateTimeFormat("en", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(date);
 }
 
 function formatBytes(
-  bytes: number | null | undefined
-) {
-  if (
-    !bytes ||
-    bytes <= 0
-  ) {
+  bytes: number | null | undefined,
+): string {
+  if (!bytes || bytes <= 0) {
     return "0 MB";
   }
 
-  const mb =
-    bytes / 1024 / 1024;
+  const megabytes = bytes / 1024 / 1024;
 
-  if (
-    mb >= 1024
-  ) {
-    return `${(
-      mb / 1024
-    ).toFixed(1)} GB`;
+  if (megabytes >= 1024) {
+    return `${(megabytes / 1024).toFixed(1)} GB`;
   }
 
-  return `${mb.toFixed(
-    mb >= 100 ? 0 : 1
+  return `${megabytes.toFixed(
+    megabytes >= 100 ? 0 : 1,
   )} MB`;
 }
 
-/* ==================================================
+function getUsagePercentage(
+  value: number,
+  fallback: number,
+): number {
+  if (!Number.isFinite(value) || value <= 0) {
+    return fallback;
+  }
+
+  return Math.min(
+    100,
+    Math.max(4, value),
+  );
+}
+
+/* =========================================================
  * ICONS
- * ================================================== */
+ * ========================================================= */
 
 function SparkIcon() {
   return (
@@ -392,475 +410,341 @@ function RefreshIcon() {
   );
 }
 
-/* ==================================================
+/* =========================================================
  * PAGE
- * ================================================== */
+ * ========================================================= */
 
 export default function BillingPage() {
-  const router =
-    useRouter();
+  const router = useRouter();
 
-  const [
-    billingStatus,
-    setBillingStatus,
-  ] =
-    useState<BillingStatus>(
-      "loading"
-    );
+  const [billingStatus, setBillingStatus] =
+    useState<BillingStatus>("loading");
 
-  const [
-    currentPlan,
-    setCurrentPlan,
-  ] =
-    useState<SyravenPlan>(
-      "free"
-    );
+  const [currentPlan, setCurrentPlan] =
+    useState<SyravenPlan>("free");
 
   const [
     subscriptionStatus,
     setSubscriptionStatus,
-  ] =
-    useState<string>(
-      ""
-    );
+  ] = useState<string>("");
 
   const [
     currentPeriodEnd,
     setCurrentPeriodEnd,
-  ] =
-    useState<string | null>(
-      null
-    );
+  ] = useState<string | null>(null);
 
   const [
     cancelAtPeriodEnd,
     setCancelAtPeriodEnd,
-  ] =
-    useState(false);
+  ] = useState<boolean>(false);
 
-  const [
-    usage,
-    setUsage,
-  ] =
-    useState<
-      NonNullable<
-        BillingResponse["usage"]
-      >
-    >({});
+  const [usage, setUsage] =
+    useState<UsageData>({});
 
-  const [
-    billingError,
-    setBillingError,
-  ] =
-    useState<string>(
-      ""
-    );
+  const [billingError, setBillingError] =
+    useState<string>("");
 
-  const [
-    isRefreshing,
-    setIsRefreshing,
-  ] =
-    useState(false);
+  const [isRefreshing, setIsRefreshing] =
+    useState<boolean>(false);
 
-  const [
-    activeAction,
-    setActiveAction,
-  ] =
-    useState<string | null>(
-      null
-    );
+  const [activeAction, setActiveAction] =
+    useState<string | null>(null);
 
-  const [
-    yearly,
-    setYearly,
-  ] =
-    useState(false);
+  const [yearly, setYearly] =
+    useState<boolean>(false);
 
-  /* ==================================================
+  /* =======================================================
    * LOAD BILLING
-   * ================================================== */
+   * ======================================================= */
 
-  const loadBilling =
-    useCallback(
-      async (
-        showRefreshState = false
-      ) => {
-        try {
-          if (
-            showRefreshState
-          ) {
-            setIsRefreshing(
-              true
-            );
-          }
+  const loadBilling = useCallback(
+    async (showRefreshState = false) => {
+      try {
+        if (showRefreshState) {
+          setIsRefreshing(true);
+        }
 
-          setBillingStatus(
-            "loading"
-          );
+        setBillingStatus("loading");
+        setBillingError("");
 
-          setBillingError(
-            ""
-          );
+        const response = await fetch(
+          "/api/billing",
+          {
+            method: "GET",
+            cache: "no-store",
+            headers: {
+              Accept: "application/json",
+            },
+          },
+        );
 
-          const response =
-            await fetch(
-              "/api/billing",
-              {
-                method: "GET",
-                cache: "no-store",
-                headers: {
-                  Accept:
-                    "application/json",
-                },
-              }
-            );
-
-          if (
-            !response.ok
-          ) {
-            throw new Error(
-              "Unable to load billing information."
-            );
-          }
-
-          const data:
-            BillingResponse =
-            await response.json();
-
-          setCurrentPlan(
-            normalizePlan(
-              data.plan
-            )
-          );
-
-          setSubscriptionStatus(
-            data.subscription_status ??
-              ""
-          );
-
-          setCurrentPeriodEnd(
-            data.current_period_end ??
-              null
-          );
-
-          setCancelAtPeriodEnd(
-            Boolean(
-              data.cancel_at_period_end
-            )
-          );
-
-          setUsage(
-            data.usage ??
-              {}
-          );
-
-          setBillingStatus(
-            "ready"
-          );
-        } catch (
-          error
-        ) {
-          console.error(
-            "SYRAVEN BILLING LOAD ERROR:",
-            error
-          );
-
-          setBillingError(
-            error instanceof Error
-              ? error.message
-              : "Unable to load billing information."
-          );
-
-          setBillingStatus(
-            "error"
-          );
-        } finally {
-          setIsRefreshing(
-            false
+        if (!response.ok) {
+          throw new Error(
+            "Unable to load billing information.",
           );
         }
-      },
-      []
-    );
+
+        const data =
+          (await response.json()) as BillingResponse;
+
+        setCurrentPlan(
+          normalizePlan(data.plan),
+        );
+
+        setSubscriptionStatus(
+          data.subscription_status ?? "",
+        );
+
+        setCurrentPeriodEnd(
+          data.current_period_end ?? null,
+        );
+
+        setCancelAtPeriodEnd(
+          Boolean(data.cancel_at_period_end),
+        );
+
+        setUsage(
+          data.usage ?? {},
+        );
+
+        setBillingStatus("ready");
+      } catch (error) {
+        console.error(
+          "SYRAVEN BILLING LOAD ERROR:",
+          error,
+        );
+
+        setBillingError(
+          error instanceof Error
+            ? error.message
+            : "Unable to load billing information.",
+        );
+
+        setBillingStatus("error");
+      } finally {
+        setIsRefreshing(false);
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     void loadBilling();
-  }, [
-    loadBilling,
-  ]);
+  }, [loadBilling]);
 
-  /* ==================================================
+  /* =======================================================
    * START CHECKOUT
-   * ================================================== */
+   * ======================================================= */
 
-  const startCheckout =
-    useCallback(
-      async (
-        plan: SyravenPlan
-      ) => {
-        if (
-          activeAction
-        ) {
-          return;
-        }
+  const startCheckout = useCallback(
+    async (plan: SyravenPlan) => {
+      if (activeAction !== null) {
+        return;
+      }
 
-        if (
-          plan === "enterprise"
-        ) {
-          router.push(
-            "/contact?plan=enterprise"
-          );
+      if (plan === "enterprise") {
+        router.push(
+          "/contact?plan=enterprise",
+        );
+        return;
+      }
 
-          return;
-        }
+      if (plan === "free") {
+        return;
+      }
 
-        if (
-          plan === "free"
-        ) {
-          return;
-        }
+      try {
+        const actionId =
+          `checkout-${plan}`;
 
-        try {
-          setActiveAction(
-            `checkout-${plan}`
-          );
+        setActiveAction(actionId);
+        setBillingError("");
 
-          const response =
-            await fetch(
-              "/api/billing/checkout",
-              {
-                method: "POST",
-                headers: {
-                  "Content-Type":
-                    "application/json",
-                  Accept:
-                    "application/json",
-                },
-                body:
-                  JSON.stringify({
-                    plan,
-                    interval:
-                      yearly
-                        ? "year"
-                        : "month",
-                  }),
-              }
-            );
+        const interval: BillingInterval =
+          yearly ? "year" : "month";
 
-          const data:
-            {
-              url?: string;
-              error?: string;
-            } =
-            await response.json();
+        const response = await fetch(
+          "/api/billing/checkout",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type":
+                "application/json",
+              Accept:
+                "application/json",
+            },
+            body: JSON.stringify({
+              plan,
+              interval,
+            }),
+          },
+        );
 
-          if (
-            !response.ok ||
-            !data.url
-          ) {
-            throw new Error(
-              data.error ??
-                "Unable to start checkout."
-            );
-          }
+        const data =
+          (await response.json()) as CheckoutResponse;
 
-          window.location.assign(
-            data.url
-          );
-        } catch (
-          error
-        ) {
-          console.error(
-            "SYRAVEN CHECKOUT ERROR:",
-            error
-          );
-
-          setBillingError(
-            error instanceof Error
-              ? error.message
-              : "Unable to start checkout."
-          );
-        } finally {
-          setActiveAction(
-            null
+        if (!response.ok || !data.url) {
+          throw new Error(
+            data.error ??
+              "Unable to start checkout.",
           );
         }
-      },
-      [
-        activeAction,
-        router,
-        yearly,
-      ]
-    );
 
-  /* ==================================================
-   * OPEN BILLING PORTAL
-   * ================================================== */
+        window.location.assign(data.url);
+      } catch (error) {
+        console.error(
+          "SYRAVEN CHECKOUT ERROR:",
+          error,
+        );
 
-  const openBillingPortal =
-    useCallback(
-      async () => {
-        if (
-          activeAction
-        ) {
-          return;
-        }
+        setBillingError(
+          error instanceof Error
+            ? error.message
+            : "Unable to start checkout.",
+        );
 
-        try {
-          setActiveAction(
-            "portal"
-          );
+        setActiveAction(null);
+      }
+    },
+    [
+      activeAction,
+      router,
+      yearly,
+    ],
+  );
 
-          const response =
-            await fetch(
-              "/api/billing/portal",
-              {
-                method: "POST",
-                headers: {
-                  Accept:
-                    "application/json",
-                },
-              }
-            );
+  /* =======================================================
+   * BILLING PORTAL
+   * ======================================================= */
 
-          const data:
-            {
-              url?: string;
-              error?: string;
-            } =
-            await response.json();
+  const openBillingPortal = useCallback(
+    async () => {
+      if (activeAction !== null) {
+        return;
+      }
 
-          if (
-            !response.ok ||
-            !data.url
-          ) {
-            throw new Error(
-              data.error ??
-                "Unable to open billing portal."
-            );
-          }
+      try {
+        setActiveAction("portal");
+        setBillingError("");
 
-          window.location.assign(
-            data.url
-          );
-        } catch (
-          error
-        ) {
-          console.error(
-            "SYRAVEN BILLING PORTAL ERROR:",
-            error
-          );
+        const response = await fetch(
+          "/api/billing/portal",
+          {
+            method: "POST",
+            headers: {
+              Accept:
+                "application/json",
+            },
+          },
+        );
 
-          setBillingError(
-            error instanceof Error
-              ? error.message
-              : "Unable to open billing portal."
-          );
-        } finally {
-          setActiveAction(
-            null
+        const data =
+          (await response.json()) as CheckoutResponse;
+
+        if (!response.ok || !data.url) {
+          throw new Error(
+            data.error ??
+              "Unable to open billing portal.",
           );
         }
-      },
-      [
-        activeAction,
-      ]
-    );
 
-  /* ==================================================
-   * CURRENT PLAN
-   * ================================================== */
+        window.location.assign(data.url);
+      } catch (error) {
+        console.error(
+          "SYRAVEN BILLING PORTAL ERROR:",
+          error,
+        );
+
+        setBillingError(
+          error instanceof Error
+            ? error.message
+            : "Unable to open billing portal.",
+        );
+
+        setActiveAction(null);
+      }
+    },
+    [activeAction],
+  );
+
+  /* =======================================================
+   * CURRENT PLAN CONFIG
+   * ======================================================= */
 
   const currentPlanConfig =
-    useMemo(
-      () =>
+    useMemo<PlanConfig>(() => {
+      return (
         PLANS.find(
-          (
-            plan
-          ) =>
-            plan.id ===
-            currentPlan
-        ) ??
-        PLANS[0],
-      [
-        currentPlan,
-      ]
-    );
+          (plan) =>
+            plan.id === currentPlan,
+        ) ?? DEFAULT_PLAN_CONFIG
+      );
+    }, [currentPlan]);
 
-  const statusLabel =
-    useMemo(
-      () => {
-        if (
-          billingStatus ===
-          "loading"
-        ) {
-          return "Loading";
-        }
+  /* =======================================================
+   * STATUS LABEL
+   * ======================================================= */
 
-        if (
-          billingStatus ===
-          "error"
-        ) {
-          return "Needs attention";
-        }
+  const statusLabel = useMemo(() => {
+    if (billingStatus === "loading") {
+      return "Loading";
+    }
 
-        if (
-          cancelAtPeriodEnd
-        ) {
-          return "Cancels at period end";
-        }
+    if (billingStatus === "error") {
+      return "Needs attention";
+    }
 
-        switch (
-          subscriptionStatus
-            .trim()
-            .toLowerCase()
-        ) {
-          case "active":
-            return "Active";
+    if (cancelAtPeriodEnd) {
+      return "Cancels at period end";
+    }
 
-          case "trialing":
-            return "Trial";
+    switch (
+      subscriptionStatus
+        .trim()
+        .toLowerCase()
+    ) {
+      case "active":
+        return "Active";
 
-          case "past_due":
-            return "Payment required";
+      case "trialing":
+        return "Trial";
 
-          case "unpaid":
-            return "Payment required";
+      case "past_due":
+      case "unpaid":
+        return "Payment required";
 
-          case "canceled":
-          case "cancelled":
-            return "Cancelled";
+      case "canceled":
+      case "cancelled":
+        return "Cancelled";
 
-          default:
-            return currentPlan ===
-              "free"
-              ? "Free"
-              : "Active";
-        }
-      },
-      [
-        billingStatus,
-        cancelAtPeriodEnd,
-        currentPlan,
-        subscriptionStatus,
-      ]
-    );
+      default:
+        return currentPlan === "free"
+          ? "Free"
+          : "Active";
+    }
+  }, [
+    billingStatus,
+    cancelAtPeriodEnd,
+    currentPlan,
+    subscriptionStatus,
+  ]);
+
+  /* =======================================================
+   * USAGE
+   * ======================================================= */
 
   const messagesUsage =
-    usage.messages ??
-    0;
+    usage.messages ?? 0;
 
   const agentsUsage =
-    usage.agents ??
-    0;
+    usage.agents ?? 0;
 
   const projectsUsage =
-    usage.projects ??
-    0;
+    usage.projects ?? 0;
 
-  /* ==================================================
+  /* =======================================================
    * RENDER
-   * ================================================== */
+   * ======================================================= */
 
   return (
     <main
@@ -1118,21 +1002,17 @@ export default function BillingPage() {
               "
             >
               Manage your SYRAVEN plan, unlock more
-              capabilities and scale your personal AI
-              operating system when you are ready.
+              capabilities and scale your AI operating
+              environment when you are ready.
             </p>
           </div>
 
           <button
             type="button"
-            onClick={() =>
-              void loadBilling(
-                true
-              )
-            }
-            disabled={
-              isRefreshing
-            }
+            onClick={() => {
+              void loadBilling(true);
+            }}
+            disabled={isRefreshing}
             className="
               inline-flex
               h-11
@@ -1173,7 +1053,7 @@ export default function BillingPage() {
 
         {/* ERROR */}
 
-        {billingError && (
+        {billingError ? (
           <div
             className="
               mt-6
@@ -1214,9 +1094,7 @@ export default function BillingPage() {
             <button
               type="button"
               onClick={() =>
-                setBillingError(
-                  ""
-                )
+                setBillingError("")
               }
               className="
                 shrink-0
@@ -1229,7 +1107,7 @@ export default function BillingPage() {
               Dismiss
             </button>
           </div>
-        )}
+        ) : null}
 
         {/* CURRENT PLAN */}
 
@@ -1297,9 +1175,7 @@ export default function BillingPage() {
                         tracking-tight
                       "
                     >
-                      {
-                        currentPlanConfig.name
-                      }
+                      {currentPlanConfig.name}
                     </h2>
 
                     <span
@@ -1317,9 +1193,7 @@ export default function BillingPage() {
                         text-white/55
                       "
                     >
-                      {
-                        statusLabel
-                      }
+                      {statusLabel}
                     </span>
                   </div>
 
@@ -1388,11 +1262,9 @@ export default function BillingPage() {
                     "
                   >
                     {subscriptionStatus ||
-                    currentPlan ===
-                      "free"
-                      ? subscriptionStatus ||
-                        "Free plan"
-                      : "Active"}
+                      (currentPlan === "free"
+                        ? "Free plan"
+                        : "Active")}
                   </p>
                 </div>
 
@@ -1416,11 +1288,10 @@ export default function BillingPage() {
                       text-white/75
                     "
                   >
-                    {currentPlan ===
-                    "free"
+                    {currentPlan === "free"
                       ? "Any time"
                       : formatDate(
-                          currentPeriodEnd
+                          currentPeriodEnd,
                         )}
                   </p>
                 </div>
@@ -1452,16 +1323,14 @@ export default function BillingPage() {
                 </div>
               </div>
 
-              {currentPlan !==
-                "free" && (
+              {currentPlan !== "free" ? (
                 <button
                   type="button"
-                  onClick={
-                    openBillingPortal
-                  }
+                  onClick={() => {
+                    void openBillingPortal();
+                  }}
                   disabled={
-                    activeAction !==
-                      null
+                    activeAction !== null
                   }
                   className="
                     mt-7
@@ -1488,12 +1357,11 @@ export default function BillingPage() {
                 >
                   <CreditCardIcon />
 
-                  {activeAction ===
-                  "portal"
+                  {activeAction === "portal"
                     ? "Opening secure portal..."
                     : "Manage subscription"}
                 </button>
-              )}
+              ) : null}
             </div>
           </div>
 
@@ -1536,119 +1404,32 @@ export default function BillingPage() {
                 space-y-5
               "
             >
-              <div>
-                <div
-                  className="
-                    flex
-                    items-center
-                    justify-between
-                    text-sm
-                  "
-                >
-                  <span className="text-white/50">
-                    Messages
-                  </span>
+              <UsageRow
+                label="Messages"
+                value={messagesUsage}
+                percentage={getUsagePercentage(
+                  messagesUsage,
+                  45,
+                )}
+              />
 
-                  <span className="text-white/80">
-                    {messagesUsage}
-                  </span>
-                </div>
+              <UsageRow
+                label="Agents"
+                value={agentsUsage}
+                percentage={getUsagePercentage(
+                  agentsUsage,
+                  28,
+                )}
+              />
 
-                <div
-                  className="
-                    mt-2
-                    h-1.5
-                    overflow-hidden
-                    rounded-full
-                    bg-white/[0.06]
-                  "
-                >
-                  <div
-                    className="
-                      h-full
-                      w-[45%]
-                      rounded-full
-                      bg-white/50
-                    "
-                  />
-                </div>
-              </div>
-
-              <div>
-                <div
-                  className="
-                    flex
-                    items-center
-                    justify-between
-                    text-sm
-                  "
-                >
-                  <span className="text-white/50">
-                    Agents
-                  </span>
-
-                  <span className="text-white/80">
-                    {agentsUsage}
-                  </span>
-                </div>
-
-                <div
-                  className="
-                    mt-2
-                    h-1.5
-                    overflow-hidden
-                    rounded-full
-                    bg-white/[0.06]
-                  "
-                >
-                  <div
-                    className="
-                      h-full
-                      w-[28%]
-                      rounded-full
-                      bg-white/50
-                    "
-                  />
-                </div>
-              </div>
-
-              <div>
-                <div
-                  className="
-                    flex
-                    items-center
-                    justify-between
-                    text-sm
-                  "
-                >
-                  <span className="text-white/50">
-                    Projects
-                  </span>
-
-                  <span className="text-white/80">
-                    {projectsUsage}
-                  </span>
-                </div>
-
-                <div
-                  className="
-                    mt-2
-                    h-1.5
-                    overflow-hidden
-                    rounded-full
-                    bg-white/[0.06]
-                  "
-                >
-                  <div
-                    className="
-                      h-full
-                      w-[35%]
-                      rounded-full
-                      bg-white/50
-                    "
-                  />
-                </div>
-              </div>
+              <UsageRow
+                label="Projects"
+                value={projectsUsage}
+                percentage={getUsagePercentage(
+                  projectsUsage,
+                  35,
+                )}
+              />
 
               <div
                 className="
@@ -1665,9 +1446,14 @@ export default function BillingPage() {
                   Storage used
                 </span>
 
-                <span className="font-medium text-white/80">
+                <span
+                  className="
+                    font-medium
+                    text-white/80
+                  "
+                >
                   {formatBytes(
-                    usage.storage_bytes
+                    usage.storage_bytes,
                   )}
                 </span>
               </div>
@@ -1715,10 +1501,7 @@ export default function BillingPage() {
             type="button"
             onClick={() =>
               setYearly(
-                (
-                  previous
-                ) =>
-                  !previous
+                (previous) => !previous,
               )
             }
             className="
@@ -1791,313 +1574,300 @@ export default function BillingPage() {
             xl:grid-cols-5
           "
         >
-          {PLANS.map(
-            (
-              plan
-            ) => {
-              const isCurrent =
-                plan.id ===
-                currentPlan;
+          {PLANS.map((plan) => {
+            const isCurrent =
+              plan.id === currentPlan;
 
-              const isBusy =
-                activeAction ===
-                `checkout-${plan.id}`;
+            const actionId =
+              `checkout-${plan.id}`;
 
-              const price =
-                yearly
-                  ? plan.yearlyPrice
-                  : plan.monthlyPrice;
+            const isBusy =
+              activeAction === actionId;
 
-              return (
-                <article
-                  key={plan.id}
-                  className={`
-                    relative
-                    flex
-                    min-h-[560px]
-                    flex-col
-                    overflow-hidden
-                    rounded-[1.5rem]
-                    border
-                    p-6
-                    transition
-                    ${
-                      plan.featured
-                        ? `
-                          border-white/25
-                          bg-white/[0.075]
-                          shadow-2xl
-                          shadow-black/30
-                        `
-                        : `
-                          border-white/[0.09]
-                          bg-white/[0.025]
-                          hover:border-white/[0.16]
-                          hover:bg-white/[0.04]
-                        `
-                    }
-                  `}
-                >
-                  {plan.featured && (
-                    <div
-                      className="
-                        absolute
-                        inset-x-0
-                        top-0
-                        h-px
-                        bg-gradient-to-r
-                        from-transparent
-                        via-white/60
-                        to-transparent
-                      "
-                    />
-                  )}
+            const price = yearly
+              ? plan.yearlyPrice
+              : plan.monthlyPrice;
 
+            return (
+              <article
+                key={plan.id}
+                className={`
+                  relative
+                  flex
+                  min-h-[560px]
+                  flex-col
+                  overflow-hidden
+                  rounded-[1.5rem]
+                  border
+                  p-6
+                  transition
+                  ${
+                    plan.featured
+                      ? `
+                        border-white/25
+                        bg-white/[0.075]
+                        shadow-2xl
+                        shadow-black/30
+                      `
+                      : `
+                        border-white/[0.09]
+                        bg-white/[0.025]
+                        hover:border-white/[0.16]
+                        hover:bg-white/[0.04]
+                      `
+                  }
+                `}
+              >
+                {plan.featured ? (
                   <div
                     className="
-                      flex
-                      items-start
-                      justify-between
-                      gap-3
+                      absolute
+                      inset-x-0
+                      top-0
+                      h-px
+                      bg-gradient-to-r
+                      from-transparent
+                      via-white/60
+                      to-transparent
+                    "
+                  />
+                ) : null}
+
+                <div
+                  className="
+                    flex
+                    items-start
+                    justify-between
+                    gap-3
+                  "
+                >
+                  <span
+                    className="
+                      rounded-full
+                      border
+                      border-white/10
+                      bg-white/[0.05]
+                      px-2.5
+                      py-1
+                      text-[10px]
+                      font-semibold
+                      uppercase
+                      tracking-[0.15em]
+                      text-white/50
                     "
                   >
+                    {plan.badge}
+                  </span>
+
+                  {isCurrent ? (
                     <span
                       className="
                         rounded-full
-                        border
-                        border-white/10
-                        bg-white/[0.05]
+                        bg-white
                         px-2.5
                         py-1
                         text-[10px]
                         font-semibold
                         uppercase
-                        tracking-[0.15em]
-                        text-white/50
+                        tracking-[0.12em]
+                        text-black
                       "
                     >
-                      {plan.badge}
+                      Current
                     </span>
+                  ) : null}
+                </div>
 
-                    {isCurrent && (
-                      <span
-                        className="
-                          rounded-full
-                          bg-white
-                          px-2.5
-                          py-1
-                          text-[10px]
-                          font-semibold
-                          uppercase
-                          tracking-[0.12em]
-                          text-black
-                        "
-                      >
-                        Current
-                      </span>
-                    )}
-                  </div>
+                <h3
+                  className="
+                    mt-6
+                    text-2xl
+                    font-semibold
+                    tracking-tight
+                  "
+                >
+                  {plan.name}
+                </h3>
 
-                  <h3
+                <p
+                  className="
+                    mt-3
+                    min-h-[72px]
+                    text-sm
+                    leading-6
+                    text-white/45
+                  "
+                >
+                  {plan.description}
+                </p>
+
+                <div
+                  className="
+                    mt-6
+                    flex
+                    items-end
+                    gap-2
+                  "
+                >
+                  <span
                     className="
-                      mt-6
-                      text-2xl
+                      text-3xl
                       font-semibold
                       tracking-tight
                     "
                   >
-                    {plan.name}
-                  </h3>
+                    {price}
+                  </span>
 
-                  <p
-                    className="
-                      mt-3
-                      min-h-[72px]
-                      text-sm
-                      leading-6
-                      text-white/45
-                    "
-                  >
-                    {
-                      plan.description
-                    }
-                  </p>
-
-                  <div
-                    className="
-                      mt-6
-                      flex
-                      items-end
-                      gap-2
-                    "
-                  >
+                  {plan.id !== "free" &&
+                  plan.id !== "enterprise" ? (
                     <span
                       className="
-                        text-3xl
-                        font-semibold
-                        tracking-tight
+                        mb-1
+                        text-xs
+                        text-white/35
                       "
                     >
-                      {price}
+                      / {yearly
+                        ? "year"
+                        : "month"}
                     </span>
+                  ) : null}
+                </div>
 
-                    {plan.id !==
-                      "free" &&
-                      plan.id !==
-                        "enterprise" && (
-                        <span
-                          className="
-                            mb-1
-                            text-xs
-                            text-white/35
-                          "
-                        >
-                          / {yearly
-                            ? "year"
-                            : "month"}
-                        </span>
-                      )}
-                  </div>
-
-                  <div
-                    className="
-                      mt-7
-                      space-y-3
-                      border-t
-                      border-white/[0.08]
-                      pt-6
-                    "
-                  >
-                    {plan.features.map(
-                      (
-                        feature
-                      ) => (
-                        <div
-                          key={
-                            feature
-                          }
-                          className="
-                            flex
-                            items-start
-                            gap-2.5
-                            text-sm
-                            leading-5
-                            text-white/60
-                          "
-                        >
-                          <span
-                            className="
-                              mt-0.5
-                              flex
-                              h-5
-                              w-5
-                              shrink-0
-                              items-center
-                              justify-center
-                              rounded-full
-                              border
-                              border-white/10
-                              bg-white/[0.04]
-                              text-white/70
-                            "
-                          >
-                            <CheckIcon />
-                          </span>
-
-                          {feature}
-                        </div>
-                      )
-                    )}
-                  </div>
-
-                  <div className="mt-auto pt-8">
-                    {isCurrent ? (
-                      <button
-                        type="button"
-                        disabled
+                <div
+                  className="
+                    mt-7
+                    space-y-3
+                    border-t
+                    border-white/[0.08]
+                    pt-6
+                  "
+                >
+                  {plan.features.map(
+                    (feature) => (
+                      <div
+                        key={feature}
                         className="
                           flex
-                          h-11
-                          w-full
-                          cursor-default
-                          items-center
-                          justify-center
-                          rounded-xl
-                          border
-                          border-white/10
-                          bg-white/[0.05]
+                          items-start
+                          gap-2.5
                           text-sm
-                          font-medium
-                          text-white/40
+                          leading-5
+                          text-white/60
                         "
                       >
-                        Current plan
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          void startCheckout(
-                            plan.id
-                          )
-                        }
-                        disabled={
-                          activeAction !==
-                          null
-                        }
-                        className={`
-                          group
-                          flex
-                          h-11
-                          w-full
-                          items-center
-                          justify-center
-                          gap-2
-                          rounded-xl
-                          text-sm
-                          font-semibold
-                          transition
-                          disabled:cursor-wait
-                          disabled:opacity-60
-                          ${
-                            plan.featured
-                              ? `
-                                bg-white
-                                text-black
-                                hover:bg-white/90
-                              `
-                              : `
-                                border
-                                border-white/10
-                                bg-white/[0.045]
-                                text-white/75
-                                hover:border-white/20
-                                hover:bg-white/[0.08]
-                                hover:text-white
-                              `
-                          }
-                        `}
-                      >
-                        {isBusy
-                          ? "Opening..."
-                          : plan.id ===
-                            "enterprise"
-                            ? "Contact sales"
-                            : currentPlan ===
-                                "free"
-                              ? "Choose plan"
-                              : "Switch plan"}
+                        <span
+                          className="
+                            mt-0.5
+                            flex
+                            h-5
+                            w-5
+                            shrink-0
+                            items-center
+                            justify-center
+                            rounded-full
+                            border
+                            border-white/10
+                            bg-white/[0.04]
+                            text-white/70
+                          "
+                        >
+                          <CheckIcon />
+                        </span>
 
-                        {!isBusy && (
-                          <ArrowIcon />
-                        )}
-                      </button>
-                    )}
-                  </div>
-                </article>
-              );
-            }
-          )}
+                        {feature}
+                      </div>
+                    ),
+                  )}
+                </div>
+
+                <div className="mt-auto pt-8">
+                  {isCurrent ? (
+                    <button
+                      type="button"
+                      disabled
+                      className="
+                        flex
+                        h-11
+                        w-full
+                        cursor-default
+                        items-center
+                        justify-center
+                        rounded-xl
+                        border
+                        border-white/10
+                        bg-white/[0.05]
+                        text-sm
+                        font-medium
+                        text-white/40
+                      "
+                    >
+                      Current plan
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void startCheckout(
+                          plan.id,
+                        );
+                      }}
+                      disabled={
+                        activeAction !== null
+                      }
+                      className={`
+                        group
+                        flex
+                        h-11
+                        w-full
+                        items-center
+                        justify-center
+                        gap-2
+                        rounded-xl
+                        text-sm
+                        font-semibold
+                        transition
+                        disabled:cursor-wait
+                        disabled:opacity-60
+                        ${
+                          plan.featured
+                            ? `
+                              bg-white
+                              text-black
+                              hover:bg-white/90
+                            `
+                            : `
+                              border
+                              border-white/10
+                              bg-white/[0.045]
+                              text-white/75
+                              hover:border-white/20
+                              hover:bg-white/[0.08]
+                              hover:text-white
+                            `
+                        }
+                      `}
+                    >
+                      {isBusy
+                        ? "Opening..."
+                        : plan.id ===
+                            "enterprise"
+                          ? "Contact sales"
+                          : currentPlan ===
+                              "free"
+                            ? "Choose plan"
+                            : "Switch plan"}
+
+                      {!isBusy ? (
+                        <ArrowIcon />
+                      ) : null}
+                    </button>
+                  )}
+                </div>
+              </article>
+            );
+          })}
         </div>
 
         {/* TRUST */}
@@ -2113,157 +1883,159 @@ export default function BillingPage() {
             md:grid-cols-3
           "
         >
-          <div
-            className="
-              flex
-              gap-3
+          <TrustCard
+            icon={<ShieldIcon />}
+            title="Secure billing"
+            description="
+              Payment and subscription management
+              remain securely separated from your
+              workspace data.
             "
-          >
-            <div
-              className="
-                flex
-                h-10
-                w-10
-                shrink-0
-                items-center
-                justify-center
-                rounded-xl
-                border
-                border-white/10
-                bg-white/[0.04]
-                text-white/65
-              "
-            >
-              <ShieldIcon />
-            </div>
+          />
 
-            <div>
-              <p
-                className="
-                  text-sm
-                  font-medium
-                  text-white/80
-                "
-              >
-                Secure billing
-              </p>
-
-              <p
-                className="
-                  mt-1
-                  text-sm
-                  leading-6
-                  text-white/40
-                "
-              >
-                Payment and subscription management
-                remain securely separated from your
-                workspace data.
-              </p>
-            </div>
-          </div>
-
-          <div
-            className="
-              flex
-              gap-3
+          <TrustCard
+            icon={<CreditCardIcon />}
+            title="Full control"
+            description="
+              Manage payment methods, invoices and
+              subscription settings from your secure
+              billing portal.
             "
-          >
-            <div
-              className="
-                flex
-                h-10
-                w-10
-                shrink-0
-                items-center
-                justify-center
-                rounded-xl
-                border
-                border-white/10
-                bg-white/[0.04]
-                text-white/65
-              "
-            >
-              <CreditCardIcon />
-            </div>
+          />
 
-            <div>
-              <p
-                className="
-                  text-sm
-                  font-medium
-                  text-white/80
-                "
-              >
-                Full control
-              </p>
-
-              <p
-                className="
-                  mt-1
-                  text-sm
-                  leading-6
-                  text-white/40
-                "
-              >
-                Manage payment methods, invoices and
-                subscription settings from your secure
-                billing portal.
-              </p>
-            </div>
-          </div>
-
-          <div
-            className="
-              flex
-              gap-3
+          <TrustCard
+            icon={<SparkIcon />}
+            title="Upgrade when ready"
+            description="
+              SYRAVEN grows with your workflow, from
+              personal intelligence to enterprise-scale
+              AI operations.
             "
-          >
-            <div
-              className="
-                flex
-                h-10
-                w-10
-                shrink-0
-                items-center
-                justify-center
-                rounded-xl
-                border
-                border-white/10
-                bg-white/[0.04]
-                text-white/65
-              "
-            >
-              <SparkIcon />
-            </div>
-
-            <div>
-              <p
-                className="
-                  text-sm
-                  font-medium
-                  text-white/80
-                "
-              >
-                Upgrade when ready
-              </p>
-
-              <p
-                className="
-                  mt-1
-                  text-sm
-                  leading-6
-                  text-white/40
-                "
-              >
-                SYRAVEN grows with your workflow, from
-                personal intelligence to enterprise-scale
-                AI operations.
-              </p>
-            </div>
-          </div>
+          />
         </div>
       </section>
     </main>
+  );
+}
+
+/* =========================================================
+ * REUSABLE COMPONENTS
+ * ========================================================= */
+
+type UsageRowProps = {
+  label: string;
+  value: number;
+  percentage: number;
+};
+
+function UsageRow({
+  label,
+  value,
+  percentage,
+}: UsageRowProps) {
+  return (
+    <div>
+      <div
+        className="
+          flex
+          items-center
+          justify-between
+          text-sm
+        "
+      >
+        <span className="text-white/50">
+          {label}
+        </span>
+
+        <span className="text-white/80">
+          {value}
+        </span>
+      </div>
+
+      <div
+        className="
+          mt-2
+          h-1.5
+          overflow-hidden
+          rounded-full
+          bg-white/[0.06]
+        "
+      >
+        <div
+          className="
+            h-full
+            rounded-full
+            bg-white/50
+            transition-all
+            duration-500
+          "
+          style={{
+            width: `${percentage}%`,
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+type TrustCardProps = {
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+};
+
+function TrustCard({
+  icon,
+  title,
+  description,
+}: TrustCardProps) {
+  return (
+    <div
+      className="
+        flex
+        gap-3
+      "
+    >
+      <div
+        className="
+          flex
+          h-10
+          w-10
+          shrink-0
+          items-center
+          justify-center
+          rounded-xl
+          border
+          border-white/10
+          bg-white/[0.04]
+          text-white/65
+        "
+      >
+        {icon}
+      </div>
+
+      <div>
+        <p
+          className="
+            text-sm
+            font-medium
+            text-white/80
+          "
+        >
+          {title}
+        </p>
+
+        <p
+          className="
+            mt-1
+            text-sm
+            leading-6
+            text-white/40
+          "
+        >
+          {description}
+        </p>
+      </div>
+    </div>
   );
 }

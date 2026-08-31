@@ -2,10 +2,15 @@
 
 import {
   useCallback,
+  useEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
+
+/* =========================================================
+   TYPES
+========================================================= */
 
 export type MessageRole =
   | "system"
@@ -60,7 +65,7 @@ export interface UpdateMessageInput {
   status?: MessageStatus;
   attachments?: MessageAttachment[];
   metadata?: MessageMetadata;
-  error?: string;
+  error?: string | undefined;
 }
 
 export interface UseMessagesOptions {
@@ -72,6 +77,8 @@ export interface UseMessagesReturn {
   messages: Message[];
 
   messageCount: number;
+
+  firstMessage: Message | null;
 
   lastMessage: Message | null;
 
@@ -100,14 +107,33 @@ export interface UseMessagesReturn {
     content: string
   ) => Message | null;
 
+  prependToMessage: (
+    id: string,
+    content: string
+  ) => Message | null;
+
   removeMessage: (
     id: string
+  ) => void;
+
+  removeMessages: (
+    ids: string[]
   ) => void;
 
   clearMessages: () => void;
 
   getMessage: (
     id: string
+  ) => Message | null;
+
+  hasMessage: (
+    id: string
+  ) => boolean;
+
+  findMessage: (
+    predicate: (
+      message: Message
+    ) => boolean
   ) => Message | null;
 
   getMessagesByRole: (
@@ -124,6 +150,10 @@ export interface UseMessagesReturn {
     error: string
   ) => Message | null;
 
+  clearMessageError: (
+    id: string
+  ) => Message | null;
+
   replaceMessages: (
     messages: Message[]
   ) => void;
@@ -133,25 +163,128 @@ export interface UseMessagesReturn {
   ) => void;
 }
 
+/* =========================================================
+   CONSTANTS
+========================================================= */
+
+const VALID_ROLES: readonly MessageRole[] = [
+  "system",
+  "user",
+  "assistant",
+  "tool",
+];
+
+const VALID_STATUSES: readonly MessageStatus[] = [
+  "sending",
+  "streaming",
+  "complete",
+  "error",
+];
+
+/* =========================================================
+   ID HELPERS
+========================================================= */
+
 function createMessageId(): string {
   if (
-    typeof crypto !== "undefined" &&
-    typeof crypto.randomUUID === "function"
+    typeof globalThis !== "undefined" &&
+    typeof globalThis.crypto !== "undefined" &&
+    typeof globalThis.crypto.randomUUID ===
+      "function"
   ) {
-    return crypto.randomUUID();
+    return globalThis.crypto.randomUUID();
   }
 
   return [
+    "msg",
     Date.now().toString(36),
     Math.random()
       .toString(36)
-      .slice(2),
-  ].join("-");
+      .slice(2, 12),
+  ].join("_");
 }
+
+/* =========================================================
+   TIME HELPERS
+========================================================= */
 
 function getTimestamp(): string {
   return new Date().toISOString();
 }
+
+/* =========================================================
+   VALIDATION
+========================================================= */
+
+function isValidRole(
+  value: unknown
+): value is MessageRole {
+  return (
+    typeof value === "string" &&
+    VALID_ROLES.includes(
+      value as MessageRole
+    )
+  );
+}
+
+function isValidStatus(
+  value: unknown
+): value is MessageStatus {
+  return (
+    typeof value === "string" &&
+    VALID_STATUSES.includes(
+      value as MessageStatus
+    )
+  );
+}
+
+/* =========================================================
+   CLONE HELPERS
+========================================================= */
+
+function cloneAttachments(
+  attachments?: MessageAttachment[]
+): MessageAttachment[] | undefined {
+  if (!attachments) {
+    return undefined;
+  }
+
+  return attachments.map(
+    (attachment) => ({
+      ...attachment,
+    })
+  );
+}
+
+function cloneMetadata(
+  metadata?: MessageMetadata
+): MessageMetadata | undefined {
+  if (!metadata) {
+    return undefined;
+  }
+
+  return {
+    ...metadata,
+  };
+}
+
+function cloneMessage(
+  message: Message
+): Message {
+  return {
+    ...message,
+    attachments: cloneAttachments(
+      message.attachments
+    ),
+    metadata: cloneMetadata(
+      message.metadata
+    ),
+  };
+}
+
+/* =========================================================
+   MESSAGE NORMALIZATION
+========================================================= */
 
 function normalizeMessage(
   input: CreateMessageInput
@@ -159,15 +292,163 @@ function normalizeMessage(
   const timestamp = getTimestamp();
 
   return {
-    id: input.id ?? createMessageId(),
-    role: input.role,
-    content: input.content,
-    status: input.status ?? "complete",
+    id:
+      typeof input.id === "string" &&
+      input.id.trim().length > 0
+        ? input.id.trim()
+        : createMessageId(),
+
+    role: isValidRole(input.role)
+      ? input.role
+      : "user",
+
+    content:
+      typeof input.content === "string"
+        ? input.content
+        : String(input.content ?? ""),
+
+    status: isValidStatus(input.status)
+      ? input.status
+      : "complete",
+
     createdAt: timestamp,
-    attachments: input.attachments,
-    metadata: input.metadata,
+
+    attachments: cloneAttachments(
+      input.attachments
+    ),
+
+    metadata: cloneMetadata(
+      input.metadata
+    ),
   };
 }
+
+function normalizeExistingMessage(
+  message: Message
+): Message {
+  const timestamp = getTimestamp();
+
+  return {
+    id:
+      typeof message.id === "string" &&
+      message.id.trim().length > 0
+        ? message.id.trim()
+        : createMessageId(),
+
+    role: isValidRole(message.role)
+      ? message.role
+      : "user",
+
+    content:
+      typeof message.content === "string"
+        ? message.content
+        : String(message.content ?? ""),
+
+    status: isValidStatus(message.status)
+      ? message.status
+      : "complete",
+
+    createdAt:
+      typeof message.createdAt === "string" &&
+      message.createdAt.trim().length > 0
+        ? message.createdAt
+        : timestamp,
+
+    ...(message.updatedAt
+      ? {
+          updatedAt:
+            message.updatedAt,
+        }
+      : {}),
+
+    ...(message.error !== undefined
+      ? {
+          error: message.error,
+        }
+      : {}),
+
+    ...(message.attachments
+      ? {
+          attachments:
+            cloneAttachments(
+              message.attachments
+            ),
+        }
+      : {}),
+
+    ...(message.metadata
+      ? {
+          metadata:
+            cloneMetadata(
+              message.metadata
+            ),
+        }
+      : {}),
+  };
+}
+
+/* =========================================================
+   ARRAY HELPERS
+========================================================= */
+
+function deduplicateMessages(
+  messages: Message[]
+): Message[] {
+  const seenIds = new Set<string>();
+
+  const result: Message[] = [];
+
+  for (const message of messages) {
+    if (seenIds.has(message.id)) {
+      continue;
+    }
+
+    seenIds.add(message.id);
+    result.push(message);
+  }
+
+  return result;
+}
+
+function applyMessageLimit(
+  messages: Message[],
+  maxMessages?: number
+): Message[] {
+  if (
+    maxMessages === undefined ||
+    !Number.isFinite(maxMessages) ||
+    maxMessages <= 0
+  ) {
+    return messages;
+  }
+
+  const safeMax = Math.floor(
+    maxMessages
+  );
+
+  if (messages.length <= safeMax) {
+    return messages;
+  }
+
+  return messages.slice(
+    messages.length - safeMax
+  );
+}
+
+function findMessageById(
+  messages: readonly Message[],
+  id: string
+): Message | null {
+  const message = messages.find(
+    (item) => item.id === id
+  );
+
+  return message ?? null;
+}
+
+/* =========================================================
+   HOOK
+========================================================= */
 
 export function useMessages(
   options: UseMessagesOptions = {}
@@ -177,11 +458,41 @@ export function useMessages(
     maxMessages,
   } = options;
 
+  /* =======================================================
+     INITIALIZATION
+  ======================================================= */
+
+  const initialMessagesRef =
+    useRef<Message[] | null>(null);
+
+  if (
+    initialMessagesRef.current === null
+  ) {
+    const normalized =
+      initialMessages.map(
+        normalizeExistingMessage
+      );
+
+    initialMessagesRef.current =
+      applyMessageLimit(
+        deduplicateMessages(normalized),
+        maxMessages
+      );
+  }
+
   const [messages, setMessagesState] =
-    useState<Message[]>(initialMessages);
+    useState<Message[]>(
+      initialMessagesRef.current
+    );
 
   const messagesRef =
-    useRef<Message[]>(initialMessages);
+    useRef<Message[]>(
+      initialMessagesRef.current
+    );
+
+  /* =======================================================
+     COMMIT STATE
+  ======================================================= */
 
   const commitMessages = useCallback(
     (
@@ -190,7 +501,7 @@ export function useMessages(
         | ((
             current: Message[]
           ) => Message[])
-    ) => {
+    ): void => {
       setMessagesState(
         (currentMessages) => {
           const nextMessages =
@@ -198,45 +509,77 @@ export function useMessages(
               ? updater(currentMessages)
               : updater;
 
-          messagesRef.current =
-            nextMessages;
+          const safeMessages =
+            nextMessages.map(
+              cloneMessage
+            );
 
-          return nextMessages;
+          messagesRef.current =
+            safeMessages;
+
+          return safeMessages;
         }
       );
     },
     []
   );
 
+  /* =======================================================
+     LIMIT
+  ======================================================= */
+
   const applyLimit = useCallback(
-    (items: Message[]): Message[] => {
-      if (
-        !maxMessages ||
-        maxMessages <= 0
-      ) {
-        return items;
-      }
-
-      if (
-        items.length <= maxMessages
-      ) {
-        return items;
-      }
-
-      return items.slice(
-        items.length - maxMessages
+    (
+      nextMessages: Message[]
+    ): Message[] => {
+      return applyMessageLimit(
+        nextMessages,
+        maxMessages
       );
     },
     [maxMessages]
   );
 
+  useEffect(() => {
+    if (
+      maxMessages === undefined ||
+      !Number.isFinite(maxMessages) ||
+      maxMessages <= 0
+    ) {
+      return;
+    }
+
+    commitMessages(
+      (currentMessages) =>
+        applyLimit(currentMessages)
+    );
+  }, [
+    maxMessages,
+    applyLimit,
+    commitMessages,
+  ]);
+
+  /* =======================================================
+     DERIVED VALUES
+  ======================================================= */
+
   const messageCount =
     messages.length;
 
-  const lastMessage = useMemo(
-    () =>
+  const firstMessage = useMemo(
+    (): Message | null =>
       messages.length > 0
-        ? messages[messages.length - 1]
+        ? messages[0] ?? null
+        : null,
+    [messages]
+  );
+
+  const lastMessage = useMemo(
+    (): Message | null =>
+      messages.length > 0
+        ? messages[
+            messages.length - 1
+          ] ?? null
         : null,
     [messages]
   );
@@ -244,12 +587,86 @@ export function useMessages(
   const isEmpty =
     messages.length === 0;
 
+  /* =======================================================
+     GETTERS
+  ======================================================= */
+
+  const getMessage = useCallback(
+    (
+      id: string
+    ): Message | null => {
+      return findMessageById(
+        messagesRef.current,
+        id
+      );
+    },
+    []
+  );
+
+  const hasMessage = useCallback(
+    (id: string): boolean => {
+      return messagesRef.current.some(
+        (message) =>
+          message.id === id
+      );
+    },
+    []
+  );
+
+  const findMessage = useCallback(
+    (
+      predicate: (
+        message: Message
+      ) => boolean
+    ): Message | null => {
+      const message =
+        messagesRef.current.find(
+          predicate
+        );
+
+      return message ?? null;
+    },
+    []
+  );
+
+  const getMessagesByRole =
+    useCallback(
+      (
+        role: MessageRole
+      ): Message[] => {
+        return messagesRef.current
+          .filter(
+            (message) =>
+              message.role === role
+          )
+          .map(cloneMessage);
+      },
+      []
+    );
+
+  /* =======================================================
+     ADD SINGLE
+  ======================================================= */
+
   const addMessage = useCallback(
     (
       input: CreateMessageInput
     ): Message => {
-      const message =
+      let message =
         normalizeMessage(input);
+
+      const exists =
+        messagesRef.current.some(
+          (item) =>
+            item.id === message.id
+        );
+
+      if (exists) {
+        message = {
+          ...message,
+          id: createMessageId(),
+        };
+      }
 
       commitMessages(
         (currentMessages) =>
@@ -259,7 +676,7 @@ export function useMessages(
           ])
       );
 
-      return message;
+      return cloneMessage(message);
     },
     [
       applyLimit,
@@ -267,36 +684,68 @@ export function useMessages(
     ]
   );
 
+  /* =======================================================
+     ADD MULTIPLE
+  ======================================================= */
+
   const addMessages = useCallback(
     (
       inputs: CreateMessageInput[]
     ): Message[] => {
-      const newMessages =
-        inputs.map(
-          normalizeMessage
-        );
-
       if (
-        newMessages.length === 0
+        !Array.isArray(inputs) ||
+        inputs.length === 0
       ) {
         return [];
+      }
+
+      const existingIds = new Set(
+        messagesRef.current.map(
+          (message) => message.id
+        )
+      );
+
+      const createdMessages: Message[] =
+        [];
+
+      for (const input of inputs) {
+        let message =
+          normalizeMessage(input);
+
+        while (
+          existingIds.has(message.id)
+        ) {
+          message = {
+            ...message,
+            id: createMessageId(),
+          };
+        }
+
+        existingIds.add(message.id);
+        createdMessages.push(message);
       }
 
       commitMessages(
         (currentMessages) =>
           applyLimit([
             ...currentMessages,
-            ...newMessages,
+            ...createdMessages,
           ])
       );
 
-      return newMessages;
+      return createdMessages.map(
+        cloneMessage
+      );
     },
     [
       applyLimit,
       commitMessages,
     ]
   );
+
+  /* =======================================================
+     UPDATE
+  ======================================================= */
 
   const updateMessage = useCallback(
     (
@@ -304,9 +753,9 @@ export function useMessages(
       input: UpdateMessageInput
     ): Message | null => {
       const existingMessage =
-        messagesRef.current.find(
-          (message) =>
-            message.id === id
+        findMessageById(
+          messagesRef.current,
+          id
         );
 
       if (!existingMessage) {
@@ -315,9 +764,31 @@ export function useMessages(
 
       const updatedMessage: Message = {
         ...existingMessage,
-        ...input,
         updatedAt: getTimestamp(),
       };
+
+      if (
+        input.content !== undefined
+      ) {
+        updatedMessage.content =
+          input.content;
+      }
+
+      if (
+        input.status !== undefined
+      ) {
+        updatedMessage.status =
+          input.status;
+      }
+
+      if (
+        input.attachments !== undefined
+      ) {
+        updatedMessage.attachments =
+          cloneAttachments(
+            input.attachments
+          );
+      }
 
       if (
         input.metadata !== undefined
@@ -326,6 +797,20 @@ export function useMessages(
           ...existingMessage.metadata,
           ...input.metadata,
         };
+      }
+
+      if (
+        input.error !== undefined
+      ) {
+        updatedMessage.error =
+          input.error;
+      }
+
+      if (
+        input.status === "complete" &&
+        input.error === undefined
+      ) {
+        delete updatedMessage.error;
       }
 
       commitMessages(
@@ -338,10 +823,16 @@ export function useMessages(
           )
       );
 
-      return updatedMessage;
+      return cloneMessage(
+        updatedMessage
+      );
     },
     [commitMessages]
   );
+
+  /* =======================================================
+     UPDATE CONTENT
+  ======================================================= */
 
   const updateMessageContent =
     useCallback(
@@ -349,13 +840,16 @@ export function useMessages(
         id: string,
         content: string
       ): Message | null => {
-        return updateMessage(
-          id,
-          { content }
-        );
+        return updateMessage(id, {
+          content,
+        });
       },
       [updateMessage]
     );
+
+  /* =======================================================
+     APPEND
+  ======================================================= */
 
   const appendToMessage =
     useCallback(
@@ -364,26 +858,68 @@ export function useMessages(
         content: string
       ): Message | null => {
         const existingMessage =
-          messagesRef.current.find(
-            (message) =>
-              message.id === id
+          findMessageById(
+            messagesRef.current,
+            id
           );
 
         if (!existingMessage) {
           return null;
         }
 
-        return updateMessage(
-          id,
-          {
-            content:
-              existingMessage.content +
-              content,
-          }
-        );
+        if (!content) {
+          return cloneMessage(
+            existingMessage
+          );
+        }
+
+        return updateMessage(id, {
+          content:
+            existingMessage.content +
+            content,
+        });
       },
       [updateMessage]
     );
+
+  /* =======================================================
+     PREPEND
+  ======================================================= */
+
+  const prependToMessage =
+    useCallback(
+      (
+        id: string,
+        content: string
+      ): Message | null => {
+        const existingMessage =
+          findMessageById(
+            messagesRef.current,
+            id
+          );
+
+        if (!existingMessage) {
+          return null;
+        }
+
+        if (!content) {
+          return cloneMessage(
+            existingMessage
+          );
+        }
+
+        return updateMessage(id, {
+          content:
+            content +
+            existingMessage.content,
+        });
+      },
+      [updateMessage]
+    );
+
+  /* =======================================================
+     REMOVE SINGLE
+  ======================================================= */
 
   const removeMessage =
     useCallback(
@@ -399,37 +935,50 @@ export function useMessages(
       [commitMessages]
     );
 
+  /* =======================================================
+     REMOVE MULTIPLE
+  ======================================================= */
+
+  const removeMessages =
+    useCallback(
+      (
+        ids: string[]
+      ): void => {
+        if (
+          !Array.isArray(ids) ||
+          ids.length === 0
+        ) {
+          return;
+        }
+
+        const idsSet =
+          new Set(ids);
+
+        commitMessages(
+          (currentMessages) =>
+            currentMessages.filter(
+              (message) =>
+                !idsSet.has(
+                  message.id
+                )
+            )
+        );
+      },
+      [commitMessages]
+    );
+
+  /* =======================================================
+     CLEAR
+  ======================================================= */
+
   const clearMessages =
-    useCallback(() => {
+    useCallback((): void => {
       commitMessages([]);
     }, [commitMessages]);
 
-  const getMessage = useCallback(
-    (
-      id: string
-    ): Message | null => {
-      return (
-        messagesRef.current.find(
-          (message) =>
-            message.id === id
-        ) ?? null
-      );
-    },
-    []
-  );
-
-  const getMessagesByRole =
-    useCallback(
-      (
-        role: MessageRole
-      ): Message[] => {
-        return messagesRef.current.filter(
-          (message) =>
-            message.role === role
-        );
-      },
-      []
-    );
+  /* =======================================================
+     STATUS
+  ======================================================= */
 
   const setMessageStatus =
     useCallback(
@@ -437,13 +986,16 @@ export function useMessages(
         id: string,
         status: MessageStatus
       ): Message | null => {
-        return updateMessage(
-          id,
-          { status }
-        );
+        return updateMessage(id, {
+          status,
+        });
       },
       [updateMessage]
     );
+
+  /* =======================================================
+     SET ERROR
+  ======================================================= */
 
   const setMessageError =
     useCallback(
@@ -451,25 +1003,88 @@ export function useMessages(
         id: string,
         error: string
       ): Message | null => {
-        return updateMessage(
-          id,
-          {
-            error,
-            status: "error",
-          }
-        );
+        return updateMessage(id, {
+          error,
+          status: "error",
+        });
       },
       [updateMessage]
     );
+
+  /* =======================================================
+     CLEAR ERROR
+  ======================================================= */
+
+  const clearMessageError =
+    useCallback(
+      (
+        id: string
+      ): Message | null => {
+        const existingMessage =
+          findMessageById(
+            messagesRef.current,
+            id
+          );
+
+        if (!existingMessage) {
+          return null;
+        }
+
+        const updatedMessage: Message = {
+          ...existingMessage,
+          updatedAt: getTimestamp(),
+        };
+
+        delete updatedMessage.error;
+
+        commitMessages(
+          (currentMessages) =>
+            currentMessages.map(
+              (message) =>
+                message.id === id
+                  ? updatedMessage
+                  : message
+            )
+        );
+
+        return cloneMessage(
+          updatedMessage
+        );
+      },
+      [commitMessages]
+    );
+
+  /* =======================================================
+     REPLACE
+  ======================================================= */
 
   const replaceMessages =
     useCallback(
       (
         nextMessages: Message[]
       ): void => {
+        if (
+          !Array.isArray(
+            nextMessages
+          )
+        ) {
+          commitMessages([]);
+          return;
+        }
+
+        const normalizedMessages =
+          nextMessages.map(
+            normalizeExistingMessage
+          );
+
+        const uniqueMessages =
+          deduplicateMessages(
+            normalizedMessages
+          );
+
         commitMessages(
           applyLimit(
-            [...nextMessages]
+            uniqueMessages
           )
         );
       },
@@ -478,6 +1093,10 @@ export function useMessages(
         commitMessages,
       ]
     );
+
+  /* =======================================================
+     SET
+  ======================================================= */
 
   const setMessages =
     useCallback(
@@ -491,10 +1110,16 @@ export function useMessages(
       [replaceMessages]
     );
 
+  /* =======================================================
+     RETURN
+  ======================================================= */
+
   return {
     messages,
 
     messageCount,
+
+    firstMessage,
 
     lastMessage,
 
@@ -510,17 +1135,27 @@ export function useMessages(
 
     appendToMessage,
 
+    prependToMessage,
+
     removeMessage,
+
+    removeMessages,
 
     clearMessages,
 
     getMessage,
+
+    hasMessage,
+
+    findMessage,
 
     getMessagesByRole,
 
     setMessageStatus,
 
     setMessageError,
+
+    clearMessageError,
 
     replaceMessages,
 

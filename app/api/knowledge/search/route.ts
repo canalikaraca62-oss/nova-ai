@@ -12,6 +12,7 @@ export const dynamic = "force-dynamic";
 const DEFAULT_LIMIT = 10;
 const MAX_LIMIT = 50;
 const MAX_QUERY_LENGTH = 1000;
+const MAX_EXCERPT_LENGTH = 500;
 
 /* ==================================================
    TYPES
@@ -65,21 +66,181 @@ type AuthenticatedUser = {
   email: string | null;
 };
 
+type KnowledgeRow = {
+  id?: unknown;
+  title?: unknown;
+  content?: unknown;
+  source_type?: unknown;
+  source_id?: unknown;
+  project_id?: unknown;
+  workspace_id?: unknown;
+  team_id?: unknown;
+  metadata?: unknown;
+  created_at?: unknown;
+  updated_at?: unknown;
+};
+
 /* ==================================================
-   HELPERS
+   CONSTANTS
+================================================== */
+
+const VALID_SOURCE_TYPES = new Set<KnowledgeSourceType>([
+  "file",
+  "document",
+  "note",
+  "message",
+  "web",
+  "project",
+  "memory",
+  "other",
+]);
+
+/* ==================================================
+   TYPE GUARDS
+================================================== */
+
+function isRecord(
+  value: unknown
+): value is Record<string, unknown> {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    !Array.isArray(value)
+  );
+}
+
+function toRecord(
+  value: unknown
+): Record<string, unknown> {
+  if (isRecord(value)) {
+    return value;
+  }
+
+  return {};
+}
+
+function toStringValue(
+  value: unknown,
+  fallback = ""
+): string {
+  if (typeof value === "string") {
+    return value;
+  }
+
+  if (
+    typeof value === "number" ||
+    typeof value === "boolean"
+  ) {
+    return String(value);
+  }
+
+  return fallback;
+}
+
+function toNullableString(
+  value: unknown
+): string | null {
+  if (typeof value === "string") {
+    return value;
+  }
+
+  if (
+    typeof value === "number" ||
+    typeof value === "boolean"
+  ) {
+    return String(value);
+  }
+
+  return null;
+}
+
+function normalizeMetadata(
+  value: unknown
+): Record<string, unknown> {
+  if (
+    value !== null &&
+    typeof value === "object" &&
+    !Array.isArray(value)
+  ) {
+    return value as Record<string, unknown>;
+  }
+
+  return {};
+}
+
+/* ==================================================
+   NORMALIZERS
+================================================== */
+
+function normalizeScope(
+  value: unknown
+): SearchScope {
+  switch (value) {
+    case "personal":
+    case "project":
+    case "workspace":
+    case "team":
+    case "all":
+      return value;
+
+    default:
+      return "all";
+  }
+}
+
+function normalizeSourceType(
+  value: unknown
+): KnowledgeSourceType {
+  if (
+    typeof value === "string" &&
+    VALID_SOURCE_TYPES.has(
+      value as KnowledgeSourceType
+    )
+  ) {
+    return value as KnowledgeSourceType;
+  }
+
+  return "other";
+}
+
+function normalizeSourceTypes(
+  value: unknown
+): KnowledgeSourceType[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const result: KnowledgeSourceType[] = [];
+
+  for (const item of value) {
+    if (
+      typeof item === "string" &&
+      VALID_SOURCE_TYPES.has(
+        item as KnowledgeSourceType
+      )
+    ) {
+      result.push(
+        item as KnowledgeSourceType
+      );
+    }
+  }
+
+  return [...new Set(result)];
+}
+
+/* ==================================================
+   LIMIT
 ================================================== */
 
 function clampLimit(
   value: unknown
-) {
+): number {
   const parsed =
     typeof value === "number"
       ? value
       : Number(value);
 
-  if (
-    !Number.isFinite(parsed)
-  ) {
+  if (!Number.isFinite(parsed)) {
     return DEFAULT_LIMIT;
   }
 
@@ -92,74 +253,71 @@ function clampLimit(
   );
 }
 
-function normalizeScope(
-  value: unknown
-): SearchScope {
-  switch (value) {
-    case "personal":
-    case "project":
-    case "workspace":
-    case "team":
-      return value;
+/* ==================================================
+   QUERY HELPERS
+================================================== */
 
-    default:
-      return "all";
-  }
+function normalizeQuery(
+  value: string
+): string {
+  return value
+    .trim()
+    .replace(/\s+/g, " ")
+    .slice(
+      0,
+      MAX_QUERY_LENGTH
+    );
 }
 
-function normalizeSourceTypes(
-  value: unknown
-): KnowledgeSourceType[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-
-  const allowed =
-    new Set<KnowledgeSourceType>([
-      "file",
-      "document",
-      "note",
-      "message",
-      "web",
-      "project",
-      "memory",
-      "other",
-    ]);
-
-  return value.filter(
-    (
-      item
-    ): item is KnowledgeSourceType =>
-      typeof item === "string" &&
-      allowed.has(
-        item as KnowledgeSourceType
-      )
-  );
+function escapeSearchTerm(
+  value: string
+): string {
+  return value
+    .replace(/[,%()']/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
+
+/* ==================================================
+   EXCERPT
+================================================== */
 
 function createExcerpt(
   content: string,
   query: string
-) {
+): string {
   const normalizedContent =
-    content.replace(/\s+/g, " ").trim();
+    content
+      .replace(/\s+/g, " ")
+      .trim();
 
   if (!normalizedContent) {
     return "";
   }
 
   const normalizedQuery =
-    query.trim().toLowerCase();
+    query
+      .trim()
+      .toLowerCase();
+
+  if (!normalizedQuery) {
+    return normalizedContent.slice(
+      0,
+      MAX_EXCERPT_LENGTH
+    );
+  }
 
   const index =
     normalizedContent
       .toLowerCase()
-      .indexOf(normalizedQuery);
+      .indexOf(
+        normalizedQuery
+      );
 
   if (index === -1) {
     return normalizedContent.slice(
       0,
-      500
+      MAX_EXCERPT_LENGTH
     );
   }
 
@@ -178,11 +336,12 @@ function createExcerpt(
     );
 
   const prefix =
-    start > 0 ? "…" : "";
+    start > 0
+      ? "…"
+      : "";
 
   const suffix =
-    end <
-    normalizedContent.length
+    end < normalizedContent.length
       ? "…"
       : "";
 
@@ -192,22 +351,13 @@ function createExcerpt(
   )}${suffix}`;
 }
 
-function escapeSearchTerm(
-  value: string
-) {
-  return value
-    .replace(/[,%()']/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
 /* ==================================================
    AUTH
 ================================================== */
 
 function getBearerToken(
   request: NextRequest
-) {
+): string | null {
   const authorization =
     request.headers.get(
       "authorization"
@@ -217,18 +367,43 @@ function getBearerToken(
     return null;
   }
 
-  const [scheme, token] =
-    authorization.split(" ");
+  const parts =
+    authorization
+      .trim()
+      .split(/\s+/);
+
+  if (parts.length !== 2) {
+    return null;
+  }
+
+  const scheme =
+    parts[0];
+
+  const token =
+    parts[1];
 
   if (
-    scheme?.toLowerCase() !==
-      "bearer" ||
-    !token
+    typeof scheme !== "string" ||
+    typeof token !== "string"
   ) {
     return null;
   }
 
-  return token.trim();
+  if (
+    scheme.toLowerCase() !==
+    "bearer"
+  ) {
+    return null;
+  }
+
+  const normalizedToken =
+    token.trim();
+
+  if (!normalizedToken) {
+    return null;
+  }
+
+  return normalizedToken;
 }
 
 async function getAuthenticatedUser(
@@ -273,81 +448,267 @@ async function parseRequest(
   if (
     request.method === "GET"
   ) {
-    const {
-      searchParams,
-    } = new URL(request.url);
+    const url =
+      new URL(request.url);
+
+    const sourceTypesParam =
+      url.searchParams.get(
+        "sourceTypes"
+      );
 
     return {
       query:
-        searchParams.get("query") ??
-        searchParams.get("q") ??
+        url.searchParams.get("query") ??
+        url.searchParams.get("q") ??
         "",
+
       limit:
-        Number(
-          searchParams.get("limit")
-        ) || DEFAULT_LIMIT,
+        clampLimit(
+          url.searchParams.get(
+            "limit"
+          )
+        ),
+
       projectId:
-        searchParams.get(
+        url.searchParams.get(
           "projectId"
         ) ?? undefined,
+
       workspaceId:
-        searchParams.get(
+        url.searchParams.get(
           "workspaceId"
         ) ?? undefined,
+
       teamId:
-        searchParams.get(
+        url.searchParams.get(
           "teamId"
         ) ?? undefined,
+
       scope:
         normalizeScope(
-          searchParams.get("scope")
-        ),
-      sourceTypes:
-        searchParams
-          .get("sourceTypes")
-          ?.split(",")
-          .map(
-            (value) =>
-              value.trim()
+          url.searchParams.get(
+            "scope"
           )
-          .filter(Boolean) as
-          | KnowledgeSourceType[]
-          | undefined,
+        ),
+
+      sourceTypes:
+        sourceTypesParam
+          ? normalizeSourceTypes(
+              sourceTypesParam
+                .split(",")
+                .map(
+                  (item) =>
+                    item.trim()
+                )
+                .filter(Boolean)
+            )
+          : [],
     };
   }
 
-  const body =
+  const body: unknown =
     await request.json();
+
+  const payload =
+    toRecord(body);
 
   return {
     query:
-      typeof body?.query ===
-      "string"
-        ? body.query
-        : "",
-    limit: body?.limit,
+      toStringValue(
+        payload.query
+      ),
+
+    limit:
+      payload.limit === undefined
+        ? undefined
+        : clampLimit(
+            payload.limit
+          ),
+
     projectId:
-      typeof body?.projectId ===
-      "string"
-        ? body.projectId
-        : undefined,
+      toNullableString(
+        payload.projectId
+      ) ?? undefined,
+
     workspaceId:
-      typeof body?.workspaceId ===
-      "string"
-        ? body.workspaceId
-        : undefined,
+      toNullableString(
+        payload.workspaceId
+      ) ?? undefined,
+
     teamId:
-      typeof body?.teamId ===
-      "string"
-        ? body.teamId
-        : undefined,
+      toNullableString(
+        payload.teamId
+      ) ?? undefined,
+
     scope:
       normalizeScope(
-        body?.scope
+        payload.scope
       ),
+
     sourceTypes:
       normalizeSourceTypes(
-        body?.sourceTypes
+        payload.sourceTypes
+      ),
+  };
+}
+
+/* ==================================================
+   SEARCH SCORE
+================================================== */
+
+function calculateSearchScore(
+  title: string,
+  content: string,
+  query: string
+): number {
+  const normalizedQuery =
+    query
+      .trim()
+      .toLowerCase();
+
+  if (!normalizedQuery) {
+    return 0;
+  }
+
+  const lowerTitle =
+    title.toLowerCase();
+
+  const lowerContent =
+    content.toLowerCase();
+
+  let score = 0;
+
+  if (
+    lowerTitle.includes(
+      normalizedQuery
+    )
+  ) {
+    score += 100;
+  }
+
+  if (
+    lowerTitle.trim() ===
+    normalizedQuery
+  ) {
+    score += 100;
+  }
+
+  if (
+    lowerContent.includes(
+      normalizedQuery
+    )
+  ) {
+    score += 25;
+  }
+
+  const occurrences =
+    lowerContent
+      .split(
+        normalizedQuery
+      )
+      .length - 1;
+
+  score += Math.min(
+    occurrences * 5,
+    50
+  );
+
+  return score;
+}
+
+/* ==================================================
+   ROW NORMALIZATION
+================================================== */
+
+function normalizeKnowledgeRow(
+  value: unknown,
+  query: string
+): KnowledgeSearchResult | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const row =
+    value as KnowledgeRow;
+
+  const id =
+    toStringValue(
+      row.id
+    ).trim();
+
+  if (!id) {
+    return null;
+  }
+
+  const title =
+    toStringValue(
+      row.title
+    ).trim() ||
+    "Untitled knowledge";
+
+  const content =
+    toStringValue(
+      row.content
+    );
+
+  const sourceType =
+    normalizeSourceType(
+      row.source_type
+    );
+
+  return {
+    id,
+    title,
+    content,
+
+    excerpt:
+      createExcerpt(
+        content,
+        query
+      ),
+
+    sourceType,
+
+    sourceId:
+      toNullableString(
+        row.source_id
+      ),
+
+    projectId:
+      toNullableString(
+        row.project_id
+      ),
+
+    workspaceId:
+      toNullableString(
+        row.workspace_id
+      ),
+
+    teamId:
+      toNullableString(
+        row.team_id
+      ),
+
+    metadata:
+      normalizeMetadata(
+        row.metadata
+      ),
+
+    score:
+      calculateSearchScore(
+        title,
+        content,
+        query
+      ),
+
+    createdAt:
+      toNullableString(
+        row.created_at
+      ),
+
+    updatedAt:
+      toNullableString(
+        row.updated_at
       ),
   };
 }
@@ -374,7 +735,7 @@ async function searchKnowledge({
   teamId?: string;
   scope: SearchScope;
   sourceTypes: KnowledgeSourceType[];
-}) {
+}): Promise<KnowledgeSearchResult[]> {
   const safeQuery =
     escapeSearchTerm(query);
 
@@ -402,9 +763,9 @@ async function searchKnowledge({
         userId
       );
 
-  /*
-    Scope filters
-  */
+  /* ================================================
+     SCOPE FILTERS
+  ================================================= */
 
   if (
     scope === "personal"
@@ -458,9 +819,9 @@ async function searchKnowledge({
       );
   }
 
-  /*
-    Optional context filters
-  */
+  /* ================================================
+     OPTIONAL CONTEXT FILTERS
+  ================================================= */
 
   if (
     projectId &&
@@ -495,9 +856,9 @@ async function searchKnowledge({
       );
   }
 
-  /*
-    Source type filter
-  */
+  /* ================================================
+     SOURCE TYPE FILTER
+  ================================================= */
 
   if (
     sourceTypes.length > 0
@@ -509,13 +870,9 @@ async function searchKnowledge({
       );
   }
 
-  /*
-    Full-text style fallback search.
-
-    Supabase/PostgREST tarafında özel
-    vector/RPC sistemi olmasa bile
-    title + content üzerinde arama yapar.
-  */
+  /* ================================================
+     TEXT SEARCH
+  ================================================= */
 
   if (safeQuery) {
     databaseQuery =
@@ -526,6 +883,15 @@ async function searchKnowledge({
         ].join(",")
       );
   }
+
+  const fetchLimit =
+    Math.min(
+      Math.max(
+        limit * 3,
+        limit
+      ),
+      MAX_LIMIT * 3
+    );
 
   const {
     data,
@@ -539,10 +905,7 @@ async function searchKnowledge({
         }
       )
       .limit(
-        Math.max(
-          limit * 3,
-          limit
-        )
+        fetchLimit
       );
 
   if (error) {
@@ -554,114 +917,53 @@ async function searchKnowledge({
     throw error;
   }
 
-  const results:
-    KnowledgeSearchResult[] =
+  const results =
     (data ?? [])
-      .map((item) => {
-        const title =
-          typeof item.title ===
-          "string"
-            ? item.title
-            : "Untitled knowledge";
-
-        const content =
-          typeof item.content ===
-          "string"
-            ? item.content
-            : "";
-
-        /*
-          Basit relevance score.
-          İleride vector search/RPC
-          eklendiğinde aynı response
-          formatı korunabilir.
-        */
-
-        const lowerQuery =
-          safeQuery.toLowerCase();
-
-        const lowerTitle =
-          title.toLowerCase();
-
-        const lowerContent =
-          content.toLowerCase();
-
-        let score = 0;
-
-        if (
-          lowerTitle.includes(
-            lowerQuery
+      .map(
+        (item) =>
+          normalizeKnowledgeRow(
+            item,
+            safeQuery
           )
-        ) {
-          score += 100;
-        }
-
-        if (
-          lowerContent.includes(
-            lowerQuery
-          )
-        ) {
-          score += 25;
-        }
-
-        const occurrences =
-          lowerQuery
-            ? lowerContent
-                .split(lowerQuery)
-                .length - 1
-            : 0;
-
-        score += Math.min(
-          occurrences * 5,
-          50
-        );
-
-        return {
-          id: item.id,
-          title,
-          content,
-          excerpt:
-            createExcerpt(
-              content,
-              safeQuery
-            ),
-          sourceType:
-            (
-              item.source_type ??
-              "other"
-            ) as KnowledgeSourceType,
-          sourceId:
-            item.source_id ??
-            null,
-          projectId:
-            item.project_id ??
-            null,
-          workspaceId:
-            item.workspace_id ??
-            null,
-          teamId:
-            item.team_id ??
-            null,
-          metadata:
-            item.metadata &&
-            typeof item.metadata ===
-              "object"
-              ? item.metadata
-              : {},
-          score,
-          createdAt:
-            item.created_at ??
-            null,
-          updatedAt:
-            item.updated_at ??
-            null,
-        };
-      })
-      .sort(
-        (a, b) =>
-          b.score - a.score
       )
-      .slice(0, limit);
+      .filter(
+        (
+          item
+        ): item is KnowledgeSearchResult =>
+          item !== null
+      )
+      .sort(
+        (a, b) => {
+          const scoreDifference =
+            b.score - a.score;
+
+          if (
+            scoreDifference !== 0
+          ) {
+            return scoreDifference;
+          }
+
+          const aTime =
+            a.updatedAt
+              ? Date.parse(
+                  a.updatedAt
+                )
+              : 0;
+
+          const bTime =
+            b.updatedAt
+              ? Date.parse(
+                  b.updatedAt
+                )
+              : 0;
+
+          return bTime - aTime;
+        }
+      )
+      .slice(
+        0,
+        limit
+      );
 
   return results;
 }
@@ -687,6 +989,111 @@ function buildResponse(
 }
 
 /* ==================================================
+   COMMON SEARCH HANDLER
+================================================== */
+
+async function handleSearch(
+  request: NextRequest
+) {
+  const user =
+    await getAuthenticatedUser(
+      request
+    );
+
+  if (!user) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Unauthorized.",
+      },
+      {
+        status: 401,
+        headers: {
+          "Cache-Control":
+            "no-store",
+        },
+      }
+    );
+  }
+
+  const payload =
+    await parseRequest(
+      request
+    );
+
+  const query =
+    normalizeQuery(
+      payload.query
+    );
+
+  if (!query) {
+    return NextResponse.json(
+      {
+        success: false,
+        error:
+          "A search query is required.",
+      },
+      {
+        status: 400,
+        headers: {
+          "Cache-Control":
+            "no-store",
+        },
+      }
+    );
+  }
+
+  const limit =
+    clampLimit(
+      payload.limit
+    );
+
+  const results =
+    await searchKnowledge({
+      userId:
+        user.id,
+
+      query,
+
+      limit,
+
+      projectId:
+        payload.projectId,
+
+      workspaceId:
+        payload.workspaceId,
+
+      teamId:
+        payload.teamId,
+
+      scope:
+        normalizeScope(
+          payload.scope
+        ),
+
+      sourceTypes:
+        normalizeSourceTypes(
+          payload.sourceTypes
+        ),
+    });
+
+  return NextResponse.json(
+    buildResponse(
+      query,
+      results,
+      limit
+    ),
+    {
+      status: 200,
+      headers: {
+        "Cache-Control":
+          "no-store",
+      },
+    }
+  );
+}
+
+/* ==================================================
    GET
 ================================================== */
 
@@ -694,84 +1101,8 @@ export async function GET(
   request: NextRequest
 ) {
   try {
-    const user =
-      await getAuthenticatedUser(
-        request
-      );
-
-    if (!user) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Unauthorized.",
-        },
-        {
-          status: 401,
-        }
-      );
-    }
-
-    const payload =
-      await parseRequest(
-        request
-      );
-
-    const query =
-      payload.query
-        .trim()
-        .slice(
-          0,
-          MAX_QUERY_LENGTH
-        );
-
-    if (!query) {
-      return NextResponse.json(
-        {
-          success: false,
-          error:
-            "A search query is required.",
-        },
-        {
-          status: 400,
-        }
-      );
-    }
-
-    const limit =
-      clampLimit(
-        payload.limit
-      );
-
-    const results =
-      await searchKnowledge({
-        userId: user.id,
-        query,
-        limit,
-        projectId:
-          payload.projectId,
-        workspaceId:
-          payload.workspaceId,
-        teamId:
-          payload.teamId,
-        scope:
-          normalizeScope(
-            payload.scope
-          ),
-        sourceTypes:
-          normalizeSourceTypes(
-            payload.sourceTypes
-          ),
-      });
-
-    return NextResponse.json(
-      buildResponse(
-        query,
-        results,
-        limit
-      ),
-      {
-        status: 200,
-      }
+    return await handleSearch(
+      request
     );
   } catch (error) {
     console.error(
@@ -800,100 +1131,8 @@ export async function POST(
   request: NextRequest
 ) {
   try {
-    const user =
-      await getAuthenticatedUser(
-        request
-      );
-
-    if (!user) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Unauthorized.",
-        },
-        {
-          status: 401,
-        }
-      );
-    }
-
-    let payload:
-      KnowledgeSearchRequest;
-
-    try {
-      payload =
-        await parseRequest(
-          request
-        );
-    } catch {
-      return NextResponse.json(
-        {
-          success: false,
-          error:
-            "Invalid request body.",
-        },
-        {
-          status: 400,
-        }
-      );
-    }
-
-    const query =
-      payload.query
-        .trim()
-        .slice(
-          0,
-          MAX_QUERY_LENGTH
-        );
-
-    if (!query) {
-      return NextResponse.json(
-        {
-          success: false,
-          error:
-            "A search query is required.",
-        },
-        {
-          status: 400,
-        }
-      );
-    }
-
-    const limit =
-      clampLimit(
-        payload.limit
-      );
-
-    const results =
-      await searchKnowledge({
-        userId: user.id,
-        query,
-        limit,
-        projectId:
-          payload.projectId,
-        workspaceId:
-          payload.workspaceId,
-        teamId:
-          payload.teamId,
-        scope:
-          normalizeScope(
-            payload.scope
-          ),
-        sourceTypes:
-          normalizeSourceTypes(
-            payload.sourceTypes
-          ),
-      });
-
-    return NextResponse.json(
-      buildResponse(
-        query,
-        results,
-        limit
-      ),
-      {
-        status: 200,
-      }
+    return await handleSearch(
+      request
     );
   } catch (error) {
     console.error(
@@ -912,4 +1151,38 @@ export async function POST(
       }
     );
   }
+}
+
+/* ==================================================
+   METHOD NOT ALLOWED
+================================================== */
+
+function methodNotAllowed() {
+  return NextResponse.json(
+    {
+      success: false,
+      error:
+        "Method not allowed.",
+    },
+    {
+      status: 405,
+      headers: {
+        Allow: "GET, POST",
+        "Cache-Control":
+          "no-store",
+      },
+    }
+  );
+}
+
+export async function PUT() {
+  return methodNotAllowed();
+}
+
+export async function PATCH() {
+  return methodNotAllowed();
+}
+
+export async function DELETE() {
+  return methodNotAllowed();
 }

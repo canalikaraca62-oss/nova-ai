@@ -59,6 +59,11 @@ export interface DocumentInput {
   buffer: Buffer | Uint8Array | ArrayBuffer;
 }
 
+type BinaryDocumentInput =
+  | Buffer
+  | Uint8Array
+  | ArrayBuffer;
+
 type DocumentReader = (
   input: Response
 ) => Promise<unknown> | unknown;
@@ -69,7 +74,13 @@ type DocumentReader = (
 
 const DEFAULT_MAX_FILE_SIZE = 50 * 1024 * 1024;
 
-const MIME_TYPE_MAP: Record<string, SupportedDocumentType> = {
+const DEFAULT_BINARY_MIME_TYPE =
+  "application/octet-stream";
+
+const MIME_TYPE_MAP: Record<
+  string,
+  SupportedDocumentType
+> = {
   "application/pdf": "pdf",
 
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
@@ -87,7 +98,10 @@ const MIME_TYPE_MAP: Record<string, SupportedDocumentType> = {
   "text/csv": "csv",
 };
 
-const EXTENSION_MAP: Record<string, SupportedDocumentType> = {
+const EXTENSION_MAP: Record<
+  string,
+  SupportedDocumentType
+> = {
   pdf: "pdf",
   docx: "docx",
   pptx: "pptx",
@@ -107,7 +121,7 @@ const EXTENSION_MAP: Record<string, SupportedDocumentType> = {
  * Converts supported binary input into a Uint8Array.
  */
 function toUint8Array(
-  input: Buffer | Uint8Array | ArrayBuffer
+  input: BinaryDocumentInput
 ): Uint8Array {
   if (input instanceof ArrayBuffer) {
     return new Uint8Array(input);
@@ -123,18 +137,21 @@ function toUint8Array(
 /**
  * Creates a standalone ArrayBuffer.
  *
- * Important:
- * Do not pass Uint8Array<ArrayBufferLike> directly to Response.
- * Some TypeScript versions reject it as BodyInit.
+ * This prevents Buffer / Uint8Array backing-buffer
+ * compatibility issues with Response BodyInit typing.
  */
 function toStandaloneArrayBuffer(
-  input: Buffer | Uint8Array | ArrayBuffer
+  input: BinaryDocumentInput
 ): ArrayBuffer {
   const bytes = toUint8Array(input);
 
-  const arrayBuffer = new ArrayBuffer(bytes.byteLength);
+  const arrayBuffer = new ArrayBuffer(
+    bytes.byteLength
+  );
 
-  const target = new Uint8Array(arrayBuffer);
+  const target = new Uint8Array(
+    arrayBuffer
+  );
 
   target.set(bytes);
 
@@ -145,15 +162,16 @@ function toStandaloneArrayBuffer(
  * Creates a valid Response from document binary data.
  */
 function createDocumentResponse(
-  input: Buffer | Uint8Array | ArrayBuffer,
+  input: BinaryDocumentInput,
   mimeType: string
 ): Response {
-  const arrayBuffer = toStandaloneArrayBuffer(input);
+  const arrayBuffer =
+    toStandaloneArrayBuffer(input);
 
   return new Response(arrayBuffer, {
     headers: {
       "content-type":
-        mimeType || "application/octet-stream",
+        mimeType || DEFAULT_BINARY_MIME_TYPE,
     },
   });
 }
@@ -168,15 +186,39 @@ function createDocumentResponse(
 export function getFileExtension(
   fileName: string
 ): string {
-  const normalized = fileName.trim().toLowerCase();
+  const normalized =
+    fileName.trim().toLowerCase();
 
-  const index = normalized.lastIndexOf(".");
+  const index =
+    normalized.lastIndexOf(".");
 
-  if (index === -1) {
+  if (
+    index === -1 ||
+    index === normalized.length - 1
+  ) {
     return "";
   }
 
   return normalized.slice(index + 1);
+}
+
+/**
+ * Normalizes a MIME type.
+ */
+function normalizeMimeType(
+  mimeType?: string
+): string {
+  if (!mimeType) {
+    return "";
+  }
+
+  const normalized =
+    mimeType
+      .split(";")[0]
+      ?.trim()
+      .toLowerCase();
+
+  return normalized ?? "";
 }
 
 /**
@@ -186,26 +228,43 @@ export function detectDocumentType(
   fileName: string,
   mimeType?: string
 ): SupportedDocumentType {
-  const normalizedMimeType = mimeType
-    ?.split(";")[0]
-    .trim()
-    .toLowerCase();
+  const normalizedMimeType =
+    normalizeMimeType(mimeType);
 
-  if (
-    normalizedMimeType &&
-    MIME_TYPE_MAP[normalizedMimeType]
-  ) {
-    return MIME_TYPE_MAP[normalizedMimeType];
+  if (normalizedMimeType) {
+    const detectedFromMime =
+      MIME_TYPE_MAP[normalizedMimeType];
+
+    if (detectedFromMime !== undefined) {
+      return detectedFromMime;
+    }
   }
 
-  const extension = getFileExtension(fileName);
+  const extension =
+    getFileExtension(fileName);
 
-  return EXTENSION_MAP[extension] ?? "unknown";
+  const detectedFromExtension =
+    EXTENSION_MAP[extension];
+
+  return detectedFromExtension ?? "unknown";
 }
 
 /* -------------------------------------------------------------------------- */
 /*                              TEXT NORMALIZATION                            */
 /* -------------------------------------------------------------------------- */
+
+/**
+ * Type guard for generic object records.
+ */
+function isRecord(
+  value: unknown
+): value is Record<string, unknown> {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !Array.isArray(value)
+  );
+}
 
 /**
  * Normalizes different parser return types into text.
@@ -217,23 +276,33 @@ function normalizeReaderResult(
     return result;
   }
 
-  if (result === null || result === undefined) {
+  if (
+    result === null ||
+    result === undefined
+  ) {
     return "";
   }
 
-  if (typeof result === "object") {
-    const value = result as Record<string, unknown>;
+  if (isRecord(result)) {
+    const text =
+      result["text"];
 
-    if (typeof value.text === "string") {
-      return value.text;
+    if (typeof text === "string") {
+      return text;
     }
 
-    if (typeof value.content === "string") {
-      return value.content;
+    const content =
+      result["content"];
+
+    if (typeof content === "string") {
+      return content;
     }
 
-    if (typeof value.data === "string") {
-      return value.data;
+    const data =
+      result["data"];
+
+    if (typeof data === "string") {
+      return data;
     }
   }
 
@@ -243,7 +312,9 @@ function normalizeReaderResult(
 /**
  * Cleans extracted document text.
  */
-function cleanText(text: string): string {
+function cleanText(
+  text: string
+): string {
   return text
     .replace(/\r\n/g, "\n")
     .replace(/\r/g, "\n")
@@ -256,16 +327,33 @@ function cleanText(text: string): string {
 /*                              VALIDATION                                    */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * Validates maximum file size.
+ */
 function validateFileSize(
-  input: Buffer | Uint8Array | ArrayBuffer,
+  input: BinaryDocumentInput,
   maxFileSize: number
 ): void {
-  const bytes = toUint8Array(input);
-
-  if (bytes.byteLength > maxFileSize) {
-    const maxSizeMb = Math.round(
-      maxFileSize / 1024 / 1024
+  if (
+    !Number.isFinite(maxFileSize) ||
+    maxFileSize <= 0
+  ) {
+    throw new Error(
+      "maxFileSize must be a positive finite number"
     );
+  }
+
+  const bytes =
+    toUint8Array(input);
+
+  if (
+    bytes.byteLength >
+    maxFileSize
+  ) {
+    const maxSizeMb =
+      Math.round(
+        maxFileSize / 1024 / 1024
+      );
 
     throw new Error(
       `Document exceeds maximum allowed size of ${maxSizeMb} MB`
@@ -280,21 +368,83 @@ function validateFileSize(
 /**
  * Executes a document parser safely.
  *
- * The parser receives Response, never raw Buffer.
+ * The parser receives Response,
+ * never raw Buffer.
  */
 async function executeReader(
   reader: DocumentReader,
-  buffer: Buffer | Uint8Array | ArrayBuffer,
+  buffer: BinaryDocumentInput,
   mimeType: string
 ): Promise<string> {
-  const response = createDocumentResponse(
-    buffer,
-    mimeType
-  );
+  const response =
+    createDocumentResponse(
+      buffer,
+      mimeType
+    );
 
-  const result = await reader(response);
+  const result =
+    await reader(response);
 
   return normalizeReaderResult(result);
+}
+
+/* -------------------------------------------------------------------------- */
+/*                           DOCUMENT MIME RESOLUTION                         */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Returns the preferred MIME type for a document type.
+ */
+function getDefaultMimeType(
+  fileType: SupportedDocumentType
+): string {
+  switch (fileType) {
+    case "pdf":
+      return "application/pdf";
+
+    case "docx":
+      return (
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+      );
+
+    case "pptx":
+      return (
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+      );
+
+    case "md":
+    case "markdown":
+      return "text/markdown";
+
+    case "json":
+      return "application/json";
+
+    case "csv":
+      return "text/csv";
+
+    case "txt":
+      return "text/plain";
+
+    default:
+      return DEFAULT_BINARY_MIME_TYPE;
+  }
+}
+
+/**
+ * Resolves the effective MIME type.
+ */
+function resolveMimeType(
+  mimeType: string | undefined,
+  fileType: SupportedDocumentType
+): string {
+  const normalized =
+    normalizeMimeType(mimeType);
+
+  if (normalized) {
+    return normalized;
+  }
+
+  return getDefaultMimeType(fileType);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -308,69 +458,87 @@ export async function readDocument(
   input: DocumentInput,
   options: DocumentReaderOptions = {}
 ): Promise<DocumentReaderResult> {
-  const {
-    maxFileSize = DEFAULT_MAX_FILE_SIZE,
-    trimText = true,
-  } = options;
+  const maxFileSize =
+    options.maxFileSize ??
+    DEFAULT_MAX_FILE_SIZE;
 
-  const {
-    fileName,
-    mimeType = "application/octet-stream",
-    buffer,
-  } = input;
+  const trimText =
+    options.trimText ?? true;
 
-  const fileType = detectDocumentType(
-    fileName,
-    mimeType
-  );
+  const fileName =
+    input.fileName.trim();
 
-  const bytes = toUint8Array(buffer);
+  const buffer =
+    input.buffer;
+
+  const fileType =
+    detectDocumentType(
+      fileName,
+      input.mimeType
+    );
+
+  const mimeType =
+    resolveMimeType(
+      input.mimeType,
+      fileType
+    );
+
+  const bytes =
+    toUint8Array(buffer);
 
   const metadata: DocumentMetadata = {
     fileName,
     fileType,
     mimeType,
     size: bytes.byteLength,
-    extractedAt: new Date().toISOString(),
+    extractedAt:
+      new Date().toISOString(),
   };
 
   try {
+    if (!fileName) {
+      throw new Error(
+        "Document file name is required"
+      );
+    }
+
     validateFileSize(
       buffer,
       maxFileSize
     );
 
-    let text = "";
+    let text: string;
 
     switch (fileType) {
       case "pdf": {
-        text = await executeReader(
-          readPdf as unknown as DocumentReader,
-          buffer,
-          mimeType || "application/pdf"
-        );
+        text =
+          await executeReader(
+            readPdf as unknown as DocumentReader,
+            buffer,
+            mimeType
+          );
 
         break;
       }
 
       case "docx": {
-        text = await executeReader(
-          readDocx as unknown as DocumentReader,
-          buffer,
-          mimeType ||
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        );
+        text =
+          await executeReader(
+            readDocx as unknown as DocumentReader,
+            buffer,
+            mimeType
+          );
 
         break;
       }
 
       case "pptx": {
-        text = await executeReader(
-          readPptx as unknown as DocumentReader,
-          buffer,
-          mimeType ||
-            "application/vnd.openxmlformats-officedocument.presentationml.presentation"
-        );
+        text =
+          await executeReader(
+            readPptx as unknown as DocumentReader,
+            buffer,
+            mimeType
+          );
 
         break;
       }
@@ -380,15 +548,17 @@ export async function readDocument(
       case "markdown":
       case "json":
       case "csv": {
-        text = await executeReader(
-          readText as unknown as DocumentReader,
-          buffer,
-          mimeType || "text/plain"
-        );
+        text =
+          await executeReader(
+            readText as unknown as DocumentReader,
+            buffer,
+            mimeType
+          );
 
         break;
       }
 
+      case "unknown":
       default: {
         throw new Error(
           `Unsupported document type: ${fileType}`
@@ -396,9 +566,10 @@ export async function readDocument(
       }
     }
 
-    const finalText = trimText
-      ? cleanText(text)
-      : text;
+    const finalText =
+      trimText
+        ? cleanText(text)
+        : text;
 
     return {
       success: true,
@@ -431,14 +602,21 @@ export async function readFile(
   file: File,
   options: DocumentReaderOptions = {}
 ): Promise<DocumentReaderResult> {
-  const arrayBuffer = await file.arrayBuffer();
+  const arrayBuffer =
+    await file.arrayBuffer();
+
+  const input: DocumentInput = {
+    fileName: file.name,
+    buffer: arrayBuffer,
+  };
+
+  if (file.type) {
+    input.mimeType =
+      file.type;
+  }
 
   return readDocument(
-    {
-      fileName: file.name,
-      mimeType: file.type,
-      buffer: arrayBuffer,
-    },
+    input,
     options
   );
 }
@@ -447,17 +625,23 @@ export async function readFile(
  * Reads raw binary content.
  */
 export async function readBuffer(
-  buffer: Buffer | Uint8Array | ArrayBuffer,
+  buffer: BinaryDocumentInput,
   fileName: string,
   mimeType?: string,
   options: DocumentReaderOptions = {}
 ): Promise<DocumentReaderResult> {
+  const input: DocumentInput = {
+    fileName,
+    buffer,
+  };
+
+  if (mimeType !== undefined) {
+    input.mimeType =
+      mimeType;
+  }
+
   return readDocument(
-    {
-      fileName,
-      mimeType,
-      buffer,
-    },
+    input,
     options
   );
 }
@@ -481,7 +665,9 @@ export function isSupportedDocument(
  * Returns all supported extensions.
  */
 export function getSupportedExtensions(): string[] {
-  return Object.keys(EXTENSION_MAP);
+  return Object.keys(
+    EXTENSION_MAP
+  );
 }
 
 /**
@@ -506,6 +692,6 @@ export const documentReader = {
   isSupportedDocument,
   getSupportedExtensions,
   getMaxDocumentSize,
-};
+} as const;
 
 export default documentReader;

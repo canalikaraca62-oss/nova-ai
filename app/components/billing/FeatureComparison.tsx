@@ -2,7 +2,12 @@
 
 import React, { useMemo, useState } from "react";
 
-type BillingPlan = "free" | "premium" | "pro" | "business" | "enterprise";
+type BillingPlan =
+  | "free"
+  | "premium"
+  | "pro"
+  | "business"
+  | "enterprise";
 
 type FeatureValue = boolean | string;
 
@@ -16,15 +21,13 @@ type PlanDefinition = {
   popular?: boolean;
 };
 
+type FeatureValues = Record<BillingPlan, FeatureValue>;
+
 type FeatureRow = {
   category: string;
   feature: string;
   description?: string;
-  free: FeatureValue;
-  premium: FeatureValue;
-  pro: FeatureValue;
-  business: FeatureValue;
-  enterprise: FeatureValue;
+  values: FeatureValues;
 };
 
 export type FeatureComparisonProps = {
@@ -33,7 +36,7 @@ export type FeatureComparisonProps = {
   className?: string;
 };
 
-const plans: PlanDefinition[] = [
+const plans: readonly PlanDefinition[] = [
   {
     id: "free",
     name: "Free",
@@ -71,277 +74,337 @@ const plans: PlanDefinition[] = [
     price: "Custom",
     period: "",
   },
-];
+] as const;
 
-const features: FeatureRow[] = [
+const features: readonly FeatureRow[] = [
   {
     category: "AI & Intelligence",
     feature: "AI sohbetleri",
     description: "SYRAVEN AI ile günlük kullanım",
-    free: "Limited",
-    premium: "Extended",
-    pro: "High",
-    business: "Unlimited",
-    enterprise: "Unlimited",
+    values: {
+      free: "Limited",
+      premium: "Extended",
+      pro: "High",
+      business: "Unlimited",
+      enterprise: "Unlimited",
+    },
   },
   {
     category: "AI & Intelligence",
     feature: "Premium AI modelleri",
     description: "Gelişmiş model erişimi",
-    free: false,
-    premium: true,
-    pro: true,
-    business: true,
-    enterprise: true,
+    values: {
+      free: false,
+      premium: true,
+      pro: true,
+      business: true,
+      enterprise: true,
+    },
   },
   {
     category: "AI & Intelligence",
     feature: "Agent execution",
     description: "AI agent oluşturma ve çalıştırma",
-    free: "Limited",
-    premium: "Extended",
-    pro: "High",
-    business: "Unlimited",
-    enterprise: "Unlimited",
+    values: {
+      free: "Limited",
+      premium: "Extended",
+      pro: "High",
+      business: "Unlimited",
+      enterprise: "Unlimited",
+    },
   },
   {
     category: "AI & Intelligence",
     feature: "Custom AI instructions",
-    free: true,
-    premium: true,
-    pro: true,
-    business: true,
-    enterprise: true,
+    values: {
+      free: true,
+      premium: true,
+      pro: true,
+      business: true,
+      enterprise: true,
+    },
   },
   {
     category: "AI & Intelligence",
     feature: "Advanced reasoning",
     description: "Daha karmaşık görev çözümleme",
-    free: false,
-    premium: true,
-    pro: true,
-    business: true,
-    enterprise: true,
+    values: {
+      free: false,
+      premium: true,
+      pro: true,
+      business: true,
+      enterprise: true,
+    },
   },
   {
     category: "Agents",
     feature: "Aktif agent sayısı",
-    free: "3",
-    premium: "10",
-    pro: "50",
-    business: "Unlimited",
-    enterprise: "Unlimited",
+    values: {
+      free: "3",
+      premium: "10",
+      pro: "50",
+      business: "Unlimited",
+      enterprise: "Unlimited",
+    },
   },
   {
     category: "Agents",
     feature: "Custom agents",
-    free: true,
-    premium: true,
-    pro: true,
-    business: true,
-    enterprise: true,
+    values: {
+      free: true,
+      premium: true,
+      pro: true,
+      business: true,
+      enterprise: true,
+    },
   },
   {
     category: "Agents",
     feature: "Agent templates",
-    free: "Basic",
-    premium: "Premium",
-    pro: "All",
-    business: "All",
-    enterprise: "Custom",
+    values: {
+      free: "Basic",
+      premium: "Premium",
+      pro: "All",
+      business: "All",
+      enterprise: "Custom",
+    },
   },
   {
     category: "Agents",
     feature: "Multi-step workflows",
-    free: false,
-    premium: true,
-    pro: true,
-    business: true,
-    enterprise: true,
+    values: {
+      free: false,
+      premium: true,
+      pro: true,
+      business: true,
+      enterprise: true,
+    },
   },
   {
     category: "Agents",
     feature: "Team agent sharing",
-    free: false,
-    premium: false,
-    pro: true,
-    business: true,
-    enterprise: true,
+    values: {
+      free: false,
+      premium: false,
+      pro: true,
+      business: true,
+      enterprise: true,
+    },
   },
   {
     category: "Knowledge",
     feature: "Knowledge storage",
-    free: "1 GB",
-    premium: "10 GB",
-    pro: "100 GB",
-    business: "1 TB",
-    enterprise: "Custom",
+    values: {
+      free: "1 GB",
+      premium: "10 GB",
+      pro: "100 GB",
+      business: "1 TB",
+      enterprise: "Custom",
+    },
   },
   {
     category: "Knowledge",
     feature: "Document analysis",
-    free: true,
-    premium: true,
-    pro: true,
-    business: true,
-    enterprise: true,
+    values: {
+      free: true,
+      premium: true,
+      pro: true,
+      business: true,
+      enterprise: true,
+    },
   },
   {
     category: "Knowledge",
     feature: "Advanced search",
-    free: "Basic",
-    premium: true,
-    pro: true,
-    business: true,
-    enterprise: true,
+    values: {
+      free: "Basic",
+      premium: true,
+      pro: true,
+      business: true,
+      enterprise: true,
+    },
   },
   {
     category: "Knowledge",
     feature: "Team knowledge base",
-    free: false,
-    premium: false,
-    pro: true,
-    business: true,
-    enterprise: true,
+    values: {
+      free: false,
+      premium: false,
+      pro: true,
+      business: true,
+      enterprise: true,
+    },
   },
   {
     category: "Canvas & Projects",
     feature: "Projects",
-    free: "3",
-    premium: "25",
-    pro: "100",
-    business: "Unlimited",
-    enterprise: "Unlimited",
+    values: {
+      free: "3",
+      premium: "25",
+      pro: "100",
+      business: "Unlimited",
+      enterprise: "Unlimited",
+    },
   },
   {
     category: "Canvas & Projects",
     feature: "AI Canvas",
-    free: "Basic",
-    premium: true,
-    pro: true,
-    business: true,
-    enterprise: true,
+    values: {
+      free: "Basic",
+      premium: true,
+      pro: true,
+      business: true,
+      enterprise: true,
+    },
   },
   {
     category: "Canvas & Projects",
     feature: "Collaboration",
-    free: false,
-    premium: false,
-    pro: true,
-    business: true,
-    enterprise: true,
+    values: {
+      free: false,
+      premium: false,
+      pro: true,
+      business: true,
+      enterprise: true,
+    },
   },
   {
     category: "Voice",
     feature: "Voice input",
-    free: "Limited",
-    premium: true,
-    pro: true,
-    business: true,
-    enterprise: true,
+    values: {
+      free: "Limited",
+      premium: true,
+      pro: true,
+      business: true,
+      enterprise: true,
+    },
   },
   {
     category: "Voice",
     feature: "Voice output",
-    free: "Limited",
-    premium: true,
-    pro: true,
-    business: true,
-    enterprise: true,
+    values: {
+      free: "Limited",
+      premium: true,
+      pro: true,
+      business: true,
+      enterprise: true,
+    },
   },
   {
     category: "Voice",
     feature: "Advanced transcription",
-    free: false,
-    premium: true,
-    pro: true,
-    business: true,
-    enterprise: true,
+    values: {
+      free: false,
+      premium: true,
+      pro: true,
+      business: true,
+      enterprise: true,
+    },
   },
   {
     category: "Usage & Limits",
     feature: "Monthly AI usage",
-    free: "Starter",
-    premium: "5×",
-    pro: "20×",
-    business: "Unlimited",
-    enterprise: "Custom",
+    values: {
+      free: "Starter",
+      premium: "5×",
+      pro: "20×",
+      business: "Unlimited",
+      enterprise: "Custom",
+    },
   },
   {
     category: "Usage & Limits",
     feature: "API access",
-    free: false,
-    premium: false,
-    pro: true,
-    business: true,
-    enterprise: true,
+    values: {
+      free: false,
+      premium: false,
+      pro: true,
+      business: true,
+      enterprise: true,
+    },
   },
   {
     category: "Usage & Limits",
     feature: "Advanced analytics",
-    free: false,
-    premium: false,
-    pro: true,
-    business: true,
-    enterprise: true,
+    values: {
+      free: false,
+      premium: false,
+      pro: true,
+      business: true,
+      enterprise: true,
+    },
   },
   {
     category: "Security & Support",
     feature: "Standard support",
-    free: true,
-    premium: true,
-    pro: true,
-    business: true,
-    enterprise: true,
+    values: {
+      free: true,
+      premium: true,
+      pro: true,
+      business: true,
+      enterprise: true,
+    },
   },
   {
     category: "Security & Support",
     feature: "Priority support",
-    free: false,
-    premium: false,
-    pro: true,
-    business: true,
-    enterprise: true,
+    values: {
+      free: false,
+      premium: false,
+      pro: true,
+      business: true,
+      enterprise: true,
+    },
   },
   {
     category: "Security & Support",
     feature: "Dedicated support",
-    free: false,
-    premium: false,
-    pro: false,
-    business: false,
-    enterprise: true,
+    values: {
+      free: false,
+      premium: false,
+      pro: false,
+      business: false,
+      enterprise: true,
+    },
   },
   {
     category: "Security & Support",
     feature: "Custom integrations",
-    free: false,
-    premium: false,
-    pro: false,
-    business: true,
-    enterprise: true,
+    values: {
+      free: false,
+      premium: false,
+      pro: false,
+      business: true,
+      enterprise: true,
+    },
   },
   {
     category: "Security & Support",
     feature: "SSO / SAML",
-    free: false,
-    premium: false,
-    pro: false,
-    business: false,
-    enterprise: true,
+    values: {
+      free: false,
+      premium: false,
+      pro: false,
+      business: false,
+      enterprise: true,
+    },
   },
   {
     category: "Security & Support",
     feature: "Custom SLA",
-    free: false,
-    premium: false,
-    pro: false,
-    business: false,
-    enterprise: true,
+    values: {
+      free: false,
+      premium: false,
+      pro: false,
+      business: false,
+      enterprise: true,
+    },
   },
-];
+] as const;
 
-function cn(...classes: Array<string | undefined | false | null>) {
+function cn(
+  ...classes: Array<string | undefined | false | null>
+): string {
   return classes.filter(Boolean).join(" ");
 }
 
@@ -355,6 +418,7 @@ function FeatureValueDisplay({
       <span
         className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-emerald-500/10 text-sm font-bold text-emerald-500"
         aria-label="Included"
+        title="Included"
       >
         ✓
       </span>
@@ -366,6 +430,7 @@ function FeatureValueDisplay({
       <span
         className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-zinc-500/10 text-sm font-bold text-zinc-500"
         aria-label="Not included"
+        title="Not included"
       >
         —
       </span>
@@ -379,6 +444,10 @@ function FeatureValueDisplay({
   );
 }
 
+function getFeatureValues(feature: FeatureRow): FeatureValue[] {
+  return plans.map((plan) => feature.values[plan.id]);
+}
+
 export default function FeatureComparison({
   currentPlan = "free",
   onSelectPlan,
@@ -387,34 +456,29 @@ export default function FeatureComparison({
   const [showOnlyDifferences, setShowOnlyDifferences] = useState(false);
 
   const groupedFeatures = useMemo(() => {
-    const filtered = features.filter((feature) => {
+    const filteredFeatures = features.filter((feature) => {
       if (!showOnlyDifferences) {
         return true;
       }
 
-      const values = [
-        feature.free,
-        feature.premium,
-        feature.pro,
-        feature.business,
-        feature.enterprise,
-      ];
+      const values = getFeatureValues(feature);
 
       return new Set(values.map((value) => String(value))).size > 1;
     });
 
-    return filtered.reduce<Record<string, FeatureRow[]>>(
-      (groups, feature) => {
-        if (!groups[feature.category]) {
-          groups[feature.category] = [];
-        }
+    const groups = new Map<string, FeatureRow[]>();
 
-        groups[feature.category].push(feature);
+    for (const feature of filteredFeatures) {
+      const existingFeatures = groups.get(feature.category);
 
-        return groups;
-      },
-      {}
-    );
+      if (existingFeatures) {
+        existingFeatures.push(feature);
+      } else {
+        groups.set(feature.category, [feature]);
+      }
+    }
+
+    return Array.from(groups.entries());
   }, [showOnlyDifferences]);
 
   const handleSelectPlan = (plan: BillingPlan) => {
@@ -448,9 +512,9 @@ export default function FeatureComparison({
           <input
             type="checkbox"
             checked={showOnlyDifferences}
-            onChange={(event) =>
-              setShowOnlyDifferences(event.target.checked)
-            }
+            onChange={(event) => {
+              setShowOnlyDifferences(event.target.checked);
+            }}
             className="h-4 w-4 cursor-pointer rounded border-zinc-300 accent-zinc-900 dark:border-zinc-700 dark:accent-white"
           />
 
@@ -508,11 +572,11 @@ export default function FeatureComparison({
                           {plan.price}
                         </span>
 
-                        {plan.period && (
+                        {plan.period ? (
                           <span className="text-xs text-zinc-500">
                             {plan.period}
                           </span>
-                        )}
+                        ) : null}
                       </div>
 
                       <button
@@ -540,60 +604,59 @@ export default function FeatureComparison({
               })}
             </div>
 
-            {Object.entries(groupedFeatures).map(
-              ([category, categoryFeatures]) => (
-                <React.Fragment key={category}>
-                  <div className="grid grid-cols-[minmax(260px,1.4fr)_repeat(5,minmax(150px,1fr))] border-b border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900/50">
-                    <div className="px-6 py-3 text-xs font-bold uppercase tracking-[0.16em] text-zinc-500 dark:text-zinc-400">
-                      {category}
-                    </div>
-
-                    {plans.map((plan) => (
-                      <div
-                        key={`${category}-${plan.id}`}
-                        className="border-l border-zinc-200 dark:border-zinc-800"
-                      />
-                    ))}
+            {groupedFeatures.map(([category, categoryFeatures]) => (
+              <React.Fragment key={category}>
+                <div className="grid grid-cols-[minmax(260px,1.4fr)_repeat(5,minmax(150px,1fr))] border-b border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900/50">
+                  <div className="px-6 py-3 text-xs font-bold uppercase tracking-[0.16em] text-zinc-500 dark:text-zinc-400">
+                    {category}
                   </div>
 
-                  {categoryFeatures.map((feature) => (
+                  {plans.map((plan) => (
                     <div
-                      key={`${category}-${feature.feature}`}
-                      className="grid grid-cols-[minmax(260px,1.4fr)_repeat(5,minmax(150px,1fr))] border-b border-zinc-100 transition hover:bg-zinc-50/70 last:border-b-0 dark:border-zinc-900 dark:hover:bg-zinc-900/30"
-                    >
-                      <div className="px-6 py-4">
-                        <div className="font-medium text-zinc-900 dark:text-zinc-100">
-                          {feature.feature}
-                        </div>
+                      key={`${category}-${plan.id}`}
+                      className="border-l border-zinc-200 dark:border-zinc-800"
+                    />
+                  ))}
+                </div>
 
-                        {feature.description && (
-                          <div className="mt-1 text-xs leading-5 text-zinc-500 dark:text-zinc-500">
-                            {feature.description}
-                          </div>
-                        )}
+                {categoryFeatures.map((feature) => (
+                  <div
+                    key={`${category}-${feature.feature}`}
+                    className="grid grid-cols-[minmax(260px,1.4fr)_repeat(5,minmax(150px,1fr))] border-b border-zinc-100 transition hover:bg-zinc-50/70 last:border-b-0 dark:border-zinc-900 dark:hover:bg-zinc-900/30"
+                  >
+                    <div className="px-6 py-4">
+                      <div className="font-medium text-zinc-900 dark:text-zinc-100">
+                        {feature.feature}
                       </div>
 
-                      {plans.map((plan) => {
-                        const value = feature[plan.id];
-
-                        return (
-                          <div
-                            key={`${feature.feature}-${plan.id}`}
-                            className={cn(
-                              "flex min-h-[72px] items-center justify-center border-l border-zinc-100 px-4 py-3 text-center dark:border-zinc-900",
-                              currentPlan === plan.id &&
-                                "bg-zinc-50/50 dark:bg-zinc-900/20"
-                            )}
-                          >
-                            <FeatureValueDisplay value={value} />
-                          </div>
-                        );
-                      })}
+                      {feature.description ? (
+                        <div className="mt-1 text-xs leading-5 text-zinc-500 dark:text-zinc-500">
+                          {feature.description}
+                        </div>
+                      ) : null}
                     </div>
-                  ))}
-                </React.Fragment>
-              )
-            )}
+
+                    {plans.map((plan) => {
+                      const value: FeatureValue =
+                        feature.values[plan.id];
+
+                      return (
+                        <div
+                          key={`${feature.feature}-${plan.id}`}
+                          className={cn(
+                            "flex min-h-[72px] items-center justify-center border-l border-zinc-100 px-4 py-3 text-center dark:border-zinc-900",
+                            currentPlan === plan.id &&
+                              "bg-zinc-50/50 dark:bg-zinc-900/20"
+                          )}
+                        >
+                          <FeatureValueDisplay value={value} />
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))}
+              </React.Fragment>
+            ))}
           </div>
         </div>
       </div>
@@ -623,3 +686,11 @@ export default function FeatureComparison({
     </section>
   );
 }
+
+export type {
+  BillingPlan,
+  FeatureValue,
+  FeatureValues,
+  FeatureRow,
+  PlanDefinition,
+};
