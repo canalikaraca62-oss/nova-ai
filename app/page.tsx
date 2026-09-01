@@ -52,7 +52,7 @@ const capabilities = [
 
 export default function HomePage() {
   return (
-    <main className="min-h-screen bg-red-500 p-10 text-5xl font-bold text-white">
+    <main className="min-h-screen overflow-hidden bg-[#09090b] text-white">
       TAILWIND TEST
       {/* Background */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
