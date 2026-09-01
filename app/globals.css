@@ -485,3 +485,14 @@ select:-webkit-autofill:focus {
     transition-duration: 0.01ms !important;
   }
 }
+/* =========================================================
+   BUTTON TEXT VISIBILITY FIX
+   ========================================================= */
+
+a.bg-white {
+  color: #09090b !important;
+}
+
+a.bg-white svg {
+  color: #09090b !important;
+}
