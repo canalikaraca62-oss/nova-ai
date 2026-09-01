@@ -52,7 +52,8 @@ const capabilities = [
 
 export default function HomePage() {
   return (
-    <main className="min-h-screen overflow-hidden bg-[#09090b] text-white">
+    <main className="min-h-screen bg-red-500 p-10 text-5xl font-bold text-white">
+      TAILWIND TEST
       {/* Background */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
         <div className="absolute left-1/2 top-[-20rem] h-[50rem] w-[50rem] -translate-x-1/2 rounded-full bg-violet-600/10 blur-[140px]" />
@@ -158,10 +159,7 @@ export default function HomePage() {
 
         <div className="mt-16 flex flex-wrap justify-center gap-x-6 gap-y-3 text-sm text-white/40">
           {capabilities.map((capability) => (
-            <div
-              key={capability}
-              className="flex items-center gap-2"
-            >
+            <div key={capability} className="flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4 text-violet-400/70" />
               {capability}
             </div>
@@ -214,7 +212,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Intelligence section */}
+      {/* Intelligence Section */}
       <section className="relative z-10">
         <div className="mx-auto max-w-7xl px-6 py-24">
           <div className="overflow-hidden rounded-3xl border border-white/[0.08] bg-gradient-to-br from-white/[0.06] to-transparent p-8 md:p-14">
@@ -225,7 +223,7 @@ export default function HomePage() {
                 </div>
 
                 <h2 className="max-w-xl text-3xl font-semibold tracking-tight sm:text-4xl">
-                  Your organization's intelligence, connected.
+                  Your organization&apos;s intelligence, connected.
                 </h2>
 
                 <p className="mt-6 max-w-xl leading-8 text-white/50">
@@ -328,7 +326,9 @@ export default function HomePage() {
       {/* Footer */}
       <footer className="relative z-10 border-t border-white/[0.06]">
         <div className="mx-auto flex max-w-7xl flex-col gap-5 px-6 py-8 text-sm text-white/40 sm:flex-row sm:items-center sm:justify-between">
-          <div>© {new Date().getFullYear()} SYRAVEN. All rights reserved.</div>
+          <div>
+            © {new Date().getFullYear()} SYRAVEN. All rights reserved.
+          </div>
 
           <div className="flex gap-5">
             <Link
