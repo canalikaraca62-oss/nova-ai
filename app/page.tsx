@@ -53,9 +53,11 @@ const capabilities = [
 export default function HomePage() {
   return (
     <main className="min-h-screen overflow-hidden bg-[#09090b] text-white">
-      TAILWIND TEST
       {/* Background */}
-      <div className="pointer-events-none fixed inset-0 overflow-hidden">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none fixed inset-0 overflow-hidden"
+      >
         <div className="absolute left-1/2 top-[-20rem] h-[50rem] w-[50rem] -translate-x-1/2 rounded-full bg-violet-600/10 blur-[140px]" />
         <div className="absolute bottom-[-15rem] right-[-10rem] h-[35rem] w-[35rem] rounded-full bg-indigo-600/10 blur-[120px]" />
       </div>
@@ -109,7 +111,7 @@ export default function HomePage() {
 
             <Link
               href="/register"
-              className="inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2 text-sm font-semibold text-black transition-transform hover:scale-[1.02]"
+              className="inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2 text-sm font-semibold text-black transition-transform hover:scale-[1.02] hover:bg-white/90"
             >
               Get started
               <ArrowRight className="h-4 w-4" />
@@ -160,8 +162,8 @@ export default function HomePage() {
         <div className="mt-16 flex flex-wrap justify-center gap-x-6 gap-y-3 text-sm text-white/40">
           {capabilities.map((capability) => (
             <div key={capability} className="flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 text-violet-400/70" />
-              {capability}
+              <CheckCircle2 className="h-4 w-4 shrink-0 text-violet-400/70" />
+              <span>{capability}</span>
             </div>
           ))}
         </div>
@@ -190,22 +192,22 @@ export default function HomePage() {
               const Icon = feature.icon;
 
               return (
-                <div
+                <article
                   key={feature.title}
-                  className="group rounded-2xl border border-white/[0.08] bg-white/[0.025] p-7 transition-all hover:-translate-y-1 hover:border-white/[0.16] hover:bg-white/[0.04]"
+                  className="group rounded-2xl border border-white/[0.08] bg-white/[0.025] p-7 transition-all duration-200 hover:-translate-y-1 hover:border-white/[0.16] hover:bg-white/[0.04]"
                 >
                   <div className="mb-6 flex h-11 w-11 items-center justify-center rounded-xl border border-violet-400/15 bg-violet-500/10">
                     <Icon className="h-5 w-5 text-violet-300" />
                   </div>
 
-                  <h3 className="text-lg font-semibold">
+                  <h3 className="text-lg font-semibold text-white">
                     {feature.title}
                   </h3>
 
                   <p className="mt-3 max-w-md leading-7 text-white/50">
                     {feature.description}
                   </p>
-                </div>
+                </article>
               );
             })}
           </div>
@@ -251,12 +253,13 @@ export default function HomePage() {
                 <div className="space-y-3">
                   <div className="rounded-xl border border-white/[0.06] bg-white/[0.04] p-4">
                     <div className="flex items-center gap-3">
-                      <Brain className="h-5 w-5 text-violet-300" />
+                      <Brain className="h-5 w-5 shrink-0 text-violet-300" />
 
                       <div>
-                        <div className="text-sm font-medium">
+                        <div className="text-sm font-medium text-white">
                           Intelligence Layer
                         </div>
+
                         <div className="mt-1 text-xs text-white/40">
                           Understanding context across your workspace
                         </div>
@@ -266,12 +269,13 @@ export default function HomePage() {
 
                   <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-4">
                     <div className="flex items-center gap-3">
-                      <MessageSquare className="h-5 w-5 text-indigo-300" />
+                      <MessageSquare className="h-5 w-5 shrink-0 text-indigo-300" />
 
                       <div>
-                        <div className="text-sm font-medium">
+                        <div className="text-sm font-medium text-white">
                           AI Collaboration
                         </div>
+
                         <div className="mt-1 text-xs text-white/40">
                           Agents working alongside your team
                         </div>
@@ -281,12 +285,13 @@ export default function HomePage() {
 
                   <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
                     <div className="flex items-center gap-3">
-                      <Zap className="h-5 w-5 text-yellow-300" />
+                      <Zap className="h-5 w-5 shrink-0 text-yellow-300" />
 
                       <div>
-                        <div className="text-sm font-medium">
+                        <div className="text-sm font-medium text-white">
                           Automated Execution
                         </div>
+
                         <div className="mt-1 text-xs text-white/40">
                           Turning intelligence into action
                         </div>
@@ -315,7 +320,7 @@ export default function HomePage() {
 
           <Link
             href="/register"
-            className="mt-8 inline-flex items-center gap-2 rounded-xl bg-white px-6 py-3 text-sm font-semibold text-black transition-transform hover:scale-[1.02]"
+            className="mt-8 inline-flex items-center gap-2 rounded-xl bg-white px-6 py-3 text-sm font-semibold text-black transition-transform hover:scale-[1.02] hover:bg-white/90"
           >
             Get started
             <ArrowRight className="h-4 w-4" />
