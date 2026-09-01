@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { toJson } from "@/lib/supabase/json";
+import type { Database } from "@/types/database";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -13,7 +15,17 @@ const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 100;
 
 /* ==================================================
-   TYPES
+   DATABASE TYPES
+================================================== */
+
+type ProjectInsert =
+  Database["public"]["Tables"]["projects"]["Insert"];
+
+type ProjectUpdate =
+  Database["public"]["Tables"]["projects"]["Update"];
+
+/* ==================================================
+   PROJECT TYPES
 ================================================== */
 
 type ProjectStatus =
@@ -35,6 +47,10 @@ type ProjectPriority =
   | "high"
   | "critical";
 
+/* ==================================================
+   REQUEST TYPES
+================================================== */
+
 type CreateProjectBody = {
   userId?: string;
   workspaceId?: string | null;
@@ -50,7 +66,6 @@ type CreateProjectBody = {
   dueDate?: string | null;
 
   metadata?: Record<string, unknown> | null;
-  tags?: string[];
 };
 
 type UpdateProjectBody = {
@@ -69,7 +84,6 @@ type UpdateProjectBody = {
   dueDate?: string | null;
 
   metadata?: Record<string, unknown> | null;
-  tags?: string[];
 };
 
 /* ==================================================
@@ -90,6 +104,10 @@ function jsonError(
     }
   );
 }
+
+/* ==================================================
+   NORMALIZERS
+================================================== */
 
 function normalizeString(
   value: unknown,
@@ -190,34 +208,11 @@ function normalizePriority(
   }
 }
 
-function normalizeTags(
-  value: unknown
-): string[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-
-  return Array.from(
-    new Set(
-      value
-        .filter(
-          (item): item is string =>
-            typeof item === "string"
-        )
-        .map((item) =>
-          item.trim().slice(0, 100)
-        )
-        .filter(Boolean)
-        .slice(0, 50)
-    )
-  );
-}
-
 function normalizeMetadata(
   value: unknown
 ): Record<string, unknown> {
   if (
-    value &&
+    value !== null &&
     typeof value === "object" &&
     !Array.isArray(value)
   ) {
@@ -269,7 +264,6 @@ const PROJECT_SELECT = `
   start_date,
   due_date,
   metadata,
-  tags,
   created_at,
   updated_at
 `;
@@ -316,13 +310,15 @@ export async function GET(
     const search =
       searchParams.get("search");
 
-    const limit = normalizeLimit(
-      searchParams.get("limit")
-    );
+    const limit =
+      normalizeLimit(
+        searchParams.get("limit")
+      );
 
-    const offset = normalizeOffset(
-      searchParams.get("offset")
-    );
+    const offset =
+      normalizeOffset(
+        searchParams.get("offset")
+      );
 
     let query = supabaseAdmin
       .from("projects")
@@ -410,11 +406,18 @@ export async function GET(
     return NextResponse.json(
       {
         success: true,
-        data: data ?? [],
+
+        data:
+          data ?? [],
+
         pagination: {
-          total: count ?? 0,
+          total:
+            count ?? 0,
+
           limit,
+
           offset,
+
           hasMore:
             (count ?? 0) >
             offset + limit,
@@ -512,56 +515,58 @@ export async function POST(
     const now =
       new Date().toISOString();
 
+    const insertData: ProjectInsert = {
+      user_id:
+        userId,
+
+      workspace_id:
+        workspaceId ?? null,
+
+      name,
+
+      description:
+        description ?? null,
+
+      status:
+        normalizeStatus(
+          body.status
+        ),
+
+      visibility:
+        normalizeVisibility(
+          body.visibility
+        ),
+
+      priority:
+        normalizePriority(
+          body.priority
+        ),
+
+      start_date:
+        startDate,
+
+      due_date:
+        dueDate,
+
+      metadata:
+        toJson(
+          normalizeMetadata(
+            body.metadata
+          )
+        ),
+
+      updated_at:
+        now,
+    };
+
     const {
       data,
       error,
     } = await supabaseAdmin
       .from("projects")
-      .insert({
-        user_id: userId,
-
-        workspace_id:
-          workspaceId ?? null,
-
-        name,
-
-        description:
-          description ?? null,
-
-        status:
-          normalizeStatus(
-            body.status
-          ),
-
-        visibility:
-          normalizeVisibility(
-            body.visibility
-          ),
-
-        priority:
-          normalizePriority(
-            body.priority
-          ),
-
-        start_date:
-          startDate,
-
-        due_date:
-          dueDate,
-
-        metadata:
-          normalizeMetadata(
-            body.metadata
-          ),
-
-        tags:
-          normalizeTags(
-            body.tags
-          ),
-
-        updated_at:
-          now,
-      })
+      .insert(
+        insertData
+      )
       .select(
         PROJECT_SELECT
       )
@@ -626,10 +631,7 @@ export async function PATCH(
       );
     }
 
-    const updateData: Record<
-      string,
-      unknown
-    > = {
+    const updateData: ProjectUpdate = {
       updated_at:
         new Date().toISOString(),
     };
@@ -722,17 +724,10 @@ export async function PATCH(
       body.metadata !== undefined
     ) {
       updateData.metadata =
-        normalizeMetadata(
-          body.metadata
-        );
-    }
-
-    if (
-      body.tags !== undefined
-    ) {
-      updateData.tags =
-        normalizeTags(
-          body.tags
+        toJson(
+          normalizeMetadata(
+            body.metadata
+          )
         );
     }
 
@@ -804,7 +799,9 @@ export async function PATCH(
       error,
     } = await supabaseAdmin
       .from("projects")
-      .update(updateData)
+      .update(
+        updateData
+      )
       .eq(
         "id",
         id
@@ -906,7 +903,9 @@ export async function DELETE(
         "user_id",
         userId
       )
-      .select("id")
+      .select(
+        "id"
+      )
       .maybeSingle();
 
     if (error) {

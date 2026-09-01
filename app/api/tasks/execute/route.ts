@@ -1,9 +1,24 @@
-import { NextRequest, NextResponse } from "next/server";
+import {
+  NextRequest,
+  NextResponse,
+} from "next/server";
 
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { toJson } from "@/lib/supabase/json";
+import type { Database } from "@/types/database";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+/* ==================================================
+   DATABASE TYPES
+================================================== */
+
+type TaskRow =
+  Database["public"]["Tables"]["tasks"]["Row"];
+
+type TaskUpdate =
+  Database["public"]["Tables"]["tasks"]["Update"];
 
 /* ==================================================
    TYPES
@@ -19,38 +34,62 @@ type TaskStatus =
 type ExecutePayload = {
   taskId?: unknown;
   task_id?: unknown;
+
   instruction?: unknown;
   prompt?: unknown;
+
   input?: unknown;
+
   autoComplete?: unknown;
   auto_complete?: unknown;
 };
 
-type TaskRecord = {
-  id: string;
-  user_id: string;
-  title: string;
-  description: string | null;
-  status: TaskStatus | string;
-  priority: string | null;
-  project_id: string | null;
-  agent_id: string | null;
-  due_date: string | null;
-  tags: string[] | null;
-  metadata: Record<string, unknown> | null;
-  created_at: string | null;
-  updated_at: string | null;
-};
+type TaskRecord = Pick<
+  TaskRow,
+  | "id"
+  | "user_id"
+  | "title"
+  | "description"
+  | "status"
+  | "priority"
+  | "project_id"
+  | "agent_id"
+  | "due_date"
+  | "tags"
+  | "metadata"
+  | "created_at"
+  | "updated_at"
+>;
+
+type ExecutionStatus =
+  | "running"
+  | "completed"
+  | "failed";
 
 type ExecutionRecord = {
   id: string;
-  status: "running" | "completed" | "failed";
+
+  status: ExecutionStatus;
+
   startedAt: string;
-  completedAt: string | null;
-  instruction: string | null;
+
+  completedAt:
+    | string
+    | null;
+
+  instruction:
+    | string
+    | null;
+
   input: unknown;
-  result: string | null;
-  error: string | null;
+
+  result:
+    | string
+    | null;
+
+  error:
+    | string
+    | null;
 };
 
 /* ==================================================
@@ -58,7 +97,10 @@ type ExecutionRecord = {
 ================================================== */
 
 const MAX_INSTRUCTION_LENGTH = 12000;
+
 const MAX_EXECUTION_HISTORY = 20;
+
+const MAX_TASK_ID_LENGTH = 200;
 
 /* ==================================================
    RESPONSE HELPERS
@@ -102,19 +144,27 @@ function failure(
 
 async function getAuthenticatedUser(
   request: NextRequest
-) {
+): Promise<{
+  userId: string | null;
+  error: string | null;
+}> {
   const authorization =
-    request.headers.get("authorization");
+    request.headers.get(
+      "authorization"
+    );
 
   if (!authorization) {
     return {
       userId: null,
-      error: "Missing authorization header.",
+      error:
+        "Missing authorization header.",
     };
   }
 
   const token =
-    authorization.startsWith("Bearer ")
+    authorization.startsWith(
+      "Bearer "
+    )
       ? authorization
           .slice(7)
           .trim()
@@ -123,7 +173,8 @@ async function getAuthenticatedUser(
   if (!token) {
     return {
       userId: null,
-      error: "Invalid authorization token.",
+      error:
+        "Invalid authorization token.",
     };
   }
 
@@ -146,7 +197,8 @@ async function getAuthenticatedUser(
   }
 
   return {
-    userId: data.user.id,
+    userId:
+      data.user.id,
     error: null,
   };
 }
@@ -156,7 +208,8 @@ async function getAuthenticatedUser(
 ================================================== */
 
 function normalizeString(
-  value: unknown
+  value: unknown,
+  maxLength = 10000
 ): string | null {
   if (
     typeof value !== "string"
@@ -167,9 +220,16 @@ function normalizeString(
   const normalized =
     value.trim();
 
-  return normalized.length > 0
-    ? normalized
-    : null;
+  if (
+    !normalized
+  ) {
+    return null;
+  }
+
+  return normalized.slice(
+    0,
+    maxLength
+  );
 }
 
 function normalizeBoolean(
@@ -208,7 +268,10 @@ function normalizeBoolean(
 
 function normalizeMetadata(
   value: unknown
-): Record<string, unknown> {
+): Record<
+  string,
+  unknown
+> {
   if (
     !value ||
     typeof value !== "object" ||
@@ -223,13 +286,54 @@ function normalizeMetadata(
   >;
 }
 
-function createExecutionId() {
+function normalizeTaskStatus(
+  value: unknown
+): TaskStatus {
+  switch (
+    value
+  ) {
+    case "todo":
+    case "in_progress":
+    case "blocked":
+    case "completed":
+    case "cancelled":
+      return value;
+
+    default:
+      return "todo";
+  }
+}
+
+/* ==================================================
+   EXECUTION ID
+================================================== */
+
+function createExecutionId(): string {
+  const random =
+    typeof crypto !== "undefined" &&
+    typeof crypto.randomUUID ===
+      "function"
+      ? crypto
+          .randomUUID()
+          .replace(
+            /-/g,
+            ""
+          )
+          .slice(
+            0,
+            16
+          )
+      : Math.random()
+          .toString(36)
+          .slice(
+            2,
+            18
+          );
+
   return [
     "task_exec",
     Date.now().toString(36),
-    Math.random()
-      .toString(36)
-      .slice(2, 10),
+    random,
   ].join("_");
 }
 
@@ -237,8 +341,38 @@ function createExecutionId() {
    EXECUTION HISTORY
 ================================================== */
 
+function isExecutionRecord(
+  value: unknown
+): value is ExecutionRecord {
+  if (
+    !value ||
+    typeof value !== "object" ||
+    Array.isArray(value)
+  ) {
+    return false;
+  }
+
+  const record =
+    value as Record<
+      string,
+      unknown
+    >;
+
+  return (
+    typeof record.id ===
+      "string" &&
+    typeof record.status ===
+      "string" &&
+    typeof record.startedAt ===
+      "string"
+  );
+}
+
 function getExecutionHistory(
-  metadata: Record<string, unknown>
+  metadata: Record<
+    string,
+    unknown
+  >
 ): ExecutionRecord[] {
   const executions =
     metadata.executions;
@@ -253,17 +387,7 @@ function getExecutionHistory(
 
   return executions
     .filter(
-      (
-        item
-      ): item is ExecutionRecord =>
-        Boolean(
-          item &&
-          typeof item === "object" &&
-          !Array.isArray(item) &&
-          typeof (
-            item as ExecutionRecord
-          ).id === "string"
-        )
+      isExecutionRecord
     )
     .slice(
       -MAX_EXECUTION_HISTORY
@@ -276,23 +400,43 @@ function buildExecutionMetadata(
     unknown
   >,
   execution: ExecutionRecord
-) {
+): Record<
+  string,
+  unknown
+> {
   const previousExecutions =
     getExecutionHistory(
       existingMetadata
     );
 
-  const executions = [
-    ...previousExecutions,
-    execution,
-  ].slice(
-    -MAX_EXECUTION_HISTORY
+  /*
+   * Aynı execution id varsa
+   * eski running kaydını replace eder.
+   */
+
+  const executions =
+    previousExecutions.filter(
+      (
+        item
+      ) =>
+        item.id !==
+        execution.id
+    );
+
+  executions.push(
+    execution
   );
 
   return {
     ...existingMetadata,
-    executions,
-    lastExecution: execution,
+
+    executions:
+      executions.slice(
+        -MAX_EXECUTION_HISTORY
+      ),
+
+    lastExecution:
+      execution,
   };
 }
 
@@ -313,7 +457,23 @@ async function getTask(
   } =
     await supabaseAdmin
       .from("tasks")
-      .select("*")
+      .select(
+        `
+          id,
+          user_id,
+          title,
+          description,
+          status,
+          priority,
+          project_id,
+          agent_id,
+          due_date,
+          tags,
+          metadata,
+          created_at,
+          updated_at
+        `
+      )
       .eq(
         "id",
         taskId
@@ -328,6 +488,7 @@ async function getTask(
     task:
       (data as TaskRecord | null) ??
       null,
+
     error,
   };
 }
@@ -343,22 +504,40 @@ async function updateTaskExecution({
   metadata,
 }: {
   taskId: string;
+
   userId: string;
+
   status: TaskStatus;
-  metadata: Record<string, unknown>;
-}) {
+
+  metadata: Record<
+    string,
+    unknown
+  >;
+}): Promise<{
+  task: TaskRecord | null;
+  error: unknown;
+}> {
+  const updateData: TaskUpdate = {
+    status,
+
+    metadata:
+      toJson(
+        metadata
+      ),
+
+    updated_at:
+      new Date().toISOString(),
+  };
+
   const {
     data,
     error,
   } =
     await supabaseAdmin
       .from("tasks")
-      .update({
-        status,
-        metadata,
-        updated_at:
-          new Date().toISOString(),
-      })
+      .update(
+        updateData
+      )
       .eq(
         "id",
         taskId
@@ -367,13 +546,30 @@ async function updateTaskExecution({
         "user_id",
         userId
       )
-      .select("*")
+      .select(
+        `
+          id,
+          user_id,
+          title,
+          description,
+          status,
+          priority,
+          project_id,
+          agent_id,
+          due_date,
+          tags,
+          metadata,
+          created_at,
+          updated_at
+        `
+      )
       .maybeSingle();
 
   return {
     task:
       (data as TaskRecord | null) ??
       null,
+
     error,
   };
 }
@@ -388,25 +584,43 @@ function buildExecutionContext({
   input,
 }: {
   task: TaskRecord;
-  instruction: string | null;
+
+  instruction:
+    | string
+    | null;
+
   input: unknown;
 }) {
   return {
-    taskId: task.id,
-    title: task.title,
+    taskId:
+      task.id,
+
+    title:
+      task.title,
+
     description:
       task.description,
+
+    status:
+      task.status,
+
     priority:
       task.priority,
+
     projectId:
       task.project_id,
+
     agentId:
       task.agent_id,
+
     dueDate:
       task.due_date,
+
     tags:
       task.tags ?? [],
+
     instruction,
+
     input:
       input ?? null,
   };
@@ -414,14 +628,6 @@ function buildExecutionContext({
 
 /* ==================================================
    EXECUTION ENGINE
-
-   Bu katman mevcut veritabanı yapısına
-   bağımlı kalmadan deterministic bir
-   execution result üretir.
-
-   Daha sonra agent/AI katmanı genişletildiğinde
-   bu fonksiyon merkezi execution adapter olarak
-   kullanılabilir.
 ================================================== */
 
 async function executeTask({
@@ -430,7 +636,11 @@ async function executeTask({
   input,
 }: {
   task: TaskRecord;
-  instruction: string | null;
+
+  instruction:
+    | string
+    | null;
+
   input: unknown;
 }) {
   const context =
@@ -440,7 +650,8 @@ async function executeTask({
       input,
     });
 
-  const steps: string[] = [];
+  const steps: string[] =
+    [];
 
   steps.push(
     `Task "${task.title}" execution started.`
@@ -479,6 +690,25 @@ async function executeTask({
   }
 
   if (
+    task.due_date
+  ) {
+    steps.push(
+      "Task due date was included in the execution context."
+    );
+  }
+
+  if (
+    Array.isArray(
+      task.tags
+    ) &&
+    task.tags.length > 0
+  ) {
+    steps.push(
+      "Task tags were included in the execution context."
+    );
+  }
+
+  if (
     input !== undefined &&
     input !== null
   ) {
@@ -489,11 +719,14 @@ async function executeTask({
 
   return {
     context,
+
     result: {
       summary:
         instruction ??
         `Task "${task.title}" was processed successfully.`,
+
       steps,
+
       processedAt:
         new Date().toISOString(),
     },
@@ -537,7 +770,8 @@ export async function POST(
 
     try {
       payload =
-        await request.json();
+        (await request.json()) as
+          ExecutePayload;
     } catch {
       return failure(
         "Invalid JSON body.",
@@ -549,7 +783,8 @@ export async function POST(
     const taskId =
       normalizeString(
         payload.taskId ??
-        payload.task_id
+          payload.task_id,
+        MAX_TASK_ID_LENGTH
       );
 
     if (
@@ -565,12 +800,24 @@ export async function POST(
     const instruction =
       normalizeString(
         payload.instruction ??
-        payload.prompt
+          payload.prompt,
+        MAX_INSTRUCTION_LENGTH
       );
 
+    /*
+     * normalizeString slice yaptığı için
+     * uzunluk kontrolünü orijinal değer üzerinden
+     * ayrıca yapıyoruz.
+     */
+
+    const rawInstruction =
+      payload.instruction ??
+      payload.prompt;
+
     if (
-      instruction &&
-      instruction.length >
+      typeof rawInstruction ===
+        "string" &&
+      rawInstruction.trim().length >
         MAX_INSTRUCTION_LENGTH
     ) {
       return failure(
@@ -583,7 +830,7 @@ export async function POST(
     const autoComplete =
       normalizeBoolean(
         payload.autoComplete ??
-        payload.auto_complete,
+          payload.auto_complete,
         true
       );
 
@@ -633,8 +880,13 @@ export async function POST(
        STATUS VALIDATION
     ---------------------------------------------- */
 
+    const currentStatus =
+      normalizeTaskStatus(
+        task.status
+      );
+
     if (
-      task.status ===
+      currentStatus ===
       "completed"
     ) {
       return failure(
@@ -645,7 +897,7 @@ export async function POST(
     }
 
     if (
-      task.status ===
+      currentStatus ===
       "cancelled"
     ) {
       return failure(
@@ -672,14 +924,26 @@ export async function POST(
 
     const runningExecution:
       ExecutionRecord = {
-        id: executionId,
-        status: "running",
+        id:
+          executionId,
+
+        status:
+          "running",
+
         startedAt,
-        completedAt: null,
+
+        completedAt:
+          null,
+
         instruction,
+
         input,
-        result: null,
-        error: null,
+
+        result:
+          null,
+
+        error:
+          null,
       };
 
     const runningMetadata =
@@ -688,16 +952,24 @@ export async function POST(
         runningExecution
       );
 
+    /* ----------------------------------------------
+       SAVE RUNNING STATE
+    ---------------------------------------------- */
+
     const {
+      task: runningTask,
       error: runningError,
     } =
       await updateTaskExecution({
         taskId:
           task.id,
+
         userId:
           auth.userId,
+
         status:
           "in_progress",
+
         metadata:
           runningMetadata,
       });
@@ -717,6 +989,16 @@ export async function POST(
       );
     }
 
+    if (
+      !runningTask
+    ) {
+      return failure(
+        "Task could not be updated.",
+        500,
+        "TASK_EXECUTION_UPDATE_FAILED"
+      );
+    }
+
     /* ----------------------------------------------
        EXECUTE
     ---------------------------------------------- */
@@ -724,8 +1006,11 @@ export async function POST(
     try {
       const executionResult =
         await executeTask({
-          task,
+          task:
+            runningTask,
+
           instruction,
+
           input,
         });
 
@@ -734,31 +1019,54 @@ export async function POST(
 
       const completedExecution:
         ExecutionRecord = {
-          id: executionId,
+          id:
+            executionId,
+
           status:
             "completed",
+
           startedAt,
+
           completedAt,
+
           instruction,
+
           input,
+
           result:
             JSON.stringify(
               executionResult.result
             ),
-          error: null,
+
+          error:
+            null,
         };
+
+      /*
+       * Running state'i tekrar yüklenen
+       * metadata üzerinden tamamlıyoruz.
+       */
+
+      const latestMetadata =
+        normalizeMetadata(
+          runningTask.metadata
+        );
 
       const completedMetadata =
         buildExecutionMetadata(
-          existingMetadata,
+          latestMetadata,
           completedExecution
         );
 
       const finalStatus:
         TaskStatus =
-        autoComplete
-          ? "completed"
-          : "in_progress";
+          autoComplete
+            ? "completed"
+            : "in_progress";
+
+      /* --------------------------------------------
+         SAVE COMPLETED STATE
+      -------------------------------------------- */
 
       const {
         task: updatedTask,
@@ -767,10 +1075,13 @@ export async function POST(
         await updateTaskExecution({
           taskId:
             task.id,
+
           userId:
             auth.userId,
+
           status:
             finalStatus,
+
           metadata:
             completedMetadata,
         });
@@ -790,24 +1101,44 @@ export async function POST(
         );
       }
 
-      return success({
-        execution: {
-          id:
-            executionId,
-          status:
-            "completed",
-          startedAt,
-          completedAt,
-          autoCompleted:
-            autoComplete,
+      if (
+        !updatedTask
+      ) {
+        return failure(
+          "Task execution completed but task could not be returned.",
+          500,
+          "TASK_EXECUTION_RESULT_MISSING"
+        );
+      }
+
+      return success(
+        {
+          execution: {
+            id:
+              executionId,
+
+            status:
+              "completed",
+
+            startedAt,
+
+            completedAt,
+
+            autoCompleted:
+              autoComplete,
+          },
+
+          result:
+            executionResult.result,
+
+          context:
+            executionResult.context,
+
+          task:
+            updatedTask,
         },
-        result:
-          executionResult.result,
-        context:
-          executionResult.context,
-        task:
-          updatedTask,
-      });
+        200
+      );
     } catch (
       executionError
     ) {
@@ -821,37 +1152,69 @@ export async function POST(
 
       const failedExecution:
         ExecutionRecord = {
-          id: executionId,
+          id:
+            executionId,
+
           status:
             "failed",
+
           startedAt,
+
           completedAt:
             failedAt,
+
           instruction,
+
           input,
-          result: null,
+
+          result:
+            null,
+
           error:
-            executionError instanceof Error
+            executionError instanceof
+              Error
               ? executionError.message
               : "Unknown execution error.",
         };
 
-      const failedMetadata =
+      /*
+       * Failure durumunda mevcut
+       * running metadata korunur.
+       */
+
+      const failureMetadata =
         buildExecutionMetadata(
-          existingMetadata,
+          normalizeMetadata(
+            runningTask.metadata
+          ),
           failedExecution
         );
 
-      await updateTaskExecution({
-        taskId:
-          task.id,
-        userId:
-          auth.userId,
-        status:
-          "blocked",
-        metadata:
-          failedMetadata,
-      });
+      const {
+        error: failureUpdateError,
+      } =
+        await updateTaskExecution({
+          taskId:
+            task.id,
+
+          userId:
+            auth.userId,
+
+          status:
+            "blocked",
+
+          metadata:
+            failureMetadata,
+        });
+
+      if (
+        failureUpdateError
+      ) {
+        console.error(
+          "SYRAVEN TASK EXECUTION FAILURE SAVE ERROR:",
+          failureUpdateError
+        );
+      }
 
       return failure(
         "Task execution failed.",

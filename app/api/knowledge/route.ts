@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { toJson } from "@/lib/supabase/json";
+import type { Database } from "@/types/database";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -11,6 +13,16 @@ export const dynamic = "force-dynamic";
 
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 100;
+
+/* ==================================================
+   DATABASE TYPES
+================================================== */
+
+type KnowledgeInsert =
+  Database["public"]["Tables"]["knowledge"]["Insert"];
+
+type KnowledgeUpdate =
+  Database["public"]["Tables"]["knowledge"]["Update"];
 
 /* ==================================================
    TYPES
@@ -50,7 +62,6 @@ type CreateKnowledgeBody = {
   visibility?: KnowledgeVisibility;
 
   sourceUrl?: string | null;
-  sourceName?: string | null;
 
   metadata?: Record<string, unknown> | null;
   tags?: string[];
@@ -68,7 +79,6 @@ type UpdateKnowledgeBody = {
   visibility?: KnowledgeVisibility;
 
   sourceUrl?: string | null;
-  sourceName?: string | null;
 
   metadata?: Record<string, unknown> | null;
   tags?: string[];
@@ -215,6 +225,20 @@ function normalizeString(
   );
 }
 
+function normalizeMetadata(
+  value: unknown
+): Record<string, unknown> {
+  if (
+    value &&
+    typeof value === "object" &&
+    !Array.isArray(value)
+  ) {
+    return value as Record<string, unknown>;
+  }
+
+  return {};
+}
+
 /* ==================================================
    GET KNOWLEDGE
 ================================================== */
@@ -259,6 +283,8 @@ export async function GET(
           id,
           user_id,
           workspace_id,
+          project_id,
+          team_id,
           title,
           description,
           content,
@@ -266,9 +292,13 @@ export async function GET(
           status,
           visibility,
           source_url,
-          source_name,
+          file_name,
+          file_path,
+          file_type,
+          file_size,
           metadata,
           tags,
+          embedding,
           created_at,
           updated_at
         `,
@@ -448,12 +478,6 @@ export async function POST(
         5000
       );
 
-    const sourceName =
-      normalizeString(
-        body.sourceName,
-        500
-      );
-
     const type =
       normalizeType(
         body.type
@@ -475,55 +499,55 @@ export async function POST(
       );
 
     const metadata =
-      body.metadata &&
-      typeof body.metadata === "object" &&
-      !Array.isArray(body.metadata)
-        ? body.metadata
-        : {};
+      normalizeMetadata(
+        body.metadata
+      );
+
+    const insertData: KnowledgeInsert = {
+      user_id: userId,
+
+      workspace_id:
+        workspaceId ?? null,
+
+      title,
+
+      content:
+        content ?? null,
+
+      description:
+        description ?? null,
+
+      type,
+
+      status,
+
+      visibility,
+
+      source_url:
+        sourceUrl ?? null,
+
+      metadata:
+        toJson(metadata),
+
+      tags,
+
+      updated_at:
+        new Date().toISOString(),
+    };
 
     const {
       data,
       error,
     } = await supabaseAdmin
       .from("knowledge")
-      .insert({
-        user_id: userId,
-
-        workspace_id:
-          workspaceId ?? null,
-
-        title,
-
-        content:
-          content ?? null,
-
-        description:
-          description ?? null,
-
-        type,
-
-        status,
-
-        visibility,
-
-        source_url:
-          sourceUrl ?? null,
-
-        source_name:
-          sourceName ?? null,
-
-        metadata,
-
-        tags,
-
-        updated_at:
-          new Date().toISOString(),
-      })
+      .insert(insertData)
       .select(
         `
           id,
           user_id,
           workspace_id,
+          project_id,
+          team_id,
           title,
           description,
           content,
@@ -531,9 +555,13 @@ export async function POST(
           status,
           visibility,
           source_url,
-          source_name,
+          file_name,
+          file_path,
+          file_type,
+          file_size,
           metadata,
           tags,
+          embedding,
           created_at,
           updated_at
         `
@@ -599,10 +627,7 @@ export async function PATCH(
       );
     }
 
-    const updateData: Record<
-      string,
-      unknown
-    > = {
+    const updateData: KnowledgeUpdate = {
       updated_at:
         new Date().toISOString(),
     };
@@ -684,27 +709,14 @@ export async function PATCH(
     }
 
     if (
-      body.sourceName !== undefined
-    ) {
-      updateData.source_name =
-        normalizeString(
-          body.sourceName,
-          500
-        );
-    }
-
-    if (
       body.metadata !== undefined
     ) {
       updateData.metadata =
-        body.metadata &&
-        typeof body.metadata ===
-          "object" &&
-        !Array.isArray(
-          body.metadata
-        )
-          ? body.metadata
-          : {};
+        toJson(
+          normalizeMetadata(
+            body.metadata
+          )
+        );
     }
 
     if (
@@ -731,6 +743,8 @@ export async function PATCH(
           id,
           user_id,
           workspace_id,
+          project_id,
+          team_id,
           title,
           description,
           content,
@@ -738,9 +752,13 @@ export async function PATCH(
           status,
           visibility,
           source_url,
-          source_name,
+          file_name,
+          file_path,
+          file_type,
+          file_size,
           metadata,
           tags,
+          embedding,
           created_at,
           updated_at
         `

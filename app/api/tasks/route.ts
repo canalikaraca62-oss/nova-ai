@@ -1,12 +1,31 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { toJson } from "@/lib/supabase/json";
+import type { Database } from "@/types/database";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /* ==================================================
-   TYPES
+   SYRAVEN TASKS API
+================================================== */
+
+/* ==================================================
+   DATABASE TYPES
+================================================== */
+
+type TaskInsert =
+  Database["public"]["Tables"]["tasks"]["Insert"];
+
+type TaskUpdate =
+  Database["public"]["Tables"]["tasks"]["Update"];
+
+type TaskRow =
+  Database["public"]["Tables"]["tasks"]["Row"];
+
+/* ==================================================
+   DOMAIN TYPES
 ================================================== */
 
 type TaskStatus =
@@ -22,17 +41,28 @@ type TaskPriority =
   | "high"
   | "urgent";
 
+/* ==================================================
+   REQUEST TYPES
+================================================== */
+
 type TaskPayload = {
+  id?: unknown;
+
   title?: unknown;
   description?: unknown;
+
   status?: unknown;
   priority?: unknown;
+
   projectId?: unknown;
   project_id?: unknown;
+
   agentId?: unknown;
   agent_id?: unknown;
+
   dueDate?: unknown;
   due_date?: unknown;
+
   tags?: unknown;
   metadata?: unknown;
 };
@@ -40,12 +70,17 @@ type TaskPayload = {
 type SafeTaskInput = {
   title: string;
   description: string | null;
+
   status: TaskStatus;
   priority: TaskPriority;
+
   projectId: string | null;
   agentId: string | null;
+
   dueDate: string | null;
+
   tags: string[];
+
   metadata: Record<string, unknown>;
 };
 
@@ -53,25 +88,53 @@ type SafeTaskInput = {
    CONSTANTS
 ================================================== */
 
-const TASK_STATUSES: TaskStatus[] = [
+const TASK_STATUSES = [
   "todo",
   "in_progress",
   "blocked",
   "completed",
   "cancelled",
-];
+] as const;
 
-const TASK_PRIORITIES: TaskPriority[] = [
+const TASK_PRIORITIES = [
   "low",
   "medium",
   "high",
   "urgent",
-];
+] as const;
+
+const DEFAULT_LIMIT = 50;
+const MAX_LIMIT = 100;
 
 const MAX_TITLE_LENGTH = 300;
-const MAX_DESCRIPTION_LENGTH = 20000;
-const MAX_TAGS = 20;
-const MAX_TAG_LENGTH = 80;
+const MAX_DESCRIPTION_LENGTH = 20_000;
+
+const MAX_TAGS = 50;
+const MAX_TAG_LENGTH = 100;
+
+const MAX_SEARCH_LENGTH = 500;
+
+const MAX_METADATA_SIZE = 100_000;
+
+/* ==================================================
+   SELECT
+================================================== */
+
+const TASK_SELECT = `
+  id,
+  user_id,
+  title,
+  description,
+  status,
+  priority,
+  project_id,
+  agent_id,
+  due_date,
+  tags,
+  metadata,
+  created_at,
+  updated_at
+`;
 
 /* ==================================================
    RESPONSE HELPERS
@@ -115,7 +178,10 @@ function failure(
 
 async function getAuthenticatedUser(
   request: NextRequest
-) {
+): Promise<{
+  userId: string | null;
+  error: string | null;
+}> {
   const authorization =
     request.headers.get("authorization");
 
@@ -138,45 +204,72 @@ async function getAuthenticatedUser(
     };
   }
 
-  const {
-    data,
-    error,
-  } =
-    await supabaseAdmin.auth.getUser(token);
+  try {
+    const {
+      data,
+      error,
+    } =
+      await supabaseAdmin.auth.getUser(
+        token
+      );
 
-  if (error || !data.user) {
+    if (
+      error ||
+      !data.user
+    ) {
+      return {
+        userId: null,
+        error: "Unauthorized.",
+      };
+    }
+
+    return {
+      userId: data.user.id,
+      error: null,
+    };
+  } catch (error) {
+    console.error(
+      "SYRAVEN AUTH ERROR:",
+      error
+    );
+
     return {
       userId: null,
-      error: "Unauthorized.",
+      error: "Authentication failed.",
     };
   }
-
-  return {
-    userId: data.user.id,
-    error: null,
-  };
 }
 
 /* ==================================================
-   NORMALIZERS
+   GENERAL NORMALIZERS
 ================================================== */
 
 function normalizeString(
-  value: unknown
+  value: unknown,
+  maxLength = 10_000
 ): string | null {
-  if (typeof value !== "string") {
+  if (
+    typeof value !== "string"
+  ) {
     return null;
   }
 
-  const normalized = value.trim();
+  const normalized =
+    value.trim();
 
-  return normalized.length > 0
-    ? normalized
-    : null;
+  if (!normalized) {
+    return null;
+  }
+
+  return normalized.slice(
+    0,
+    maxLength
+  );
 }
 
 function normalizeNullableString(
-  value: unknown
+  value: unknown,
+  maxLength = 10_000
 ): string | null {
   if (
     value === null ||
@@ -185,57 +278,106 @@ function normalizeNullableString(
     return null;
   }
 
-  if (typeof value !== "string") {
-    return null;
+  return normalizeString(
+    value,
+    maxLength
+  );
+}
+
+function normalizeLimit(
+  value: string | null
+): number {
+  const parsed =
+    Number(value);
+
+  if (
+    !Number.isFinite(parsed) ||
+    parsed <= 0
+  ) {
+    return DEFAULT_LIMIT;
   }
 
-  const normalized = value.trim();
+  return Math.min(
+    Math.floor(parsed),
+    MAX_LIMIT
+  );
+}
 
-  return normalized.length > 0
-    ? normalized
-    : null;
+function normalizeOffset(
+  value: string | null
+): number {
+  const parsed =
+    Number(value);
+
+  if (
+    !Number.isFinite(parsed) ||
+    parsed < 0
+  ) {
+    return 0;
+  }
+
+  return Math.floor(parsed);
+}
+
+/* ==================================================
+   ENUM VALIDATION
+================================================== */
+
+function isTaskStatus(
+  value: unknown
+): value is TaskStatus {
+  return (
+    typeof value === "string" &&
+    TASK_STATUSES.includes(
+      value as TaskStatus
+    )
+  );
+}
+
+function isTaskPriority(
+  value: unknown
+): value is TaskPriority {
+  return (
+    typeof value === "string" &&
+    TASK_PRIORITIES.includes(
+      value as TaskPriority
+    )
+  );
 }
 
 function normalizeStatus(
   value: unknown,
   fallback: TaskStatus = "todo"
 ): TaskStatus {
-  if (
-    typeof value === "string" &&
-    TASK_STATUSES.includes(
-      value as TaskStatus
-    )
-  ) {
-    return value as TaskStatus;
-  }
-
-  return fallback;
+  return isTaskStatus(value)
+    ? value
+    : fallback;
 }
 
 function normalizePriority(
   value: unknown,
   fallback: TaskPriority = "medium"
 ): TaskPriority {
-  if (
-    typeof value === "string" &&
-    TASK_PRIORITIES.includes(
-      value as TaskPriority
-    )
-  ) {
-    return value as TaskPriority;
-  }
-
-  return fallback;
+  return isTaskPriority(value)
+    ? value
+    : fallback;
 }
+
+/* ==================================================
+   TAGS
+================================================== */
 
 function normalizeTags(
   value: unknown
 ): string[] {
-  if (!Array.isArray(value)) {
+  if (
+    !Array.isArray(value)
+  ) {
     return [];
   }
 
-  const uniqueTags = new Set<string>();
+  const uniqueTags =
+    new Set<string>();
 
   for (const item of value) {
     if (
@@ -252,9 +394,11 @@ function normalizeTags(
           MAX_TAG_LENGTH
         );
 
-    if (tag) {
-      uniqueTags.add(tag);
+    if (!tag) {
+      continue;
     }
+
+    uniqueTags.add(tag);
 
     if (
       uniqueTags.size >=
@@ -269,6 +413,10 @@ function normalizeTags(
   );
 }
 
+/* ==================================================
+   METADATA
+================================================== */
+
 function normalizeMetadata(
   value: unknown
 ): Record<string, unknown> {
@@ -280,11 +428,28 @@ function normalizeMetadata(
     return {};
   }
 
-  return value as Record<
-    string,
-    unknown
-  >;
+  try {
+    const serialized =
+      JSON.stringify(value);
+
+    if (
+      serialized.length >
+      MAX_METADATA_SIZE
+    ) {
+      return {};
+    }
+
+    return JSON.parse(
+      serialized
+    ) as Record<string, unknown>;
+  } catch {
+    return {};
+  }
 }
+
+/* ==================================================
+   DATE
+================================================== */
 
 function normalizeDate(
   value: unknown
@@ -297,12 +462,21 @@ function normalizeDate(
     return null;
   }
 
-  if (typeof value !== "string") {
+  if (
+    typeof value !== "string"
+  ) {
+    return null;
+  }
+
+  const normalized =
+    value.trim();
+
+  if (!normalized) {
     return null;
   }
 
   const date =
-    new Date(value);
+    new Date(normalized);
 
   if (
     Number.isNaN(
@@ -316,7 +490,84 @@ function normalizeDate(
 }
 
 /* ==================================================
-   CREATE INPUT
+   SEARCH SANITIZER
+================================================== */
+
+function normalizeSearch(
+  value: string | null
+): string | null {
+  if (!value) {
+    return null;
+  }
+
+  const normalized =
+    value
+      .replace(/[,()]/g, " ")
+      .trim()
+      .slice(
+        0,
+        MAX_SEARCH_LENGTH
+      );
+
+  return normalized || null;
+}
+
+/* ==================================================
+   JSON BODY
+================================================== */
+
+async function parseJsonBody(
+  request: NextRequest
+): Promise<
+  | {
+      success: true;
+      data: Record<string, unknown>;
+    }
+  | {
+      success: false;
+      error: string;
+      code: string;
+    }
+> {
+  try {
+    const body =
+      await request.json();
+
+    if (
+      !body ||
+      typeof body !== "object" ||
+      Array.isArray(body)
+    ) {
+      return {
+        success: false,
+        error:
+          "Request body must be a JSON object.",
+        code:
+          "INVALID_BODY",
+      };
+    }
+
+    return {
+      success: true,
+      data:
+        body as Record<
+          string,
+          unknown
+        >,
+    };
+  } catch {
+    return {
+      success: false,
+      error:
+        "Invalid JSON body.",
+      code:
+        "INVALID_JSON",
+    };
+  }
+}
+
+/* ==================================================
+   CREATE INPUT VALIDATION
 ================================================== */
 
 function parseCreateInput(
@@ -329,92 +580,256 @@ function parseCreateInput(
   | {
       success: false;
       error: string;
+      code: string;
     } {
-  const rawTitle =
+  const title =
     normalizeString(
-      payload.title
+      payload.title,
+      MAX_TITLE_LENGTH
     );
 
-  if (!rawTitle) {
+  if (!title) {
     return {
       success: false,
       error:
         "Task title is required.",
+      code:
+        "TITLE_REQUIRED",
     };
   }
 
   if (
-    rawTitle.length >
-    MAX_TITLE_LENGTH
+    typeof payload.title === "string" &&
+    payload.title.trim().length >
+      MAX_TITLE_LENGTH
   ) {
     return {
       success: false,
       error:
         `Task title cannot exceed ${MAX_TITLE_LENGTH} characters.`,
+      code:
+        "TITLE_TOO_LONG",
     };
   }
 
-  const rawDescription =
+  const description =
     normalizeNullableString(
-      payload.description
+      payload.description,
+      MAX_DESCRIPTION_LENGTH
     );
 
   if (
-    rawDescription &&
-    rawDescription.length >
+    typeof payload.description === "string" &&
+    payload.description.trim().length >
       MAX_DESCRIPTION_LENGTH
   ) {
     return {
       success: false,
       error:
         `Task description cannot exceed ${MAX_DESCRIPTION_LENGTH} characters.`,
+      code:
+        "DESCRIPTION_TOO_LONG",
     };
   }
 
-  const projectId =
-    normalizeNullableString(
-      payload.projectId ??
-      payload.project_id
-    );
+  if (
+    payload.status !== undefined &&
+    !isTaskStatus(
+      payload.status
+    )
+  ) {
+    return {
+      success: false,
+      error:
+        "Invalid task status.",
+      code:
+        "INVALID_STATUS",
+    };
+  }
 
-  const agentId =
-    normalizeNullableString(
-      payload.agentId ??
-      payload.agent_id
-    );
+  if (
+    payload.priority !== undefined &&
+    !isTaskPriority(
+      payload.priority
+    )
+  ) {
+    return {
+      success: false,
+      error:
+        "Invalid task priority.",
+      code:
+        "INVALID_PRIORITY",
+    };
+  }
 
-  const dueDate =
-    normalizeDate(
-      payload.dueDate ??
-      payload.due_date
-    );
+  const rawProjectId =
+    payload.projectId ??
+    payload.project_id;
+
+  const rawAgentId =
+    payload.agentId ??
+    payload.agent_id;
+
+  const rawDueDate =
+    payload.dueDate ??
+    payload.due_date;
+
+  if (
+    rawDueDate !== undefined &&
+    rawDueDate !== null &&
+    rawDueDate !== ""
+  ) {
+    const parsedDate =
+      normalizeDate(
+        rawDueDate
+      );
+
+    if (!parsedDate) {
+      return {
+        success: false,
+        error:
+          "Invalid due date.",
+        code:
+          "INVALID_DUE_DATE",
+      };
+    }
+  }
 
   return {
     success: true,
     data: {
-      title: rawTitle,
-      description:
-        rawDescription,
+      title,
+      description,
+
       status:
         normalizeStatus(
           payload.status
         ),
+
       priority:
         normalizePriority(
           payload.priority
         ),
-      projectId,
-      agentId,
-      dueDate,
+
+      projectId:
+        normalizeNullableString(
+          rawProjectId,
+          200
+        ),
+
+      agentId:
+        normalizeNullableString(
+          rawAgentId,
+          200
+        ),
+
+      dueDate:
+        normalizeDate(
+          rawDueDate
+        ),
+
       tags:
         normalizeTags(
           payload.tags
         ),
+
       metadata:
         normalizeMetadata(
           payload.metadata
         ),
     },
+  };
+}
+
+/* ==================================================
+   PROJECT ACCESS VALIDATION
+================================================== */
+
+async function validateProjectAccess(
+  projectId: string,
+  userId: string
+): Promise<{
+  valid: boolean;
+  databaseError: boolean;
+}> {
+  const {
+    data,
+    error,
+  } =
+    await supabaseAdmin
+      .from("projects")
+      .select("id")
+      .eq(
+        "id",
+        projectId
+      )
+      .eq(
+        "user_id",
+        userId
+      )
+      .maybeSingle();
+
+  if (error) {
+    console.error(
+      "SYRAVEN PROJECT VALIDATION ERROR:",
+      error
+    );
+
+    return {
+      valid: false,
+      databaseError: true,
+    };
+  }
+
+  return {
+    valid: Boolean(data),
+    databaseError: false,
+  };
+}
+
+/* ==================================================
+   AGENT ACCESS VALIDATION
+================================================== */
+
+async function validateAgentAccess(
+  agentId: string,
+  userId: string
+): Promise<{
+  valid: boolean;
+  databaseError: boolean;
+}> {
+  const {
+    data,
+    error,
+  } =
+    await supabaseAdmin
+      .from("agents")
+      .select("id")
+      .eq(
+        "id",
+        agentId
+      )
+      .eq(
+        "user_id",
+        userId
+      )
+      .maybeSingle();
+
+  if (error) {
+    console.error(
+      "SYRAVEN AGENT VALIDATION ERROR:",
+      error
+    );
+
+    return {
+      valid: false,
+      databaseError: true,
+    };
+  }
+
+  return {
+    valid: Boolean(data),
+    databaseError: false,
   };
 }
 
@@ -443,78 +858,64 @@ export async function GET(
     const searchParams =
       request.nextUrl.searchParams;
 
-    const status =
+    const rawStatus =
       searchParams.get(
         "status"
       );
 
-    const priority =
+    const rawPriority =
       searchParams.get(
         "priority"
       );
 
     const projectId =
-      searchParams.get(
-        "projectId"
-      ) ??
-      searchParams.get(
-        "project_id"
+      normalizeString(
+        searchParams.get(
+          "projectId"
+        ) ??
+        searchParams.get(
+          "project_id"
+        ),
+        200
       );
 
     const agentId =
-      searchParams.get(
-        "agentId"
-      ) ??
-      searchParams.get(
-        "agent_id"
+      normalizeString(
+        searchParams.get(
+          "agentId"
+        ) ??
+        searchParams.get(
+          "agent_id"
+        ),
+        200
       );
 
-    const limitParam =
-      Number(
+    const search =
+      normalizeSearch(
         searchParams.get(
-          "limit"
-        ) ?? "50"
-      );
-
-    const offsetParam =
-      Number(
-        searchParams.get(
-          "offset"
-        ) ?? "0"
+          "search"
+        )
       );
 
     const limit =
-      Number.isFinite(
-        limitParam
-      )
-        ? Math.min(
-            Math.max(
-              Math.floor(
-                limitParam
-              ),
-              1
-            ),
-            100
-          )
-        : 50;
+      normalizeLimit(
+        searchParams.get(
+          "limit"
+        )
+      );
 
     const offset =
-      Number.isFinite(
-        offsetParam
-      )
-        ? Math.max(
-            Math.floor(
-              offsetParam
-            ),
-            0
-          )
-        : 0;
+      normalizeOffset(
+        searchParams.get(
+          "offset"
+        )
+      );
 
     let query =
       supabaseAdmin
         .from("tasks")
         .select(
-          "*",
+          TASK_SELECT,
           {
             count: "exact",
           }
@@ -524,41 +925,39 @@ export async function GET(
           auth.userId
         )
         .order(
-          "created_at",
+          "updated_at",
           {
             ascending: false,
           }
         )
         .range(
           offset,
-          offset +
-            limit -
-            1
+          offset + limit - 1
         );
 
     if (
-      status &&
-      TASK_STATUSES.includes(
-        status as TaskStatus
+      rawStatus &&
+      isTaskStatus(
+        rawStatus
       )
     ) {
       query =
         query.eq(
           "status",
-          status
+          rawStatus
         );
     }
 
     if (
-      priority &&
-      TASK_PRIORITIES.includes(
-        priority as TaskPriority
+      rawPriority &&
+      isTaskPriority(
+        rawPriority
       )
     ) {
       query =
         query.eq(
           "priority",
-          priority
+          rawPriority
         );
     }
 
@@ -575,6 +974,13 @@ export async function GET(
         query.eq(
           "agent_id",
           agentId
+        );
+    }
+
+    if (search) {
+      query =
+        query.or(
+          `title.ilike.%${search}%,description.ilike.%${search}%`
         );
     }
 
@@ -598,16 +1004,20 @@ export async function GET(
       );
     }
 
+    const total =
+      count ?? 0;
+
     return success({
       tasks:
         data ?? [],
+
       pagination: {
-        total:
-          count ?? 0,
+        total,
         limit,
         offset,
+
         hasMore:
-          (count ?? 0) >
+          total >
           offset + limit,
       },
     });
@@ -633,6 +1043,10 @@ export async function POST(
   request: NextRequest
 ) {
   try {
+    /* ----------------------------------------------
+       AUTH
+    ---------------------------------------------- */
+
     const auth =
       await getAuthenticatedUser(
         request
@@ -647,18 +1061,29 @@ export async function POST(
       );
     }
 
-    let payload: TaskPayload;
+    /* ----------------------------------------------
+       BODY
+    ---------------------------------------------- */
 
-    try {
-      payload =
-        await request.json();
-    } catch {
+    const bodyResult =
+      await parseJsonBody(
+        request
+      );
+
+    if (!bodyResult.success) {
       return failure(
-        "Invalid JSON body.",
+        bodyResult.error,
         400,
-        "INVALID_JSON"
+        bodyResult.code
       );
     }
+
+    const payload =
+      bodyResult.data as TaskPayload;
+
+    /* ----------------------------------------------
+       VALIDATE INPUT
+    ---------------------------------------------- */
 
     const parsed =
       parseCreateInput(
@@ -669,34 +1094,36 @@ export async function POST(
       return failure(
         parsed.error,
         400,
-        "INVALID_TASK"
+        parsed.code
       );
     }
 
     const input =
       parsed.data;
 
+    /* ----------------------------------------------
+       VALIDATE PROJECT
+    ---------------------------------------------- */
+
     if (input.projectId) {
-      const {
-        data: project,
-        error: projectError,
-      } =
-        await supabaseAdmin
-          .from("projects")
-          .select("id")
-          .eq(
-            "id",
-            input.projectId
-          )
-          .eq(
-            "user_id",
-            auth.userId
-          )
-          .maybeSingle();
+      const projectValidation =
+        await validateProjectAccess(
+          input.projectId,
+          auth.userId
+        );
 
       if (
-        projectError ||
-        !project
+        projectValidation.databaseError
+      ) {
+        return failure(
+          "Failed to verify project access.",
+          500,
+          "PROJECT_VALIDATION_FAILED"
+        );
+      }
+
+      if (
+        !projectValidation.valid
       ) {
         return failure(
           "Project not found or access denied.",
@@ -706,27 +1133,29 @@ export async function POST(
       }
     }
 
+    /* ----------------------------------------------
+       VALIDATE AGENT
+    ---------------------------------------------- */
+
     if (input.agentId) {
-      const {
-        data: agent,
-        error: agentError,
-      } =
-        await supabaseAdmin
-          .from("agents")
-          .select("id")
-          .eq(
-            "id",
-            input.agentId
-          )
-          .eq(
-            "user_id",
-            auth.userId
-          )
-          .maybeSingle();
+      const agentValidation =
+        await validateAgentAccess(
+          input.agentId,
+          auth.userId
+        );
 
       if (
-        agentError ||
-        !agent
+        agentValidation.databaseError
+      ) {
+        return failure(
+          "Failed to verify agent access.",
+          500,
+          "AGENT_VALIDATION_FAILED"
+        );
+      }
+
+      if (
+        !agentValidation.valid
       ) {
         return failure(
           "Agent not found or access denied.",
@@ -736,35 +1165,62 @@ export async function POST(
       }
     }
 
+    /* ----------------------------------------------
+       INSERT
+    ---------------------------------------------- */
+
+    const now =
+      new Date().toISOString();
+
+    const insertData: TaskInsert = {
+      user_id:
+        auth.userId,
+
+      title:
+        input.title,
+
+      description:
+        input.description,
+
+      status:
+        input.status,
+
+      priority:
+        input.priority,
+
+      project_id:
+        input.projectId,
+
+      agent_id:
+        input.agentId,
+
+      due_date:
+        input.dueDate,
+
+      tags:
+        input.tags,
+
+      metadata:
+        toJson(
+          input.metadata
+        ),
+
+      updated_at:
+        now,
+    };
+
     const {
       data,
       error,
     } =
       await supabaseAdmin
         .from("tasks")
-        .insert({
-          user_id:
-            auth.userId,
-          title:
-            input.title,
-          description:
-            input.description,
-          status:
-            input.status,
-          priority:
-            input.priority,
-          project_id:
-            input.projectId,
-          agent_id:
-            input.agentId,
-          due_date:
-            input.dueDate,
-          tags:
-            input.tags,
-          metadata:
-            input.metadata,
-        })
-        .select("*")
+        .insert(
+          insertData
+        )
+        .select(
+          TASK_SELECT
+        )
         .single();
 
     if (error) {
@@ -808,6 +1264,10 @@ export async function PATCH(
   request: NextRequest
 ) {
   try {
+    /* ----------------------------------------------
+       AUTH
+    ---------------------------------------------- */
+
     const auth =
       await getAuthenticatedUser(
         request
@@ -822,10 +1282,47 @@ export async function PATCH(
       );
     }
 
-    const taskId =
+    /* ----------------------------------------------
+       BODY
+    ---------------------------------------------- */
+
+    const bodyResult =
+      await parseJsonBody(
+        request
+      );
+
+    if (!bodyResult.success) {
+      return failure(
+        bodyResult.error,
+        400,
+        bodyResult.code
+      );
+    }
+
+    const payload =
+      bodyResult.data as TaskPayload;
+
+    /* ----------------------------------------------
+       TASK ID
+    ---------------------------------------------- */
+
+    const queryTaskId =
       request.nextUrl.searchParams.get(
         "id"
       );
+
+    const bodyTaskId =
+      normalizeString(
+        payload.id,
+        200
+      );
+
+    const taskId =
+      normalizeString(
+        queryTaskId,
+        200
+      ) ??
+      bodyTaskId;
 
     if (!taskId) {
       return failure(
@@ -835,26 +1332,68 @@ export async function PATCH(
       );
     }
 
-    let payload: TaskPayload;
+    /* ----------------------------------------------
+       LOAD EXISTING TASK
+    ---------------------------------------------- */
 
-    try {
-      payload =
-        await request.json();
-    } catch {
+    const {
+      data: existingTask,
+      error: existingTaskError,
+    } =
+      await supabaseAdmin
+        .from("tasks")
+        .select(
+          `
+            id,
+            project_id,
+            agent_id
+          `
+        )
+        .eq(
+          "id",
+          taskId
+        )
+        .eq(
+          "user_id",
+          auth.userId
+        )
+        .maybeSingle();
+
+    if (existingTaskError) {
+      console.error(
+        "SYRAVEN TASK LOOKUP ERROR:",
+        existingTaskError
+      );
+
       return failure(
-        "Invalid JSON body.",
-        400,
-        "INVALID_JSON"
+        "Failed to verify task.",
+        500,
+        "TASK_LOOKUP_FAILED"
       );
     }
 
-    const updates: Record<
-      string,
-      unknown
-    > = {
+    if (!existingTask) {
+      return failure(
+        "Task not found.",
+        404,
+        "TASK_NOT_FOUND"
+      );
+    }
+
+    /* ----------------------------------------------
+       UPDATE DATA
+    ---------------------------------------------- */
+
+    const updateData: TaskUpdate = {
       updated_at:
         new Date().toISOString(),
     };
+
+    let hasUpdates = false;
+
+    /* ----------------------------------------------
+       TITLE
+    ---------------------------------------------- */
 
     if (
       payload.title !==
@@ -862,7 +1401,8 @@ export async function PATCH(
     ) {
       const title =
         normalizeString(
-          payload.title
+          payload.title,
+          MAX_TITLE_LENGTH
         );
 
       if (!title) {
@@ -874,52 +1414,75 @@ export async function PATCH(
       }
 
       if (
-        title.length >
-        MAX_TITLE_LENGTH
+        typeof payload.title === "string" &&
+        payload.title.trim().length >
+          MAX_TITLE_LENGTH
       ) {
         return failure(
           `Task title cannot exceed ${MAX_TITLE_LENGTH} characters.`,
           400,
-          "INVALID_TITLE"
+          "TITLE_TOO_LONG"
         );
       }
 
-      updates.title =
+      updateData.title =
         title;
+
+      hasUpdates = true;
     }
+
+    /* ----------------------------------------------
+       DESCRIPTION
+    ---------------------------------------------- */
 
     if (
       payload.description !==
       undefined
     ) {
-      const description =
-        normalizeNullableString(
-          payload.description
-        );
-
       if (
-        description &&
-        description.length >
-          MAX_DESCRIPTION_LENGTH
+        payload.description !== null &&
+        typeof payload.description !==
+          "string"
       ) {
         return failure(
-          `Task description cannot exceed ${MAX_DESCRIPTION_LENGTH} characters.`,
+          "Description must be a string or null.",
           400,
           "INVALID_DESCRIPTION"
         );
       }
 
-      updates.description =
-        description;
+      if (
+        typeof payload.description === "string" &&
+        payload.description.trim().length >
+          MAX_DESCRIPTION_LENGTH
+      ) {
+        return failure(
+          `Task description cannot exceed ${MAX_DESCRIPTION_LENGTH} characters.`,
+          400,
+          "DESCRIPTION_TOO_LONG"
+        );
+      }
+
+      updateData.description =
+        normalizeNullableString(
+          payload.description,
+          MAX_DESCRIPTION_LENGTH
+        );
+
+      hasUpdates = true;
     }
+
+    /* ----------------------------------------------
+       STATUS
+    ---------------------------------------------- */
 
     if (
       payload.status !==
       undefined
     ) {
       if (
-        !TASK_STATUSES.includes(
-          payload.status as TaskStatus
+        !isTaskStatus(
+          payload.status
         )
       ) {
         return failure(
@@ -929,17 +1492,23 @@ export async function PATCH(
         );
       }
 
-      updates.status =
+      updateData.status =
         payload.status;
+
+      hasUpdates = true;
     }
+
+    /* ----------------------------------------------
+       PRIORITY
+    ---------------------------------------------- */
 
     if (
       payload.priority !==
       undefined
     ) {
       if (
-        !TASK_PRIORITIES.includes(
-          payload.priority as TaskPriority
+        !isTaskPriority(
+          payload.priority
         )
       ) {
         return failure(
@@ -949,74 +1518,200 @@ export async function PATCH(
         );
       }
 
-      updates.priority =
+      updateData.priority =
         payload.priority;
+
+      hasUpdates = true;
     }
+
+    /* ----------------------------------------------
+       TAGS
+    ---------------------------------------------- */
 
     if (
       payload.tags !==
       undefined
     ) {
-      updates.tags =
+      if (
+        !Array.isArray(
+          payload.tags
+        )
+      ) {
+        return failure(
+          "Tags must be an array.",
+          400,
+          "INVALID_TAGS"
+        );
+      }
+
+      updateData.tags =
         normalizeTags(
           payload.tags
         );
+
+      hasUpdates = true;
     }
+
+    /* ----------------------------------------------
+       METADATA
+    ---------------------------------------------- */
 
     if (
       payload.metadata !==
       undefined
     ) {
-      updates.metadata =
-        normalizeMetadata(
+      if (
+        !payload.metadata ||
+        typeof payload.metadata !==
+          "object" ||
+        Array.isArray(
           payload.metadata
+        )
+      ) {
+        return failure(
+          "Metadata must be a JSON object.",
+          400,
+          "INVALID_METADATA"
         );
+      }
+
+      try {
+        const serialized =
+          JSON.stringify(
+            payload.metadata
+          );
+
+        if (
+          serialized.length >
+          MAX_METADATA_SIZE
+        ) {
+          return failure(
+            `Metadata cannot exceed ${MAX_METADATA_SIZE} bytes.`,
+            400,
+            "METADATA_TOO_LARGE"
+          );
+        }
+
+        updateData.metadata =
+          toJson(
+            JSON.parse(
+              serialized
+            )
+          );
+      } catch {
+        return failure(
+          "Metadata must be JSON serializable.",
+          400,
+          "INVALID_METADATA"
+        );
+      }
+
+      hasUpdates = true;
     }
 
-    if (
+    /* ----------------------------------------------
+       DUE DATE
+    ---------------------------------------------- */
+
+    const hasDueDateUpdate =
       payload.dueDate !==
         undefined ||
       payload.due_date !==
-        undefined
-    ) {
-      updates.due_date =
-        normalizeDate(
-          payload.dueDate ??
-          payload.due_date
-        );
-    }
-
-    const projectValue =
-      payload.projectId ??
-      payload.project_id;
+        undefined;
 
     if (
-      projectValue !==
-      undefined
+      hasDueDateUpdate
     ) {
-      const projectId =
-        normalizeNullableString(
-          projectValue
-        );
+      const rawDueDate =
+        payload.dueDate ??
+        payload.due_date;
 
-      if (projectId) {
-        const {
-          data: project,
-        } =
-          await supabaseAdmin
-            .from("projects")
-            .select("id")
-            .eq(
-              "id",
-              projectId
-            )
-            .eq(
-              "user_id",
-              auth.userId
-            )
-            .maybeSingle();
+      if (
+        rawDueDate !== null &&
+        rawDueDate !== undefined &&
+        rawDueDate !== ""
+      ) {
+        const dueDate =
+          normalizeDate(
+            rawDueDate
+          );
 
-        if (!project) {
+        if (!dueDate) {
+          return failure(
+            "Invalid due date.",
+            400,
+            "INVALID_DUE_DATE"
+          );
+        }
+
+        updateData.due_date =
+          dueDate;
+      } else {
+        updateData.due_date =
+          null;
+      }
+
+      hasUpdates = true;
+    }
+
+    /* ----------------------------------------------
+       PROJECT
+    ---------------------------------------------- */
+
+    const hasProjectUpdate =
+      payload.projectId !==
+        undefined ||
+      payload.project_id !==
+        undefined;
+
+    if (
+      hasProjectUpdate
+    ) {
+      const rawProjectId =
+        payload.projectId ??
+        payload.project_id;
+
+      let projectId: string | null =
+        null;
+
+      if (
+        rawProjectId !== null &&
+        rawProjectId !== undefined &&
+        rawProjectId !== ""
+      ) {
+        projectId =
+          normalizeString(
+            rawProjectId,
+            200
+          );
+
+        if (!projectId) {
+          return failure(
+            "Invalid project id.",
+            400,
+            "INVALID_PROJECT_ID"
+          );
+        }
+
+        const validation =
+          await validateProjectAccess(
+            projectId,
+            auth.userId
+          );
+
+        if (
+          validation.databaseError
+        ) {
+          return failure(
+            "Failed to verify project access.",
+            500,
+            "PROJECT_VALIDATION_FAILED"
+          );
+        }
+
+        if (
+          !validation.valid
+        ) {
           return failure(
             "Project not found or access denied.",
             403,
@@ -1025,41 +1720,70 @@ export async function PATCH(
         }
       }
 
-      updates.project_id =
+      updateData.project_id =
         projectId;
+
+      hasUpdates = true;
     }
 
-    const agentValue =
-      payload.agentId ??
-      payload.agent_id;
+    /* ----------------------------------------------
+       AGENT
+    ---------------------------------------------- */
+
+    const hasAgentUpdate =
+      payload.agentId !==
+        undefined ||
+      payload.agent_id !==
+        undefined;
 
     if (
-      agentValue !==
-      undefined
+      hasAgentUpdate
     ) {
-      const agentId =
-        normalizeNullableString(
-          agentValue
-        );
+      const rawAgentId =
+        payload.agentId ??
+        payload.agent_id;
 
-      if (agentId) {
-        const {
-          data: agent,
-        } =
-          await supabaseAdmin
-            .from("agents")
-            .select("id")
-            .eq(
-              "id",
-              agentId
-            )
-            .eq(
-              "user_id",
-              auth.userId
-            )
-            .maybeSingle();
+      let agentId: string | null =
+        null;
 
-        if (!agent) {
+      if (
+        rawAgentId !== null &&
+        rawAgentId !== undefined &&
+        rawAgentId !== ""
+      ) {
+        agentId =
+          normalizeString(
+            rawAgentId,
+            200
+          );
+
+        if (!agentId) {
+          return failure(
+            "Invalid agent id.",
+            400,
+            "INVALID_AGENT_ID"
+          );
+        }
+
+        const validation =
+          await validateAgentAccess(
+            agentId,
+            auth.userId
+          );
+
+        if (
+          validation.databaseError
+        ) {
+          return failure(
+            "Failed to verify agent access.",
+            500,
+            "AGENT_VALIDATION_FAILED"
+          );
+        }
+
+        if (
+          !validation.valid
+        ) {
           return failure(
             "Agent not found or access denied.",
             403,
@@ -1068,21 +1792,27 @@ export async function PATCH(
         }
       }
 
-      updates.agent_id =
+      updateData.agent_id =
         agentId;
+
+      hasUpdates = true;
     }
 
-    if (
-      Object.keys(
-        updates
-      ).length === 1
-    ) {
+    /* ----------------------------------------------
+       NO UPDATES
+    ---------------------------------------------- */
+
+    if (!hasUpdates) {
       return failure(
         "No valid fields supplied for update.",
         400,
         "NO_UPDATES"
       );
     }
+
+    /* ----------------------------------------------
+       UPDATE
+    ---------------------------------------------- */
 
     const {
       data,
@@ -1091,7 +1821,7 @@ export async function PATCH(
       await supabaseAdmin
         .from("tasks")
         .update(
-          updates
+          updateData
         )
         .eq(
           "id",
@@ -1101,7 +1831,9 @@ export async function PATCH(
           "user_id",
           auth.userId
         )
-        .select("*")
+        .select(
+          TASK_SELECT
+        )
         .maybeSingle();
 
     if (error) {
@@ -1150,6 +1882,10 @@ export async function DELETE(
   request: NextRequest
 ) {
   try {
+    /* ----------------------------------------------
+       AUTH
+    ---------------------------------------------- */
+
     const auth =
       await getAuthenticatedUser(
         request
@@ -1164,9 +1900,16 @@ export async function DELETE(
       );
     }
 
+    /* ----------------------------------------------
+       TASK ID
+    ---------------------------------------------- */
+
     const taskId =
-      request.nextUrl.searchParams.get(
-        "id"
+      normalizeString(
+        request.nextUrl.searchParams.get(
+          "id"
+        ),
+        200
       );
 
     if (!taskId) {
@@ -1176,6 +1919,10 @@ export async function DELETE(
         "TASK_ID_REQUIRED"
       );
     }
+
+    /* ----------------------------------------------
+       DELETE
+    ---------------------------------------------- */
 
     const {
       data,
@@ -1217,8 +1964,11 @@ export async function DELETE(
     }
 
     return success({
-      id: data.id,
-      deleted: true,
+      id:
+        data.id,
+
+      deleted:
+        true,
     });
   } catch (error) {
     console.error(

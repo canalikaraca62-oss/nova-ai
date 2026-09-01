@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { toJson } from "@/lib/supabase/json";
+import type { Database } from "@/types/database";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -11,6 +13,16 @@ export const dynamic = "force-dynamic";
 
 const DEFAULT_LIMIT = 30;
 const MAX_LIMIT = 100;
+
+/* ==================================================
+   DATABASE TYPES
+================================================== */
+
+type NotificationInsert =
+  Database["public"]["Tables"]["notifications"]["Insert"];
+
+type NotificationUpdate =
+  Database["public"]["Tables"]["notifications"]["Update"];
 
 /* ==================================================
    TYPES
@@ -443,43 +455,46 @@ export async function POST(
     const now =
       new Date().toISOString();
 
+    const insertData: NotificationInsert = {
+      user_id: userId,
+
+      type,
+
+      priority,
+
+      title,
+
+      message,
+
+      action_url:
+        actionUrl ?? null,
+
+      action_label:
+        actionLabel ?? null,
+
+      metadata: toJson(
+        normalizeMetadata(
+          body.metadata
+        )
+      ),
+
+      read,
+
+      read_at:
+        read
+          ? now
+          : null,
+
+      updated_at:
+        now,
+    };
+
     const {
       data,
       error,
     } = await supabaseAdmin
       .from("notifications")
-      .insert({
-        user_id: userId,
-
-        type,
-
-        priority,
-
-        title,
-
-        message,
-
-        action_url:
-          actionUrl ?? null,
-
-        action_label:
-          actionLabel ?? null,
-
-        metadata:
-          normalizeMetadata(
-            body.metadata
-          ),
-
-        read,
-
-        read_at:
-          read
-            ? now
-            : null,
-
-        updated_at:
-          now,
-      })
+      .insert(insertData)
       .select(
         `
           id,
@@ -558,10 +573,7 @@ export async function PATCH(
       );
     }
 
-    const updateData: Record<
-      string,
-      unknown
-    > = {
+    const updateData: NotificationUpdate = {
       updated_at:
         new Date().toISOString(),
     };
@@ -645,10 +657,11 @@ export async function PATCH(
     if (
       body.metadata !== undefined
     ) {
-      updateData.metadata =
+      updateData.metadata = toJson(
         normalizeMetadata(
           body.metadata
-        );
+        )
+      );
     }
 
     if (

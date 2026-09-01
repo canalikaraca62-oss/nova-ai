@@ -9,6 +9,41 @@ export const revalidate = 0;
 /* ==================================================
    SYRAVEN USAGE API
    app/api/usage/route.ts
+
+   Production-grade usage endpoint.
+
+   IMPORTANT DATABASE COMPATIBILITY
+
+   Current typed usage table schema:
+
+   usage:
+   - id
+   - user_id
+   - type
+   - metadata
+   - created_at
+
+   Usage metrics are extracted safely from metadata.
+
+   Security:
+   - User identity comes ONLY from verified
+     Supabase Bearer authentication.
+   - Never trusts x-user-id.
+   - Never trusts query-string userId.
+
+   Features:
+   - Monthly periods
+   - Historical period support
+   - Future period protection
+   - Safe metadata parsing
+   - Multiple usage record aggregation
+   - Unlimited enterprise limits
+   - Strict authentication
+   - No-cache responses
+================================================== */
+
+/* ==================================================
+   TYPES
 ================================================== */
 
 type SyravenPlan =
@@ -32,6 +67,78 @@ type UsageSnapshot = {
   agents: number;
   projects: number;
   storageBytes: number;
+};
+
+type UsageMetricStatus =
+  | "unlimited"
+  | "healthy"
+  | "warning"
+  | "critical"
+  | "exceeded";
+
+type UsageMetric = {
+  used: number;
+  limit: number | null;
+  remaining: number | null;
+  percentage: number | null;
+  status: UsageMetricStatus;
+};
+
+type AuthSuccess = {
+  success: true;
+  userId: string;
+};
+
+type AuthFailure = {
+  success: false;
+  error: string;
+  code:
+    | "MISSING_AUTHORIZATION"
+    | "INVALID_AUTHORIZATION"
+    | "UNAUTHORIZED";
+};
+
+type AuthResult =
+  | AuthSuccess
+  | AuthFailure;
+
+type ProfileRecord = {
+  id: string;
+  plan: string | null;
+  subscription_status: string | null;
+};
+
+type UsageMetadata = {
+  period?: unknown;
+
+  requests?: unknown;
+  messages?: unknown;
+  agents?: unknown;
+  projects?: unknown;
+
+  storage_bytes?: unknown;
+  storageBytes?: unknown;
+
+  request_count?: unknown;
+  message_count?: unknown;
+  agent_count?: unknown;
+  project_count?: unknown;
+
+  bytes?: unknown;
+};
+
+type UsageRecord = {
+  id: string;
+  user_id: string;
+  type: string | null;
+  metadata: UsageMetadata | null;
+  created_at: string | null;
+};
+
+type PeriodRange = {
+  key: string;
+  startsAt: string;
+  endsAt: string;
 };
 
 /* ==================================================
@@ -75,7 +182,7 @@ const PLAN_LIMITS: Record<
     agents: 2_500,
     projects: 5_000,
     storageBytes:
-      1024 * 1024 * 1024 * 1024,
+      1 * 1024 * 1024 * 1024 * 1024,
   },
 
   enterprise: {
@@ -88,7 +195,168 @@ const PLAN_LIMITS: Record<
 };
 
 /* ==================================================
-   HELPERS
+   RESPONSE HELPERS
+================================================== */
+
+function jsonResponse(
+  data: Record<string, unknown>,
+  status = 200
+) {
+  return NextResponse.json(
+    {
+      success:
+        status >= 200 &&
+        status < 300,
+
+      ...data,
+    },
+    {
+      status,
+      headers: {
+        "Cache-Control":
+          "private, no-store, no-cache, must-revalidate, max-age=0",
+
+        Pragma:
+          "no-cache",
+
+        Expires:
+          "0",
+
+        Vary:
+          "Authorization",
+      },
+    }
+  );
+}
+
+function errorResponse(
+  code: string,
+  message: string,
+  status: number
+) {
+  return jsonResponse(
+    {
+      error: {
+        code,
+        message,
+      },
+    },
+    status
+  );
+}
+
+/* ==================================================
+   AUTHENTICATION
+================================================== */
+
+async function getAuthenticatedUser(
+  request: NextRequest
+): Promise<AuthResult> {
+  const authorization =
+    request.headers.get(
+      "authorization"
+    );
+
+  if (!authorization) {
+    return {
+      success: false,
+      error:
+        "Authorization header is required.",
+      code:
+        "MISSING_AUTHORIZATION",
+    };
+  }
+
+  const normalized =
+    authorization.trim();
+
+  if (!normalized) {
+    return {
+      success: false,
+      error:
+        "Authorization header is invalid.",
+      code:
+        "INVALID_AUTHORIZATION",
+    };
+  }
+
+  if (
+    !/^Bearer\s+/i.test(
+      normalized
+    )
+  ) {
+    return {
+      success: false,
+      error:
+        "Authorization header must use Bearer authentication.",
+      code:
+        "INVALID_AUTHORIZATION",
+    };
+  }
+
+  const token =
+    normalized.replace(
+      /^Bearer\s+/i,
+      ""
+    ).trim();
+
+  if (!token) {
+    return {
+      success: false,
+      error:
+        "Access token is missing.",
+      code:
+        "INVALID_AUTHORIZATION",
+    };
+  }
+
+  try {
+    const {
+      data,
+      error,
+    } =
+      await supabaseAdmin.auth.getUser(
+        token
+      );
+
+    if (
+      error ||
+      !data.user
+    ) {
+      return {
+        success: false,
+        error:
+          "Authentication failed.",
+        code:
+          "UNAUTHORIZED",
+      };
+    }
+
+    return {
+      success: true,
+      userId:
+        data.user.id,
+    };
+  } catch (
+    error
+  ) {
+    console.error(
+      "SYRAVEN USAGE AUTH ERROR:",
+      error
+    );
+
+    return {
+      success: false,
+      error:
+        "Authentication failed.",
+      code:
+        "UNAUTHORIZED",
+    };
+  }
+}
+
+/* ==================================================
+   PLAN HELPERS
 ================================================== */
 
 function isPlan(
@@ -106,81 +374,115 @@ function isPlan(
 function normalizePlan(
   value: unknown
 ): SyravenPlan {
-  if (typeof value !== "string") {
+  if (
+    typeof value !== "string"
+  ) {
     return "free";
   }
 
-  const plan =
-    value.trim().toLowerCase();
-
-  if (isPlan(plan)) {
-    return plan;
-  }
+  const normalized =
+    value
+      .trim()
+      .toLowerCase();
 
   if (
-    plan === "plus"
+    isPlan(
+      normalized
+    )
   ) {
-    return "premium";
+    return normalized;
   }
 
-  if (
-    plan === "vip"
+  switch (
+    normalized
   ) {
-    return "pro";
-  }
+    case "plus":
+      return "premium";
 
-  return "free";
+    case "vip":
+      return "pro";
+
+    case "team":
+      return "business";
+
+    case "corporate":
+      return "business";
+
+    case "unlimited":
+      return "enterprise";
+
+    default:
+      return "free";
+  }
 }
 
-function getUserId(
-  request: NextRequest
-): string | null {
-  const headerUserId =
-    request.headers.get(
-      "x-user-id"
-    );
+/* ==================================================
+   PERIOD HELPERS
+================================================== */
 
-  if (
-    headerUserId &&
-    headerUserId.trim()
-  ) {
-    return headerUserId.trim();
-  }
+const PERIOD_REGEX =
+  /^\d{4}-(0[1-9]|1[0-2])$/;
 
-  const searchParams =
-    request.nextUrl.searchParams;
-
-  const queryUserId =
-    searchParams.get(
-      "userId"
-    );
-
-  if (
-    queryUserId &&
-    queryUserId.trim()
-  ) {
-    return queryUserId.trim();
-  }
-
-  return null;
-}
-
-function getMonthKey(
+function getCurrentMonthKey(
   date = new Date()
-) {
-  return date
-    .toISOString()
-    .slice(0, 7);
+): string {
+  const year =
+    date.getUTCFullYear();
+
+  const month =
+    String(
+      date.getUTCMonth() + 1
+    ).padStart(
+      2,
+      "0"
+    );
+
+  return `${year}-${month}`;
 }
 
-function getPeriodRange() {
-  const now = new Date();
+function isValidPeriod(
+  value: string
+): boolean {
+  return PERIOD_REGEX.test(
+    value
+  );
+}
+
+function isFuturePeriod(
+  period: string
+): boolean {
+  return (
+    period >
+    getCurrentMonthKey()
+  );
+}
+
+function getPeriodRange(
+  period: string
+): PeriodRange {
+  const [
+    yearString,
+    monthString,
+  ] =
+    period.split(
+      "-"
+    );
+
+  const year =
+    Number(
+      yearString
+    );
+
+  const monthIndex =
+    Number(
+      monthString
+    ) - 1;
 
   const start =
     new Date(
       Date.UTC(
-        now.getUTCFullYear(),
-        now.getUTCMonth(),
+        year,
+        monthIndex,
         1,
         0,
         0,
@@ -192,8 +494,8 @@ function getPeriodRange() {
   const end =
     new Date(
       Date.UTC(
-        now.getUTCFullYear(),
-        now.getUTCMonth() + 1,
+        year,
+        monthIndex + 1,
         1,
         0,
         0,
@@ -203,17 +505,201 @@ function getPeriodRange() {
     );
 
   return {
-    start:
+    key:
+      period,
+
+    startsAt:
       start.toISOString(),
-    end:
+
+    endsAt:
       end.toISOString(),
   };
 }
 
+function resolveRequestedPeriod(
+  request: NextRequest
+):
+  | {
+      success: true;
+      period: string;
+    }
+  | {
+      success: false;
+      error: string;
+      code: string;
+    } {
+  const requested =
+    request.nextUrl.searchParams.get(
+      "period"
+    );
+
+  if (
+    requested === null ||
+    requested.trim() === ""
+  ) {
+    return {
+      success: true,
+      period:
+        getCurrentMonthKey(),
+    };
+  }
+
+  const period =
+    requested.trim();
+
+  if (
+    !isValidPeriod(
+      period
+    )
+  ) {
+    return {
+      success: false,
+      error:
+        "Period must use YYYY-MM format.",
+      code:
+        "INVALID_PERIOD",
+    };
+  }
+
+  if (
+    isFuturePeriod(
+      period
+    )
+  ) {
+    return {
+      success: false,
+      error:
+        "Future usage periods cannot be requested.",
+      code:
+        "FUTURE_PERIOD_NOT_ALLOWED",
+    };
+  }
+
+  return {
+    success: true,
+    period,
+  };
+}
+
+/* ==================================================
+   NUMBER NORMALIZATION
+================================================== */
+
+function normalizeUsageNumber(
+  value: unknown
+): number {
+  if (
+    typeof value ===
+    "number"
+  ) {
+    if (
+      !Number.isFinite(
+        value
+      )
+    ) {
+      return 0;
+    }
+
+    return Math.max(
+      0,
+      value
+    );
+  }
+
+  if (
+    typeof value ===
+    "string"
+  ) {
+    const normalized =
+      value.trim();
+
+    if (!normalized) {
+      return 0;
+    }
+
+    const parsed =
+      Number(
+        normalized
+      );
+
+    if (
+      !Number.isFinite(
+        parsed
+      )
+    ) {
+      return 0;
+    }
+
+    return Math.max(
+      0,
+      parsed
+    );
+  }
+
+  return 0;
+}
+
+function normalizeIntegerUsage(
+  value: unknown
+): number {
+  return Math.floor(
+    normalizeUsageNumber(
+      value
+    )
+  );
+}
+
+/* ==================================================
+   METADATA HELPERS
+================================================== */
+
+function normalizeMetadata(
+  value: unknown
+): UsageMetadata {
+  if (
+    !value ||
+    typeof value !== "object" ||
+    Array.isArray(value)
+  ) {
+    return {};
+  }
+
+  return value as UsageMetadata;
+}
+
+function getMetadataNumber(
+  metadata: UsageMetadata,
+  keys: string[]
+): number {
+  for (
+    const key of keys
+  ) {
+    const value =
+      metadata[
+        key as keyof UsageMetadata
+      ];
+
+    if (
+      value !== undefined &&
+      value !== null
+    ) {
+      return normalizeUsageNumber(
+        value
+      );
+    }
+  }
+
+  return 0;
+}
+
+/* ==================================================
+   USAGE CALCULATIONS
+================================================== */
+
 function calculatePercentage(
   used: number,
   limit: number | null
-) {
+): number | null {
   if (
     limit === null
   ) {
@@ -223,13 +709,18 @@ function calculatePercentage(
   if (
     limit <= 0
   ) {
-    return 100;
+    return used > 0
+      ? 100
+      : 0;
   }
+
+  const percentage =
+    (used / limit) * 100;
 
   return Math.min(
     100,
     Math.round(
-      (used / limit) * 10000
+      percentage * 100
     ) / 100
   );
 }
@@ -237,7 +728,7 @@ function calculatePercentage(
 function getRemaining(
   used: number,
   limit: number | null
-) {
+): number | null {
   if (
     limit === null
   ) {
@@ -252,12 +743,7 @@ function getRemaining(
 
 function getUsageStatus(
   percentage: number | null
-):
-  | "unlimited"
-  | "healthy"
-  | "warning"
-  | "critical"
-  | "exceeded" {
+): UsageMetricStatus {
   if (
     percentage === null
   ) {
@@ -288,7 +774,7 @@ function getUsageStatus(
 function buildMetric(
   used: number,
   limit: number | null
-) {
+): UsageMetric {
   const percentage =
     calculatePercentage(
       used,
@@ -298,42 +784,20 @@ function buildMetric(
   return {
     used,
     limit,
+
     remaining:
       getRemaining(
         used,
         limit
       ),
+
     percentage,
+
     status:
       getUsageStatus(
         percentage
       ),
   };
-}
-
-function json(
-  data: Record<string, unknown>,
-  status = 200
-) {
-  return NextResponse.json(
-    {
-      success:
-        status >= 200 &&
-        status < 300,
-      ...data,
-    },
-    {
-      status,
-      headers: {
-        "Cache-Control":
-          "no-store, no-cache, must-revalidate",
-        Pragma:
-          "no-cache",
-        Expires:
-          "0",
-      },
-    }
-  );
 }
 
 /* ==================================================
@@ -342,15 +806,20 @@ function json(
 
 async function getProfile(
   userId: string
-) {
-  const { data, error } =
+): Promise<
+  ProfileRecord | null
+> {
+  const {
+    data,
+    error,
+  } =
     await supabaseAdmin
       .from("profiles")
       .select(
         `
-        id,
-        plan,
-        subscription_status
+          id,
+          plan,
+          subscription_status
         `
       )
       .eq(
@@ -363,85 +832,176 @@ async function getProfile(
     throw error;
   }
 
-  return data;
+  return (
+    data as ProfileRecord | null
+  );
 }
 
 /* ==================================================
-   USAGE RECORD
+   USAGE RECORDS
+
+   IMPORTANT:
+
+   Current database type indicates that usage has:
+
+   - id
+   - user_id
+   - type
+   - metadata
+   - created_at
+
+   Therefore we filter by created_at instead of a
+   non-existent "period" column.
 ================================================== */
 
-async function getUsageRecord(
+async function getUsageRecords(
   userId: string,
-  monthKey: string
-) {
-  const { data, error } =
+  period: PeriodRange
+): Promise<
+  UsageRecord[]
+> {
+  const {
+    data,
+    error,
+  } =
     await supabaseAdmin
       .from("usage")
-      .select("*")
+      .select(
+        `
+          id,
+          user_id,
+          type,
+          metadata,
+          created_at
+        `
+      )
       .eq(
         "user_id",
         userId
       )
-      .eq(
-        "period",
-        monthKey
+      .gte(
+        "created_at",
+        period.startsAt
       )
-      .maybeSingle();
+      .lt(
+        "created_at",
+        period.endsAt
+      )
+      .order(
+        "created_at",
+        {
+          ascending: true,
+        }
+      );
 
   if (error) {
-    /*
-      Tablo henüz oluşturulmamışsa
-      Supabase hatasını sessizce fallback'e
-      çevirmiyoruz. Böylece gerçek hata
-      development sırasında görünür.
-    */
     throw error;
   }
 
-  return data;
+  return (
+    (data ?? []) as UsageRecord[]
+  );
 }
 
 /* ==================================================
-   CREATE EMPTY SNAPSHOT
+   CREATE USAGE SNAPSHOT
+
+   Supports multiple metadata formats:
+
+   {
+     requests: 10,
+     messages: 5,
+     agents: 1,
+     projects: 1,
+     storage_bytes: 1024
+   }
+
+   Also supports aliases:
+
+   request_count
+   message_count
+   agent_count
+   project_count
+   storageBytes
+   bytes
 ================================================== */
 
 function createUsageSnapshot(
-  usage: Record<
-    string,
-    unknown
-  > | null
+  records: UsageRecord[]
 ): UsageSnapshot {
-  return {
-    requests:
-      typeof usage?.requests ===
-      "number"
-        ? usage.requests
-        : 0,
+  const snapshot:
+    UsageSnapshot = {
+      requests: 0,
+      messages: 0,
+      agents: 0,
+      projects: 0,
+      storageBytes: 0,
+    };
 
-    messages:
-      typeof usage?.messages ===
-      "number"
-        ? usage.messages
-        : 0,
+  for (
+    const record of records
+  ) {
+    const metadata =
+      normalizeMetadata(
+        record.metadata
+      );
 
-    agents:
-      typeof usage?.agents ===
-      "number"
-        ? usage.agents
-        : 0,
+    snapshot.requests +=
+      normalizeIntegerUsage(
+        getMetadataNumber(
+          metadata,
+          [
+            "requests",
+            "request_count",
+          ]
+        )
+      );
 
-    projects:
-      typeof usage?.projects ===
-      "number"
-        ? usage.projects
-        : 0,
+    snapshot.messages +=
+      normalizeIntegerUsage(
+        getMetadataNumber(
+          metadata,
+          [
+            "messages",
+            "message_count",
+          ]
+        )
+      );
 
-    storageBytes:
-      typeof usage?.storage_bytes ===
-      "number"
-        ? usage.storage_bytes
-        : 0,
-  };
+    snapshot.agents +=
+      normalizeIntegerUsage(
+        getMetadataNumber(
+          metadata,
+          [
+            "agents",
+            "agent_count",
+          ]
+        )
+      );
+
+    snapshot.projects +=
+      normalizeIntegerUsage(
+        getMetadataNumber(
+          metadata,
+          [
+            "projects",
+            "project_count",
+          ]
+        )
+      );
+
+    snapshot.storageBytes +=
+      getMetadataNumber(
+        metadata,
+        [
+          "storage_bytes",
+          "storageBytes",
+          "bytes",
+        ]
+      );
+  }
+
+  return snapshot;
 }
 
 /* ==================================================
@@ -452,54 +1012,88 @@ export async function GET(
   request: NextRequest
 ) {
   try {
-    const userId =
-      getUserId(request);
+    /* ----------------------------------------------
+       AUTHENTICATION
+    ---------------------------------------------- */
 
-    if (!userId) {
-      return json(
-        {
-          error: {
-            code:
-              "UNAUTHORIZED",
-            message:
-              "A valid user ID is required.",
-          },
-        },
+    const auth =
+      await getAuthenticatedUser(
+        request
+      );
+
+    if (
+      !auth.success
+    ) {
+      return errorResponse(
+        auth.code,
+        auth.error,
         401
       );
     }
 
-    const monthKey =
-      request.nextUrl.searchParams.get(
-        "period"
-      ) ??
-      getMonthKey();
+    const userId =
+      auth.userId;
+
+    /* ----------------------------------------------
+       PERIOD
+    ---------------------------------------------- */
+
+    const periodResult =
+      resolveRequestedPeriod(
+        request
+      );
+
+    if (
+      !periodResult.success
+    ) {
+      return errorResponse(
+        periodResult.code,
+        periodResult.error,
+        400
+      );
+    }
+
+    const period =
+      getPeriodRange(
+        periodResult.period
+      );
+
+    /* ----------------------------------------------
+       DATABASE
+    ---------------------------------------------- */
 
     const [
       profile,
-      usageRecord,
+      usageRecords,
     ] =
       await Promise.all([
-        getProfile(userId),
-        getUsageRecord(
+        getProfile(
+          userId
+        ),
+
+        getUsageRecords(
           userId,
-          monthKey
+          period
         ),
       ]);
 
-    if (!profile) {
-      return json(
-        {
-          error: {
-            code:
-              "PROFILE_NOT_FOUND",
-            message:
-              "User profile was not found.",
-          },
-        },
+    /* ----------------------------------------------
+       PROFILE VALIDATION
+    ---------------------------------------------- */
+
+    if (
+      !profile
+    ) {
+      return errorResponse(
+        "PROFILE_NOT_FOUND",
+        "User profile was not found.",
         404
       );
     }
+
+    /* ----------------------------------------------
+       PLAN
+    ---------------------------------------------- */
 
     const plan =
       normalizePlan(
@@ -507,18 +1101,22 @@ export async function GET(
       );
 
     const limits =
-      PLAN_LIMITS[plan];
+      PLAN_LIMITS[
+        plan
+      ];
+
+    /* ----------------------------------------------
+       USAGE SNAPSHOT
+    ---------------------------------------------- */
 
     const usage =
       createUsageSnapshot(
-        usageRecord as Record<
-          string,
-          unknown
-        > | null
+        usageRecords
       );
 
-    const period =
-      getPeriodRange();
+    /* ----------------------------------------------
+       METRICS
+    ---------------------------------------------- */
 
     const metrics = {
       requests:
@@ -552,23 +1150,23 @@ export async function GET(
         ),
     };
 
-    return json({
+    /* ----------------------------------------------
+       RESPONSE
+    ---------------------------------------------- */
+
+    return jsonResponse({
       userId,
+
       plan,
+
       subscriptionStatus:
         profile.subscription_status ??
         null,
 
-      period: {
-        key:
-          monthKey,
-        startsAt:
-          period.start,
-        endsAt:
-          period.end,
-      },
+      period,
 
-      usage: metrics,
+      usage:
+        metrics,
 
       summary: {
         totalRequests:
@@ -585,6 +1183,9 @@ export async function GET(
 
         totalStorageBytes:
           usage.storageBytes,
+
+        recordsProcessed:
+          usageRecords.length,
       },
 
       limits,
@@ -592,21 +1193,17 @@ export async function GET(
       generatedAt:
         new Date().toISOString(),
     });
-  } catch (error) {
+  } catch (
+    error
+  ) {
     console.error(
       "SYRAVEN USAGE GET ERROR:",
       error
     );
 
-    return json(
-      {
-        error: {
-          code:
-            "USAGE_FETCH_FAILED",
-          message:
-            "Failed to retrieve usage information.",
-        },
-      },
+    return errorResponse(
+      "USAGE_FETCH_FAILED",
+      "Failed to retrieve usage information.",
       500
     );
   }
@@ -616,58 +1213,33 @@ export async function GET(
    METHOD NOT ALLOWED
 ================================================== */
 
-export async function POST() {
-  return json(
+function methodNotAllowed() {
+  return jsonResponse(
     {
       error: {
         code:
           "METHOD_NOT_ALLOWED",
+
         message:
-          "POST is not supported on this endpoint.",
+          "This endpoint only supports GET requests.",
       },
     },
     405
   );
+}
+
+export async function POST() {
+  return methodNotAllowed();
 }
 
 export async function PUT() {
-  return json(
-    {
-      error: {
-        code:
-          "METHOD_NOT_ALLOWED",
-        message:
-          "PUT is not supported on this endpoint.",
-      },
-    },
-    405
-  );
+  return methodNotAllowed();
 }
 
 export async function PATCH() {
-  return json(
-    {
-      error: {
-        code:
-          "METHOD_NOT_ALLOWED",
-        message:
-          "PATCH is not supported on this endpoint.",
-      },
-    },
-    405
-  );
+  return methodNotAllowed();
 }
 
 export async function DELETE() {
-  return json(
-    {
-      error: {
-        code:
-          "METHOD_NOT_ALLOWED",
-        message:
-          "DELETE is not supported on this endpoint.",
-      },
-    },
-    405
-  );
+  return methodNotAllowed();
 }
