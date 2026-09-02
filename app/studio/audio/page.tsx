@@ -1,8 +1,9 @@
 "use client";
 
-import {
+import type {
   ChangeEvent,
-  DragEvent,
+  DragEvent} from "react";
+import {
   useEffect,
   useMemo,
   useRef,

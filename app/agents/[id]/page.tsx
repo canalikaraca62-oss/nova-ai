@@ -181,10 +181,10 @@ function getFallbackAgent(id: string): Agent {
   return {
     id,
     name:
-      id
+      `${id
         .split("-")
         .map((item) => item.charAt(0).toUpperCase() + item.slice(1))
-        .join(" ") + " Agent",
+        .join(" ")  } Agent`,
     description:
       "SYRAVEN ekosisteminde karmaşık görevleri planlamak, yürütmek ve sonuçlandırmak için yapılandırılmış yapay zeka agentı.",
     category: "SYRAVEN Agent",

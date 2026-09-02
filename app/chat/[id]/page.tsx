@@ -1,8 +1,9 @@
 "use client";
 
-import {
+import type {
   FormEvent,
-  KeyboardEvent,
+  KeyboardEvent} from "react";
+import {
   useEffect,
   useMemo,
   useRef,

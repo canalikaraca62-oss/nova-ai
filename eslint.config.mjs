@@ -7,6 +7,14 @@ export default defineConfig([
   ...nextTypescript,
 
   {
+    files: ["**/*.{ts,tsx}"],
+
+    languageOptions: {
+      parserOptions: {
+        projectService: true,
+      },
+    },
+
     rules: {
       "@typescript-eslint/no-explicit-any": "error",
 
@@ -32,10 +40,7 @@ export default defineConfig([
       "no-console": [
         "warn",
         {
-          allow: [
-            "warn",
-            "error",
-          ],
+          allow: ["warn", "error"],
         },
       ],
 
@@ -70,13 +75,9 @@ export default defineConfig([
     "dist/**",
     "coverage/**",
     "node_modules/**",
-
     "*.min.js",
-
     "next-env.d.ts",
-
     "package-lock.json",
-
     "public/**",
   ]),
 ]);

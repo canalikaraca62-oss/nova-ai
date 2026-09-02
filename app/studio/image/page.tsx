@@ -1,6 +1,7 @@
 "use client";
 
-import { ChangeEvent, DragEvent, useMemo, useRef, useState } from "react";
+import type { ChangeEvent, DragEvent} from "react";
+import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 
 type GenerationStatus = "idle" | "generating" | "completed" | "error";

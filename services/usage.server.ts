@@ -793,7 +793,7 @@ export class UsageService {
         query.offset
       );
 
-    let events =
+    const events =
       this.filterEvents(
         query
       );

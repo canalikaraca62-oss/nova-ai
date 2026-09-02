@@ -1,6 +1,7 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import type { FormEvent} from "react";
+import { useMemo, useState } from "react";
 
 type TeamRole = "Owner" | "Admin" | "Member" | "Viewer";
 

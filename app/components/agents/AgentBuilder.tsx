@@ -1,7 +1,8 @@
 "use client";
 
+import type {
+  FormEvent} from "react";
 import {
-  FormEvent,
   useCallback,
   useEffect,
   useMemo,
