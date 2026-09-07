@@ -69,10 +69,22 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          # Matches the `engines.node` floor in package.json (>=20.9.0).
-          # Pinned to a major rather than `latest` so a Node release cannot
-          # turn a green branch red without a commit.
-          node-version: '20'
+          # 24, NOT the `engines.node` floor of >=20.9.0.
+          #
+          # That floor is the APPLICATION runtime. The TEST RUNNER has a
+          # stricter requirement: `npm test` is
+          # `node --test "tests/**/*.test.ts"`, which needs Node's
+          # TypeScript type stripping — added in 22.6 and on by default
+          # from 23.6. On Node 20 the runner cannot parse a .ts file at
+          # all, so it reports failure having executed zero tests.
+          #
+          # The first CI run failed exactly this way: lint and typecheck
+          # passed, Test failed, Build was skipped. Pinning to 24 matches
+          # the version the suite is developed and verified against.
+          #
+          # Pinned to a major rather than `latest` so a Node release
+          # cannot turn a green branch red without a commit.
+          node-version: '24'
           cache: 'npm'
 
       # `npm ci` rather than `npm install`: it installs exactly the
