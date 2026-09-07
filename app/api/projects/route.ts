@@ -73,22 +73,38 @@ type ProjectUpdate =
    PROJECT TYPES
 ================================================== */
 
+/*
+  These unions mirror the CHECK constraints on public.projects.
+
+  They previously did not, and the mismatch broke creation outright:
+  normalizeStatus defaulted to "planning", which
+  projects_status_check rejects, so every POST that omitted `status`
+  -- which is every request the UI would send -- failed with a 500.
+
+    status      draft | active | archived | completed
+    visibility  private | organization | public
+
+  Verified against production:
+    projects_status_check     CHECK (status = ANY (ARRAY['draft','active','archived','completed']))
+    projects_visibility_check CHECK (visibility = ANY (ARRAY['private','organization','public']))
+
+  Widening either list requires a migration, not an edit here.
+*/
 type ProjectStatus =
-  | "planning"
+  | "draft"
   | "active"
-  | "paused"
-  | "completed"
   | "archived"
-  | "cancelled";
+  | "completed";
 
 type ProjectVisibility =
   | "private"
-  | "workspace"
+  | "organization"
   | "public";
 
+/* public.projects.priority has no CHECK; its column default is 'medium'. */
 type ProjectPriority =
   | "low"
-  | "normal"
+  | "medium"
   | "high"
   | "critical";
 
@@ -211,16 +227,18 @@ function normalizeStatus(
   value: unknown
 ): ProjectStatus {
   switch (value) {
-    case "planning":
+    case "draft":
     case "active":
-    case "paused":
-    case "completed":
     case "archived":
-    case "cancelled":
+    case "completed":
       return value;
 
     default:
-      return "planning";
+      /*
+        Matches the column default. The previous default, "planning",
+        is not in projects_status_check and made every create fail.
+      */
+      return "active";
   }
 }
 
@@ -229,7 +247,7 @@ function normalizeVisibility(
 ): ProjectVisibility {
   switch (value) {
     case "private":
-    case "workspace":
+    case "organization":
     case "public":
       return value;
 
@@ -243,13 +261,13 @@ function normalizePriority(
 ): ProjectPriority {
   switch (value) {
     case "low":
-    case "normal":
+    case "medium":
     case "high":
     case "critical":
       return value;
 
     default:
-      return "normal";
+      return "medium";
   }
 }
 

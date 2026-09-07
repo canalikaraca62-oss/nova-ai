@@ -1,4 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
+import { readFileSync, existsSync } from "node:fs";
 
 /**
  * SYRAVEN — Playwright configuration
@@ -48,15 +49,64 @@ import { defineConfig, devices } from "@playwright/test";
  */
 const PRODUCTION_PROJECT_REF = "wpmbumtpcuahyqmdeqgf";
 
-const configuredRef = process.env.NEXT_PUBLIC_SUPABASE_URL?.match(
+/**
+ * Reads the Supabase URL the way the app under test will see it.
+ *
+ * Playwright runs this config in a bare Node process, which does NOT
+ * load .env.local -- but `next start`, which this config spawns, does.
+ * Reading only process.env therefore left `configuredRef` undefined and
+ * the guard below silently inert, while the server it launched pointed
+ * straight at production. The guard has to read the same files Next
+ * does, in the same precedence order, or it is decoration.
+ */
+function resolveSupabaseUrl(): { url: string | undefined; source: string } {
+  if (process.env.NEXT_PUBLIC_SUPABASE_URL) {
+    return { url: process.env.NEXT_PUBLIC_SUPABASE_URL, source: "process.env" };
+  }
+
+  /* Next's precedence for `next start` (NODE_ENV=production). */
+  for (const file of [".env.production.local", ".env.local", ".env.production", ".env"]) {
+    if (!existsSync(file)) continue;
+
+    const match = readFileSync(file, "utf8").match(
+      /^\s*NEXT_PUBLIC_SUPABASE_URL\s*=\s*["']?([^"'\r\n]+)/m,
+    );
+
+    if (match?.[1]) return { url: match[1].trim(), source: file };
+  }
+
+  return { url: undefined, source: "nowhere" };
+}
+
+const { url: supabaseUrl, source: supabaseUrlSource } = resolveSupabaseUrl();
+
+const configuredRef = supabaseUrl?.match(
   /https:\/\/([a-z0-9]+)\.supabase\./i,
 )?.[1];
+
+/*
+ * FAIL-CLOSED, in both directions.
+ *
+ * Refusing the production ref is the obvious half. The other half is
+ * refusing when the ref cannot be determined AT ALL: an unreadable or
+ * missing URL previously produced `undefined`, which compared unequal
+ * to the production ref and was waved through. "I could not tell what
+ * I am pointed at" must abort, not proceed.
+ */
+if (!configuredRef) {
+  throw new Error(
+    "E2E cannot determine which Supabase project it would run against " +
+      `(looked in: ${supabaseUrlSource}). Set NEXT_PUBLIC_SUPABASE_URL to ` +
+      "the dedicated test project -- see tests/e2e/README.md.",
+  );
+}
 
 if (configuredRef === PRODUCTION_PROJECT_REF) {
   throw new Error(
     `E2E refuses to run against the production Supabase project ` +
-      `(${PRODUCTION_PROJECT_REF}). Point NEXT_PUBLIC_SUPABASE_URL at the ` +
-      `dedicated test project — see tests/e2e/README.md.`,
+      `(${PRODUCTION_PROJECT_REF}), configured via ${supabaseUrlSource}. ` +
+      `Point NEXT_PUBLIC_SUPABASE_URL at the dedicated test project -- ` +
+      `see tests/e2e/README.md.`,
   );
 }
 
