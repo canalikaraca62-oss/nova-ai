@@ -1,13 +1,13 @@
 "use client";
 
-import type {
-  FormEvent,
-  KeyboardEvent} from "react";
 import {
   useEffect,
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
+  type FormEvent,
+  type KeyboardEvent,
 } from "react";
 import { useRouter } from "next/navigation";
 
@@ -114,6 +114,45 @@ function getResponseContent(
   return "";
 }
 
+/**
+ * A store that never changes.
+ *
+ * `useSyncExternalStore` needs a subscribe function; the mounted flag
+ * flips exactly once, when React moves from the server snapshot to the
+ * client one, so there is nothing to subscribe to. Defined at module
+ * scope so the reference is stable across renders — an inline arrow
+ * would re-subscribe on every render.
+ */
+function subscribeToNothing(): () => void {
+  return () => {};
+}
+
+/**
+ * Formats a message timestamp for display.
+ *
+ * HYDRATION SAFETY — see the `hasMounted` guard at the call site.
+ *
+ * This function is NOT deterministic across server and client, for two
+ * independent reasons:
+ *
+ *   1. `STARTER_MESSAGES` builds its `createdAt` with `new Date()` at
+ *      MODULE SCOPE. That expression is evaluated once when the module
+ *      is loaded on the server and again when it loads in the browser,
+ *      so the two runs hold different instants.
+ *
+ *   2. `Intl.DateTimeFormat` resolves the time zone from the host. The
+ *      server renders in its own zone (Europe/Bucharest here) and the
+ *      browser in the visitor's, so even an identical instant formats
+ *      differently.
+ *
+ * Either alone makes the server HTML and the first client render
+ * disagree on this text node, which is React error #418.
+ *
+ * The value is left as-is rather than pinned to a fixed time zone: a
+ * chat timestamp is only useful in the reader's local time, so
+ * normalising it would trade a real feature for a rendering
+ * convenience. The call site defers it to after mount instead.
+ */
 function formatTime(value: string): string {
   try {
     return new Intl.DateTimeFormat("tr-TR", {
@@ -141,6 +180,36 @@ export default function ChatPage() {
 
   const [messages, setMessages] =
     useState<ChatMessage[]>(STARTER_MESSAGES);
+
+  /*
+   * HYDRATION GUARD.
+   *
+   * False during server render and during the first client render, then
+   * true. Message timestamps are rendered only once this flips.
+   *
+   * `formatTime` cannot agree between server and client (see its note:
+   * a module-scope `new Date()` plus host-dependent time zone), so
+   * emitting it in the initial HTML guarantees a text mismatch — React
+   * error #418, which is what the /chat E2E test caught.
+   *
+   * Deferring is the correct fix rather than a workaround: the value is
+   * genuinely client-only information. It must be shown in the reader's
+   * local time, and the server does not know that zone. Nothing is
+   * suppressed — the markup simply does not claim a time until the
+   * environment that can compute it correctly is running.
+   *
+   * `useSyncExternalStore` rather than a `useState` + `useEffect` pair:
+   * it is React's designated primitive for a value that differs between
+   * server and client, returning the server snapshot during SSR and
+   * hydration and the client one thereafter. It avoids the cascading
+   * re-render that setting state inside an effect causes, which the
+   * `react-hooks/set-state-in-effect` rule correctly flags.
+   */
+  const hasMounted = useSyncExternalStore(
+    subscribeToNothing,
+    () => true,
+    () => false,
+  );
 
   const [input, setInput] = useState("");
   const [isSending, setIsSending] =
@@ -546,10 +615,21 @@ export default function ChatPage() {
                             : "justify-start"
                         }`}
                       >
+                        {/*
+                          Rendered only after mount. Before then the
+                          span is empty on BOTH server and client, so
+                          the initial HTML matches by construction.
+
+                          `suppressHydrationWarning` is deliberately NOT
+                          used: that hides the symptom while leaving the
+                          markup genuinely divergent. Here the two
+                          renders agree, and the text appears on the
+                          next paint.
+                        */}
                         <span>
-                          {formatTime(
-                            message.createdAt
-                          )}
+                          {hasMounted
+                            ? formatTime(message.createdAt)
+                            : ""}
                         </span>
 
                         {!isUser && (
