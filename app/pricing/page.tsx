@@ -225,11 +225,16 @@ function PlanCard({
 
   const features = getPlanFeatures(plan);
 
+  /*
+   * Phase 12: the trial CTA pointed at /signup, which does not exist —
+   * the registration route is /register. Every free-plan CTA on this
+   * page returned a 404.
+   */
   const ctaHref =
     isEnterprise
       ? "/contact"
       : isTrial
-        ? "/signup"
+        ? "/register"
         : `/login?plan=${plan.id}&interval=${interval}`;
 
   return (
@@ -460,7 +465,7 @@ export default function PricingPage() {
               </div>
 
               <Link
-                href="/signup"
+                href="/register"
                 className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-white px-5 text-sm font-bold text-zinc-950 transition hover:bg-zinc-100"
               >
                 Start Free Trial
@@ -722,7 +727,7 @@ export default function PricingPage() {
 
           <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
             <Link
-              href="/signup"
+              href="/register"
               className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-white px-6 text-sm font-bold text-zinc-950 transition hover:bg-zinc-100"
             >
               Start 14-Day Full Trial

@@ -250,7 +250,7 @@ export default function LoginPage() {
                   </label>
 
                   <Link
-                    href="/forgot-password"
+                    href="/reset-password"
                     className="text-xs font-medium text-primary hover:underline"
                   >
                     Forgot password?
@@ -334,7 +334,7 @@ export default function LoginPage() {
             <p className="mt-8 text-center text-sm text-muted-foreground">
               New to SYRAVEN?{" "}
               <Link
-                href="/signup"
+                href="/register"
                 className="font-medium text-primary hover:underline"
               >
                 Create an account

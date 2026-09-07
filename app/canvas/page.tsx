@@ -323,15 +323,24 @@ export default function CanvasPage() {
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
-              <Link
-                href="/canvas/new"
+              {/*
+                Phase 12: this was a Link to /canvas/new, a route that
+                does not exist — the primary CTA on this page returned a
+                404. Canvases are created by the panel below (see
+                `createCanvas`), which the adjacent "Quick Create" button
+                already opens, so this now opens the same panel rather
+                than navigating nowhere.
+              */}
+              <button
+                type="button"
+                onClick={() => setShowCreatePanel(true)}
                 className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white px-4 py-3 text-sm font-semibold text-black transition hover:scale-[1.02] hover:bg-white/90 active:scale-[0.98]"
               >
                 <span className="text-lg leading-none">
                   +
                 </span>
                 New Canvas
-              </Link>
+              </button>
 
               <button
                 type="button"
@@ -564,12 +573,16 @@ export default function CanvasPage() {
               </p>
             </div>
 
-            <Link
-              href="/search?scope=canvas"
-              className="text-sm font-medium text-cyan-300/80 transition hover:text-cyan-200"
-            >
-              Advanced search →
-            </Link>
+            {/*
+              Phase 12: this linked to /search?scope=canvas, a page that
+              does not exist — there is no global search route, only
+              /projects/search. The link is removed rather than
+              repointed: this page already has its own search and filter
+              controls in the toolbar below, so an "Advanced search"
+              affordance that goes nowhere is a false promise (rule 24),
+              and /projects/search would take the user out of Canvas to
+              a scope that does not cover it.
+            */}
           </div>
 
           {filteredCanvases.length === 0 ? (
