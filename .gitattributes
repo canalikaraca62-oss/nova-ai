@@ -1,0 +1,28 @@
+# SYRAVEN — repository attributes
+#
+# Added in Phase 2 (see IMPLEMENTATION_PLAN.md) to keep generated and SQL
+# files in a consistent, tool-readable encoding.
+
+# Treat all text files consistently, normalising line endings in the repo.
+* text=auto
+
+# Generated Supabase types.
+#
+# This file was previously committed as UTF-16LE, which is what
+# `supabase gen types typescript ... > types/database.ts` produces when a
+# PowerShell redirect is used on Windows. UTF-16 compiles fine but breaks
+# grep, diffs and most tooling (ARCHITECTURE_AUDIT.md §9.2).
+#
+# Marking it as text keeps it diffable. When regenerating, write UTF-8
+# explicitly, e.g.:
+#
+#   npx supabase gen types typescript --linked `
+#     | Out-File -Encoding utf8 types/database.ts
+#
+# or from bash:
+#
+#   npx supabase gen types typescript --linked > types/database.ts
+types/database.ts text eol=lf
+
+# SQL migrations: keep LF so hashes are stable across platforms.
+*.sql text eol=lf
