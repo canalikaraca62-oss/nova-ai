@@ -124,29 +124,13 @@ const WorkspaceContext = createContext<WorkspaceContextValue | null>(
   null
 );
 
-function createSlug(value: string): string {
-  return value
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9\s-]/g, "")
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "");
-}
+/*
+ * createSlug and createWorkspaceId were removed with the local-only
+ * creation path: the server now derives the slug and the database
+ * generates the id, so a client-side version of either could only
+ * disagree with what is stored.
+ */
 
-function createWorkspaceId(): string {
-  if (
-    typeof globalThis !== "undefined" &&
-    globalThis.crypto &&
-    typeof globalThis.crypto.randomUUID === "function"
-  ) {
-    return globalThis.crypto.randomUUID();
-  }
-
-  return `workspace-${Date.now()}-${Math.random()
-    .toString(36)
-    .slice(2, 10)}`;
-}
 
 const DEFAULT_SETTINGS: WorkspaceSettings = {
   visibility: "private",
@@ -236,24 +220,63 @@ export function WorkspaceProvider({
 
     try {
       /*
-       * Backend/API integration point.
+       * Loads the caller's workspaces. What the comment here previously
+       * described as an integration point, now wired.
        *
-       * Example:
-       *
-       * const response = await fetch("/api/workspaces", {
-       *   method: "GET",
-       *   cache: "no-store",
-       * });
-       *
-       * if (!response.ok) {
-       *   throw new Error("Failed to fetch workspaces.");
-       * }
-       *
-       * const data = (await response.json()) as Workspace[];
-       * setWorkspaces(data);
+       * Visibility is decided by RLS on public.workspaces
+       * (is_organization_member), so this sends no filter and no
+       * identity: the session cookie is the whole authorization.
        */
+      const response = await fetch("/api/workspaces", {
+        method: "GET",
+        cache: "no-store",
+        headers: { Accept: "application/json" },
+      });
 
-      await Promise.resolve();
+      if (response.status === 401) {
+        /*
+         * Not signed in. An empty list is the correct view; treating it
+         * as an error would show a failure banner on a page the user is
+         * simply not authenticated for.
+         */
+        setWorkspaces([]);
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch workspaces.");
+      }
+
+      const payload = (await response.json()) as {
+        success?: boolean;
+        workspaces?: {
+          id: string;
+          name: string;
+          slug: string;
+          description: string | null;
+          created_at: string;
+          updated_at: string;
+        }[];
+      };
+
+      const rows = payload.workspaces ?? [];
+
+      /* Mapped onto the existing shape so no consumer changes. */
+      setWorkspaces(
+        rows.map((row) => ({
+          id: row.id,
+          name: row.name,
+          description: row.description ?? "",
+          slug: row.slug,
+          icon: null,
+          color: null,
+          status: "active" as WorkspaceStatus,
+          members: [],
+          settings: { ...DEFAULT_SETTINGS },
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+        })),
+      );
     } catch (err) {
       const message =
         err instanceof Error
@@ -274,8 +297,6 @@ export function WorkspaceProvider({
       setError(null);
 
       try {
-        const now = new Date().toISOString();
-
         const normalizedName = input.name.trim();
 
         if (!normalizedName) {
@@ -284,26 +305,67 @@ export function WorkspaceProvider({
           );
         }
 
-        const baseSlug =
-          createSlug(normalizedName) || "workspace";
+        /*
+         * Slug derivation moved server-side. A client-chosen slug would
+         * let one tenant squat another's URLs, and the local
+         * collision loop could only see workspaces already loaded in
+         * this browser.
+         */
 
-        let slug = baseSlug;
-        let counter = 1;
+        /*
+         * PERSISTED, not local state.
+         *
+         * This previously built a Workspace object and pushed it into
+         * React state, so a created workspace vanished on reload — the
+         * dashboard's "Create your first workspace" led nowhere twice
+         * over: no control, and no persistence behind it.
+         *
+         * The server owns identity and tenancy. `organization_id` and
+         * `created_by` are resolved from the verified session inside the
+         * route and are deliberately NOT sent from here; sending them
+         * would make ownership caller-controlled.
+         */
+        const response = await fetch("/api/workspaces", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: normalizedName,
+            description: input.description?.trim() || undefined,
+          }),
+        });
 
-        const existingSlugs = new Set(
-          workspaces.map((workspace) => workspace.slug)
-        );
+        const payload = (await response.json().catch(() => null)) as {
+          success?: boolean;
+          workspace?: {
+            id: string;
+            name: string;
+            slug: string;
+            description: string | null;
+            created_at: string;
+            updated_at: string;
+          };
+          error?: string;
+        } | null;
 
-        while (existingSlugs.has(slug)) {
-          counter += 1;
-          slug = `${baseSlug}-${counter}`;
+        if (!response.ok || !payload?.success || !payload.workspace) {
+          throw new Error(
+            payload?.error ?? "Failed to create workspace.",
+          );
         }
 
+        const created = payload.workspace;
+
+        /*
+         * Mapped onto the existing Workspace shape so no consumer
+         * changes. `icon`, `color` and `settings` are not columns on
+         * public.workspaces; they keep their previous client-side
+         * defaults rather than being invented server-side.
+         */
         const workspace: Workspace = {
-          id: createWorkspaceId(),
-          name: normalizedName,
-          description: input.description?.trim() || "",
-          slug,
+          id: created.id,
+          name: created.name,
+          description: created.description ?? "",
+          slug: created.slug,
           icon: input.icon ?? null,
           color: input.color ?? null,
           status: "active",
@@ -314,8 +376,8 @@ export function WorkspaceProvider({
               input.visibility ??
               DEFAULT_SETTINGS.visibility,
           },
-          createdAt: now,
-          updatedAt: now,
+          createdAt: created.created_at,
+          updatedAt: created.updated_at,
         };
 
         setWorkspaces((current) => [
@@ -338,10 +400,10 @@ export function WorkspaceProvider({
         setIsCreating(false);
       }
     },
-    [workspaces]
+    []
   );
 
-  const updateWorkspace = useCallback(
+const updateWorkspace = useCallback(
     async (
       workspaceId: string,
       input: UpdateWorkspaceInput
@@ -606,6 +668,38 @@ export function WorkspaceProvider({
     },
     [workspaces]
   );
+
+  /*
+   * Load persisted workspaces once on mount.
+   *
+   * Without this the provider starts from `initialWorkspaces` and never
+   * consults the server, so a workspace created in a previous session
+   * would not appear — the dashboard would show "No workspaces yet" to a
+   * user who already has one.
+   *
+   * The fetch is started from a microtask rather than from the effect
+   * body. refreshWorkspaces sets loading state on its first line, so
+   * calling it synchronously here would update state during the effect
+   * and cascade an extra render (react-hooks/set-state-in-effect).
+   * Deferring moves that first setState into a callback, which is the
+   * shape an effect is meant to have.
+   *
+   * cancelled guards unmount: a provider torn down while the request
+   * is in flight must not set state afterwards.
+   */
+  useEffect(() => {
+    let cancelled = false;
+
+    void Promise.resolve().then(() => {
+      if (cancelled) return undefined;
+
+      return refreshWorkspaces();
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [refreshWorkspaces]);
 
   useEffect(() => {
     if (

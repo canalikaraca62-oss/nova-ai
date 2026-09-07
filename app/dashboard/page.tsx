@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useWorkspace } from "../context/WorkspaceContext";
 
 function formatDate(value: string): string {
@@ -39,7 +39,45 @@ export default function DashboardPage() {
     isLoading,
     error,
     setActiveWorkspaceId,
+    createWorkspace,
+    isCreating,
   } = useWorkspace();
+
+  /*
+   * Inline create form for the empty state.
+   *
+   * The empty state previously told the user to "Create your first
+   * workspace" and offered no control, so a new account had no way
+   * forward from the dashboard. Kept inline rather than adding a modal
+   * or a new page: the dashboard is not being redesigned.
+   */
+  const [showCreate, setShowCreate] = useState(false);
+  const [newWorkspaceName, setNewWorkspaceName] = useState("");
+  const [createError, setCreateError] = useState<string | null>(null);
+
+  async function handleCreateWorkspace() {
+    const name = newWorkspaceName.trim();
+
+    if (!name) {
+      setCreateError("Enter a workspace name.");
+      return;
+    }
+
+    setCreateError(null);
+
+    try {
+      await createWorkspace({ name });
+
+      setNewWorkspaceName("");
+      setShowCreate(false);
+    } catch (creationError) {
+      setCreateError(
+        creationError instanceof Error
+          ? creationError.message
+          : "Failed to create workspace.",
+      );
+    }
+  }
 
   const dashboardData = useMemo(() => {
     const activeWorkspaces = workspaces.filter(
@@ -279,6 +317,78 @@ export default function DashboardPage() {
                     Create your first workspace to start organizing
                     projects, tasks, and collaboration.
                   </p>
+
+                  {/*
+                    The action the copy above asks for. Without it this
+                    empty state was a dead end for every new account.
+                  */}
+                  {showCreate ? (
+                    <div className="mx-auto mt-6 flex max-w-sm flex-col gap-3">
+                      <label
+                        className="sr-only"
+                        htmlFor="new-workspace-name"
+                      >
+                        Workspace name
+                      </label>
+
+                      <input
+                        id="new-workspace-name"
+                        value={newWorkspaceName}
+                        onChange={(event) =>
+                          setNewWorkspaceName(event.target.value)
+                        }
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            void handleCreateWorkspace();
+                          }
+                        }}
+                        placeholder="e.g. Product Team"
+                        autoFocus
+                        maxLength={120}
+                        className="h-11 w-full rounded-xl border border-border bg-background px-4 text-sm text-foreground outline-none transition focus:border-foreground/30"
+                      />
+
+                      {createError ? (
+                        <p
+                          role="alert"
+                          className="text-left text-sm text-red-500"
+                        >
+                          {createError}
+                        </p>
+                      ) : null}
+
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => void handleCreateWorkspace()}
+                          disabled={isCreating}
+                          className="h-11 flex-1 rounded-xl bg-foreground px-5 text-sm font-semibold text-background transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {isCreating ? "Creating..." : "Create workspace"}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowCreate(false);
+                            setCreateError(null);
+                          }}
+                          disabled={isCreating}
+                          className="h-11 rounded-xl border border-border px-5 text-sm font-medium text-foreground transition hover:bg-muted/50 disabled:opacity-60"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setShowCreate(true)}
+                      className="mt-6 inline-flex h-11 items-center justify-center rounded-xl bg-foreground px-6 text-sm font-semibold text-background transition hover:opacity-90"
+                    >
+                      Create workspace
+                    </button>
+                  )}
                 </div>
               )}
             </div>
