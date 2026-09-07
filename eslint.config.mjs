@@ -68,6 +68,26 @@ export default defineConfig([
     },
   },
 
+  {
+    /*
+     * Playwright E2E specs.
+     *
+     * Playwright's fixture API takes a callback named `use`, which the
+     * React hooks rule misreads as a hook called outside a component:
+     *
+     *     problems: async ({ page }, use) => { await use(problems); }
+     *
+     * There is no React in tests/e2e — these run in Node and drive a
+     * browser over the wire — so the rule cannot apply. It is disabled
+     * for this directory only, rather than suppressed inline at the call
+     * site or weakened project-wide.
+     */
+    files: ["tests/e2e/**/*.ts"],
+    rules: {
+      "react-hooks/rules-of-hooks": "off",
+    },
+  },
+
   globalIgnores([
     ".next/**",
     "out/**",

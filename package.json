@@ -10,9 +10,13 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "type-check": "tsc --noEmit",
-    "check": "npm run lint && npm run type-check",
+    "test": "node --test \"tests/**/*.test.ts\"",
+    "test:security": "node --test \"tests/security/*.test.ts\"",
+    "check": "npm run lint && npm run type-check && npm run test",
     "clean": "rimraf .next",
-    "prepare": "husky"
+    "prepare": "husky",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui"
   },
   "dependencies": {
     "@supabase/ssr": "^0.7.0",
@@ -30,6 +34,7 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",
+    "@playwright/test": "^1.63.0",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "^22.10.5",
     "@types/react": "^19.0.3",
