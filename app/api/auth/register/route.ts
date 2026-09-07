@@ -4,6 +4,20 @@ import { createServerClient } from "@supabase/ssr";
 import { z } from "zod";
 import crypto from "node:crypto";
 
+/*
+  SERVICE ROLE CLIENT — justification (ARCHITECTURE_AUDIT.md §8.6)
+
+  Registration necessarily runs with elevated privileges: it creates the
+  auth user and provisions the owning organization before any session
+  exists, so there is no caller identity for RLS to evaluate.
+
+  This route is intentionally public (see middleware.ts) and is the one
+  place where an unauthenticated caller reaches the admin client.
+
+  Note the compensating delete further down: if organization provisioning
+  fails after the auth user is created, the user is removed so a partial
+  signup is not left behind.
+*/
 import {
   getSupabaseAdminClient,
 } from "@/lib/supabaseAdmin";

@@ -1,5 +1,7 @@
 import type { NextRequest} from "next/server";
 import { NextResponse } from "next/server";
+
+import { withAuth } from "@/lib/api/withAuth";
 import { createClient } from "@supabase/supabase-js";
 
 export const runtime = "nodejs";
@@ -62,9 +64,6 @@ type QueryOptions = {
 
 const SUPABASE_URL =
   process.env.NEXT_PUBLIC_SUPABASE_URL;
-
-const SUPABASE_ANON_KEY =
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 const SUPABASE_SERVICE_ROLE_KEY =
   process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -133,64 +132,11 @@ function getSupabaseAdmin() {
   );
 }
 
-function getSupabaseAuthClient() {
-  if (
-    !SUPABASE_URL ||
-    !SUPABASE_ANON_KEY
-  ) {
-    throw new Error(
-      "Supabase authentication configuration is missing."
-    );
-  }
-
-  return createClient(
-    SUPABASE_URL,
-    SUPABASE_ANON_KEY,
-    {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-      },
-    }
-  );
-}
 
 /* -------------------------------------------------------------------------- */
 /*                              AUTHENTICATION                                */
 /* -------------------------------------------------------------------------- */
 
-async function getAuthenticatedUser(
-  request: NextRequest
-) {
-  const authorization =
-    request.headers.get("authorization");
-
-  if (!authorization) {
-    return null;
-  }
-
-  const token = authorization
-    .replace(/^Bearer\s+/i, "")
-    .trim();
-
-  if (!token) {
-    return null;
-  }
-
-  const supabase =
-    getSupabaseAuthClient();
-
-  const {
-    data,
-    error,
-  } = await supabase.auth.getUser(token);
-
-  if (error || !data.user) {
-    return null;
-  }
-
-  return data.user;
-}
 
 /* -------------------------------------------------------------------------- */
 /*                                VALIDATION                                  */
@@ -405,28 +351,26 @@ export async function OPTIONS() {
 /*                                    GET                                     */
 /* -------------------------------------------------------------------------- */
 
-export async function GET(
-  request: NextRequest
-) {
+export const GET = withAuth(async (
+  request,
+  session
+) => {
   try {
     const options =
       getQueryOptions(request);
 
-    const user =
-      await getAuthenticatedUser(
-        request
-      );
+    /*
+      Authentication is performed by withAuth (lib/api/withAuth.ts).
 
-    if (
-      options.mineOnly &&
-      !user
-    ) {
-      return errorResponse(
-        "Authentication is required to view your agents.",
-        401,
-        "UNAUTHORIZED"
-      );
-    }
+      This route previously allowed an anonymous caller to browse public
+      agents. That path was already unreachable: middleware.ts rejects
+      unauthenticated /api traffic and /api/agents is not allowlisted.
+      The store semantics are unchanged — an authenticated caller sees
+      public agents plus their own.
+    */
+    const user = {
+      id: session.userId,
+    };
 
     const supabase =
       getSupabaseAdmin();
@@ -640,28 +584,24 @@ export async function GET(
       "INTERNAL_ERROR"
     );
   }
-}
+})
 
 /* -------------------------------------------------------------------------- */
 /*                                    POST                                    */
 /* -------------------------------------------------------------------------- */
 
-export async function POST(
-  request: NextRequest
-) {
+export const POST = withAuth(async (
+  request,
+  session
+) => {
   try {
-    const user =
-      await getAuthenticatedUser(
-        request
-      );
-
-    if (!user) {
-      return errorResponse(
-        "Authentication is required to create an agent.",
-        401,
-        "UNAUTHORIZED"
-      );
-    }
+    /*
+      Authentication is performed by withAuth (lib/api/withAuth.ts)
+      before this handler runs.
+    */
+    const user = {
+      id: session.userId,
+    };
 
     let body: CreateAgentBody;
 
@@ -911,4 +851,4 @@ export async function POST(
       "INTERNAL_ERROR"
     );
   }
-}
+})

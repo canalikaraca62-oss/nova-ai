@@ -1,9 +1,15 @@
-import type { NextRequest} from "next/server";
 import { NextResponse } from "next/server";
 
 import type {
   ActionRequest,
 } from "@/services/action-types";
+
+import { withAuth } from "@/lib/api/withAuth";
+import { enforceUsage } from "@/lib/api/usageGuard";
+import {
+  getTool,
+  requiresHumanApproval,
+} from "@/lib/orchestration/registry";
 
 /* ==================================================
  * TYPES
@@ -83,9 +89,34 @@ function isActionRequest(
  * ACTION HELPERS
  * ================================================== */
 
+/*
+  SECURITY (Phase 9): risk classification is SERVER-SIDE.
+
+  This previously read `action.requiresConfirmation` — a CLIENT-SUPPLIED
+  field. A caller who simply omitted it had every action classified as
+  safe, so the confirmation boundary was effectively self-declared.
+
+  Risk now comes from the server-side tool registry
+  (lib/orchestration/registry.ts). An action type absent from the
+  registry is UNKNOWN and is refused rather than assumed safe — failing
+  closed is the whole point of the boundary.
+
+  The client's own `requiresConfirmation` is still honoured as a signal
+  that MORE caution is wanted, but it can only raise the requirement,
+  never lower it.
+*/
 function requiresConfirmation(
   action: ActionRequest
 ): boolean {
+  const tool = getTool(action.type);
+
+  if (tool !== null) {
+    if (requiresHumanApproval(tool.risk)) {
+      return true;
+    }
+  }
+
+  /* A client may ask for confirmation it would not otherwise get. */
   const confirmableAction =
     action as ConfirmableAction;
 
@@ -94,22 +125,62 @@ function requiresConfirmation(
   );
 }
 
+/**
+ * An action is safe only when the SERVER can classify it as low risk.
+ *
+ * Unknown action types are NOT safe. Treating an unrecognised type as
+ * harmless is how an unregistered privileged operation would slip
+ * through.
+ */
 function isSafeAction(
   action: ActionRequest
 ): boolean {
-  return (
-    action.type === "none" ||
-    !requiresConfirmation(action)
-  );
+  if (action.type === "none") {
+    return true;
+  }
+
+  const tool = getTool(action.type);
+
+  if (tool === null) {
+    /* Unknown to the registry -> not classifiable -> not safe. */
+    return false;
+  }
+
+  if (requiresHumanApproval(tool.risk)) {
+    return false;
+  }
+
+  return !requiresConfirmation(action);
 }
 
 /* ==================================================
  * POST
  * ================================================== */
 
-export async function POST(
-  request: NextRequest
-) {
+export const POST = withAuth(async (
+  request,
+  session
+) => {
+  /*
+    USAGE ENFORCEMENT (Phase 5, extended in Phase 9)
+
+    This route was outside Phase 5's scope because it calls no paid
+    provider. It is now an ACTION EXECUTION boundary, so it is metered
+    and rate limited like any other: an unmetered action endpoint is a
+    way to drive server-side work without it counting against anything.
+
+    The existing Phase 5 system is reused — no second quota system.
+  */
+  const guard = await enforceUsage(
+    session,
+    "ai:agent",
+    "agentRun"
+  );
+
+  if (guard.denied) {
+    return guard.response;
+  }
+
   try {
     let body: unknown;
 
@@ -233,7 +304,7 @@ export async function POST(
       500
     );
   }
-}
+});
 
 /* ==================================================
  * METHOD NOT ALLOWED

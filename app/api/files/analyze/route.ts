@@ -1,5 +1,8 @@
-import type { NextRequest} from "next/server";
 import { NextResponse } from "next/server";
+
+import { withAuth } from "@/lib/api/withAuth";
+import { enforceUsage } from "@/lib/api/usageGuard";
+import { resolveAiPolicy } from "@/lib/api/aiPolicy";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -719,9 +722,27 @@ function normalizeResult(
    POST
 ================================================== */
 
-export async function POST(
-  request: NextRequest
-) {
+export const POST = withAuth(async (
+  request,
+  session
+) => {
+  /*
+    USAGE ENFORCEMENT (Phase 5)
+
+    Entitlement, burst rate limit and plan quota are all checked before
+    any paid provider call. Identity and plan come from the verified
+    session and public.profiles — never from the request
+    (ARCHITECTURE_AUDIT.md §17, §8.2).
+  */
+  const guard = await enforceUsage(
+    session,
+    "ai:vision",
+    "visionRequest"
+  );
+
+  if (guard.denied) {
+    return guard.response;
+  }
   try {
     let body:
       AnalyzeRequestBody;
@@ -784,10 +805,31 @@ export async function POST(
         ? body.mode
         : "full";
 
+    /*
+      AI POLICY (Phase 7)
+
+      Model and token ceiling resolved server-side. This route
+      previously accepted body.model unvalidated and capped tokens at a
+      flat 16,000 for every plan.
+    */
+    const policy =
+      resolveAiPolicy({
+        capability: "vision",
+        entitlement: guard.entitlement,
+        requestedModel: body.model,
+        requestedTokens: body.maxTokens,
+        requestedTemperature: body.temperature,
+        defaultTemperature: 0.3,
+      });
+
+    if (!policy.ok) {
+      return policy.response;
+    }
+
     const provider =
       getProvider(
         body.provider,
-        body.model
+        policy.policy.model.id
       );
 
     if (!provider) {
@@ -798,30 +840,10 @@ export async function POST(
     }
 
     const temperature =
-      typeof body.temperature ===
-        "number"
-        ? Math.min(
-            1.5,
-            Math.max(
-              0,
-              body.temperature
-            )
-          )
-        : 0.3;
+      policy.policy.temperature;
 
     const maxTokens =
-      typeof body.maxTokens ===
-        "number"
-        ? Math.min(
-            16_000,
-            Math.max(
-              500,
-              Math.floor(
-                body.maxTokens
-              )
-            )
-          )
-        : 5_000;
+      policy.policy.maxTokens;
 
     const systemPrompt =
       buildSystemPrompt(
@@ -884,6 +906,12 @@ export async function POST(
             () => ""
           );
 
+      /*
+       * Phase 11: the provider body is truncated to 300 characters, the
+       * bound already used in lib/ai/provider.ts. An analysis request
+       * carries the document's extracted text, and a provider error can
+       * echo that request back.
+       */
       console.error(
         "SYRAVEN FILE ANALYSIS ERROR:",
         {
@@ -893,8 +921,8 @@ export async function POST(
           status:
             response.status,
 
-          error:
-            errorText,
+          detail:
+            errorText.slice(0, 300),
         }
       );
 
@@ -930,10 +958,23 @@ export async function POST(
           content
         );
     } catch {
-      console.error(
-        "SYRAVEN FILE ANALYSIS JSON ERROR:",
-        content
-      );
+      /*
+       * Phase 11 (reliability/observability).
+       *
+       * `content` is the model's analysis OF THE USER'S UPLOADED
+       * DOCUMENT, so logging it verbatim writes user document content
+       * into server logs — the exact disclosure AGENTS.md forbids.
+       *
+       * What a diagnosis of "invalid analysis format" actually needs is
+       * the SHAPE of the bad response, not its text: how long it was and
+       * how it began. The 120-character prefix is enough to tell a
+       * truncated response from a refusal or an HTML error page, and is
+       * bounded so a large document cannot flood the log.
+       */
+      console.error("SYRAVEN FILE ANALYSIS: unparseable analysis payload.", {
+        length: content.length,
+        prefix: content.slice(0, 120),
+      });
 
       return jsonError(
         "The AI provider returned an invalid analysis format.",
@@ -945,6 +986,10 @@ export async function POST(
       normalizeResult(
         parsedResult
       );
+
+    await guard.record({
+      totalTokens: data?.usage?.total_tokens ?? null,
+    });
 
     return NextResponse.json(
       {
@@ -1022,7 +1067,7 @@ export async function POST(
         : 500
     );
   }
-}
+});
 
 /* ==================================================
    GET

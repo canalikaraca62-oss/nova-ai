@@ -1,23 +1,61 @@
 /**
  * SYRAVEN Search API
+ * app/api/search/route.ts
  *
- * Enterprise-grade global search endpoint.
+ * Phase 10 Step 10.2 (see IMPLEMENTATION_PLAN.md).
  *
- * Features:
- * - Query validation
- * - Pagination
- * - Result limits
- * - Type filtering
- * - Safe error handling
- * - Request normalization
- * - Dynamic Next.js route
- * - Production-ready response format
+ * SECURITY BOUNDARY.
  *
  * GET /api/search?q=hello
+ *
+ * WHAT CHANGED IN 10.2
+ *
+ * This route previously returned a hardcoded empty array. It is now
+ * backed by lib/search, which filters by ownership AT QUERY TIME.
+ *
+ * Three things the old shell got wrong for a real implementation, and
+ * why they are not carried forward:
+ *
+ *   1. `ALLOWED_TYPES` accepted `message`, `document`, `user` and
+ *      `file`. Those are NOT searchable: `messages` has a nullable
+ *      `user_id` with no FK, `agent_runs` has no owner column at all,
+ *      and no `documents` table exists. Accepting them while returning
+ *      nothing would be a promise the system cannot keep; they are
+ *      refused explicitly instead.
+ *
+ *   2. `pagination.total` exposed an exact count. A precise total
+ *      invites inference about rows behind the filter, so the response
+ *      reports `hasMore` instead.
+ *
+ *   3. Pagination was page-based over an unbounded page number. Deep
+ *      pagination is an enumeration primitive, so it is converted to a
+ *      bounded offset by lib/search.
+ *
+ * WHAT THE CALLER MAY DECIDE
+ *
+ *   the query text, which entity types, pagination, and an optional
+ *   workspace/project to NARROW to (proven by the tenant guards).
+ *
+ * WHAT THE CALLER MAY NOT DECIDE
+ *
+ *   identity, ownership, tenancy, or which rows are visible. Those come
+ *   from the verified session and the database.
  */
 
-import type { NextRequest} from "next/server";
 import { NextResponse } from "next/server";
+
+import { withAuth } from "@/lib/api/withAuth";
+import {
+  requireOptionalProjectAccess,
+  requireOptionalWorkspaceAccess,
+} from "@/lib/api/tenantGuard";
+import { checkRateLimit, recordRateLimitEvent } from "@/lib/usage/meter";
+import { search } from "@/lib/search/query";
+import {
+  SEARCHABLE_ENTITIES,
+  type SearchableEntity,
+  validateSearchRequest,
+} from "@/lib/search/types";
 
 /* -------------------------------------------------------------------------- */
 /*                               ROUTE CONFIG                                 */
@@ -30,44 +68,34 @@ export const runtime = "nodejs";
 /*                                   TYPES                                    */
 /* -------------------------------------------------------------------------- */
 
-type SearchEntityType =
-  | "project"
-  | "task"
-  | "message"
-  | "document"
-  | "knowledge"
-  | "user"
-  | "file"
-  | "all";
-
-interface SearchResult {
+interface SearchResultItem {
   id: string;
-  type: Exclude<SearchEntityType, "all">;
+  type: SearchableEntity;
   title: string;
-  description?: string;
-  url?: string;
-  score?: number;
-  metadata?: Record<string, unknown>;
-  createdAt?: string;
-  updatedAt?: string;
+  snippet: string | null;
+  score: number;
+  updatedAt: string | null;
 }
 
 interface SearchResponse {
   success: true;
   query: string;
-  type: SearchEntityType;
-  results: SearchResult[];
+  types: readonly SearchableEntity[];
+  results: SearchResultItem[];
   pagination: {
-    page: number;
     limit: number;
-    total: number;
-    totalPages: number;
-    hasNextPage: boolean;
-    hasPreviousPage: boolean;
+    offset: number;
+    /*
+     * Deliberately NOT an exact total. See the header note: a precise
+     * count is an inference channel about rows the caller cannot read.
+     */
+    hasMore: boolean;
   };
   meta: {
     tookMs: number;
     timestamp: string;
+    /** Entity types that failed to query, so partial results are honest. */
+    degraded: readonly SearchableEntity[];
   };
 }
 
@@ -80,312 +108,225 @@ interface SearchErrorResponse {
 }
 
 /* -------------------------------------------------------------------------- */
-/*                                  CONSTANTS                                 */
-/* -------------------------------------------------------------------------- */
-
-const DEFAULT_PAGE = 1;
-const DEFAULT_LIMIT = 20;
-const MAX_LIMIT = 100;
-
-const MIN_QUERY_LENGTH = 1;
-const MAX_QUERY_LENGTH = 500;
-
-const ALLOWED_TYPES = new Set<SearchEntityType>([
-  "project",
-  "task",
-  "message",
-  "document",
-  "knowledge",
-  "user",
-  "file",
-  "all",
-]);
-
-/* -------------------------------------------------------------------------- */
-/*                                   ERRORS                                   */
-/* -------------------------------------------------------------------------- */
-
-class SearchApiError extends Error {
-  readonly status: number;
-  readonly code: string;
-
-  constructor(
-    message: string,
-    status = 400,
-    code = "SEARCH_ERROR"
-  ) {
-    super(message);
-
-    this.name = "SearchApiError";
-    this.status = status;
-    this.code = code;
-  }
-}
-
-/* -------------------------------------------------------------------------- */
-/*                              VALIDATION HELPERS                            */
-/* -------------------------------------------------------------------------- */
-
-function parsePositiveInteger(
-  value: string | null,
-  fallback: number,
-  max?: number
-): number {
-  if (!value) {
-    return fallback;
-  }
-
-  const parsed = Number.parseInt(value, 10);
-
-  if (
-    !Number.isFinite(parsed) ||
-    parsed < 1
-  ) {
-    return fallback;
-  }
-
-  if (max !== undefined) {
-    return Math.min(parsed, max);
-  }
-
-  return parsed;
-}
-
-function normalizeQuery(
-  value: string | null
-): string {
-  const query = value?.trim() ?? "";
-
-  if (query.length < MIN_QUERY_LENGTH) {
-    throw new SearchApiError(
-      "Search query is required.",
-      400,
-      "INVALID_QUERY"
-    );
-  }
-
-  if (query.length > MAX_QUERY_LENGTH) {
-    throw new SearchApiError(
-      `Search query cannot exceed ${MAX_QUERY_LENGTH} characters.`,
-      400,
-      "QUERY_TOO_LONG"
-    );
-  }
-
-  return query;
-}
-
-function normalizeType(
-  value: string | null
-): SearchEntityType {
-  if (!value) {
-    return "all";
-  }
-
-  const normalized = value
-    .trim()
-    .toLowerCase() as SearchEntityType;
-
-  if (!ALLOWED_TYPES.has(normalized)) {
-    throw new SearchApiError(
-      "Invalid search type.",
-      400,
-      "INVALID_SEARCH_TYPE"
-    );
-  }
-
-  return normalized;
-}
-
-/* -------------------------------------------------------------------------- */
 /*                              RESPONSE HELPERS                              */
 /* -------------------------------------------------------------------------- */
 
-function createErrorResponse(
-  error: unknown
+function errorResponse(
+  code: string,
+  message: string,
+  status: number,
+  extraHeaders: Record<string, string> = {},
 ): NextResponse<SearchErrorResponse> {
-  if (error instanceof SearchApiError) {
-    return NextResponse.json(
-      {
-        success: false,
-        error: {
-          code: error.code,
-          message: error.message,
-        },
-      },
-      {
-        status: error.status,
-      }
-    );
-  }
-
-  console.error(
-    "[SEARCH_API_ERROR]",
-    error
-  );
-
   return NextResponse.json(
+    { success: false, error: { code, message } },
     {
-      success: false,
-      error: {
-        code: "INTERNAL_SERVER_ERROR",
-        message:
-          "An unexpected error occurred while processing the search request.",
+      status,
+      headers: {
+        "Cache-Control": "private, no-store",
+        ...extraHeaders,
       },
     },
-    {
-      status: 500,
-    }
   );
 }
 
-/* -------------------------------------------------------------------------- */
-/*                              SEARCH SERVICE                                */
-/* -------------------------------------------------------------------------- */
+/**
+ * Maps a validation reason to a caller-safe message.
+ *
+ * The reason codes are stable and safe to expose — they describe the
+ * REQUEST, never the data. `UNKNOWN_ENTITY` deliberately does not name
+ * which types exist beyond the supported set.
+ */
+function validationMessage(reason: string): string {
+  switch (reason) {
+    case "QUERY_REQUIRED":
+      return "A search query is required.";
+    case "QUERY_TOO_SHORT":
+      return "The search query is too short.";
+    case "QUERY_TOO_LONG":
+      return "The search query is too long.";
+    case "NO_ENTITIES":
+      return "At least one search type is required.";
+    case "UNKNOWN_ENTITY":
+      return `Supported search types are: ${SEARCHABLE_ENTITIES.join(", ")}.`;
+    default:
+      return "The search request is invalid.";
+  }
+}
 
 /**
- * Temporary search adapter.
+ * Reads the requested entity types from the query string.
  *
- * Replace this implementation later with your actual
- * database / Supabase / vector / knowledge search layer.
- *
- * This function intentionally returns an empty array instead
- * of inventing data.
+ * `type=all` and an absent parameter both mean "every SUPPORTED type" —
+ * which is the three from Step 10.1, not the wider set the previous
+ * shell advertised. Anything else is passed through to the validator,
+ * which refuses unknown values rather than ignoring them.
  */
-async function executeSearch(
-  _input: {
-    query: string;
-    type: SearchEntityType;
-    page: number;
-    limit: number;
-  }
-): Promise<{
-  results: SearchResult[];
-  total: number;
-}> {
-  /*
-   * Future integration example:
-   *
-   * import { search } from "@/services/search";
-   *
-   * return search({
-   *   query: input.query,
-   *   type: input.type,
-   *   page: input.page,
-   *   limit: input.limit,
-   * });
-   */
+function readEntities(raw: string | null): unknown {
+  if (raw === null) return undefined;
 
-  return {
-    results: [],
-    total: 0,
-  };
+  const trimmed = raw.trim().toLowerCase();
+
+  if (trimmed.length === 0 || trimmed === "all") return undefined;
+
+  return trimmed.split(",").map((t) => t.trim());
 }
 
 /* -------------------------------------------------------------------------- */
 /*                                    GET                                     */
 /* -------------------------------------------------------------------------- */
 
-export async function GET(
-  request: NextRequest
-): Promise<
-  NextResponse<
-    SearchResponse | SearchErrorResponse
-  >
-> {
+export const GET = withAuth(async (request, session) => {
   const startedAt = Date.now();
 
   try {
-    const searchParams =
-      request.nextUrl.searchParams;
+    const params = request.nextUrl.searchParams;
 
-    const query = normalizeQuery(
-      searchParams.get("q") ??
-        searchParams.get("query")
+    /* ---------------------------------------------------------------- */
+    /* 1. Rate limit — before any database work                          */
+    /* ---------------------------------------------------------------- */
+
+    /*
+     * Search is rate limited but NOT quota metered: it calls no paid
+     * provider, so charging it against a plan allowance would be wrong.
+     * The limit is here because search is cheap to issue, expensive to
+     * serve, and the natural surface for term-by-term probing.
+     */
+    const limit = await checkRateLimit(
+      session.supabase,
+      session.userId,
+      "search:query",
     );
 
-    const type = normalizeType(
-      searchParams.get("type")
+    if (!limit.allowed) {
+      return errorResponse(
+        "RATE_LIMITED",
+        "Too many search requests. Please slow down.",
+        429,
+        { "Retry-After": String(limit.retryAfterSeconds) },
+      );
+    }
+
+    /* ---------------------------------------------------------------- */
+    /* 2. Validate — bounds, entity allowlist, injection-safe text       */
+    /* ---------------------------------------------------------------- */
+
+    const validation = validateSearchRequest({
+      query: params.get("q") ?? params.get("query"),
+      entities: readEntities(params.get("type")),
+      limit: params.get("limit"),
+      offset: params.get("offset"),
+      workspaceId: params.get("workspaceId"),
+      projectId: params.get("projectId"),
+    });
+
+    if (!validation.ok) {
+      return errorResponse(
+        validation.reason,
+        validationMessage(validation.reason),
+        400,
+      );
+    }
+
+    const searchRequest = validation.request;
+
+    /* ---------------------------------------------------------------- */
+    /* 3. Tenancy — PROVEN, never taken from the query string            */
+    /* ---------------------------------------------------------------- */
+
+    /*
+     * A workspace/project id can only NARROW results — ownership is
+     * already filtered in every query. It is still proven here so an
+     * unauthorized id is refused outright rather than silently matching
+     * nothing, which would let a caller probe for existence by
+     * distinguishing "no access" from "no results".
+     */
+    const workspaceAccess = await requireOptionalWorkspaceAccess(
+      session,
+      searchRequest.workspaceId,
     );
 
-    const page = parsePositiveInteger(
-      searchParams.get("page"),
-      DEFAULT_PAGE
+    if (workspaceAccess?.denied) {
+      return workspaceAccess.response;
+    }
+
+    const projectAccess = await requireOptionalProjectAccess(
+      session,
+      searchRequest.projectId,
     );
 
-    const limit = parsePositiveInteger(
-      searchParams.get("limit"),
-      DEFAULT_LIMIT,
-      MAX_LIMIT
+    if (projectAccess?.denied) {
+      return projectAccess.response;
+    }
+
+    /* ---------------------------------------------------------------- */
+    /* 4. Search — ownership filtered at query time (lib/search)         */
+    /* ---------------------------------------------------------------- */
+
+    const results = await search(session, searchRequest);
+
+    /* Recorded after the work is admitted, so refusals do not count. */
+    await recordRateLimitEvent(
+      session.supabase,
+      session.userId,
+      "search:query",
     );
-
-    const searchResult =
-      await executeSearch({
-        query,
-        type,
-        page,
-        limit,
-      });
-
-    const totalPages =
-      searchResult.total === 0
-        ? 0
-        : Math.ceil(
-            searchResult.total / limit
-          );
 
     const response: SearchResponse = {
       success: true,
+      query: searchRequest.query,
+      types: searchRequest.entities,
 
-      query,
-
-      type,
-
-      results:
-        searchResult.results,
+      results: results.hits.map((hit) => ({
+        id: hit.id,
+        type: hit.entity,
+        title: hit.title,
+        snippet: hit.snippet,
+        score: hit.score,
+        updatedAt: hit.updatedAt,
+      })),
 
       pagination: {
-        page,
-        limit,
-
-        total:
-          searchResult.total,
-
-        totalPages,
-
-        hasNextPage:
-          totalPages > 0 &&
-          page < totalPages,
-
-        hasPreviousPage:
-          page > 1,
+        limit: searchRequest.limit,
+        offset: searchRequest.offset,
+        hasMore: results.hasMore,
       },
 
       meta: {
-        tookMs:
-          Date.now() - startedAt,
-
-        timestamp:
-          new Date().toISOString(),
+        tookMs: Date.now() - startedAt,
+        timestamp: new Date().toISOString(),
+        degraded: results.degraded,
       },
     };
 
-    return NextResponse.json(
-      response,
-      {
-        status: 200,
-        headers: {
-          "Cache-Control":
-            "no-store, max-age=0",
-        },
-      }
-    );
+    return NextResponse.json(response, {
+      status: 200,
+      headers: {
+        /*
+         * Private: results are caller-specific by construction, so a
+         * shared cache holding them would serve one user's rows to
+         * another.
+         */
+        "Cache-Control": "private, no-store",
+        Vary: "Authorization, Cookie",
+      },
+    });
   } catch (error) {
-    return createErrorResponse(
-      error
+    /*
+     * Logged, never surfaced: a database or provider message can carry
+     * column names and constraint details.
+     */
+    console.error("[SYRAVEN_SEARCH_API_ERROR]", {
+      userId: session.userId,
+      name: error instanceof Error ? error.name : "unknown",
+    });
+
+    return errorResponse(
+      "INTERNAL_SERVER_ERROR",
+      "An unexpected error occurred while processing the search request.",
+      500,
     );
   }
-}
+});
 
 /* -------------------------------------------------------------------------- */
 /*                                  OPTIONS                                   */

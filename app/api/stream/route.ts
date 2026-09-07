@@ -1,4 +1,7 @@
-import type { NextRequest } from "next/server";
+
+import { withAuth } from "@/lib/api/withAuth";
+import { enforceUsage } from "@/lib/api/usageGuard";
+import { resolveAiPolicy } from "@/lib/api/aiPolicy";
 
 /* ==================================================
  * SYRAVEN AI STREAM API
@@ -522,9 +525,28 @@ function parseGroqLine(
  * POST
  * ================================================== */
 
-export async function POST(
-  request: NextRequest
-) {
+export const POST = withAuth(async (
+  request,
+  session
+) => {
+  /*
+    USAGE ENFORCEMENT (Phase 5)
+
+    Entitlement, burst rate limit and plan quota are all checked before
+    any paid provider call. Identity and plan come from the verified
+    session and public.profiles — never from the request
+    (ARCHITECTURE_AUDIT.md §17, §8.2).
+  */
+  const guard = await enforceUsage(
+    session,
+    "ai:stream",
+    "chatMessage",
+      ["chatMessageMonthly"]
+  );
+
+  if (guard.denied) {
+    return guard.response;
+  }
   try {
     const apiKey =
       process.env.GROQ_API_KEY;
@@ -568,15 +590,37 @@ export async function POST(
         body.model
       );
 
+    /*
+      AI POLICY (Phase 7)
+
+      This route already restricted models to a local allowlist, but its
+      token ceiling was a flat constant for every plan. The policy layer
+      applies the Phase 5 plan ceiling as well, taking whichever is
+      lower.
+    */
+    const policy =
+      resolveAiPolicy({
+        capability: "chat",
+        entitlement: guard.entitlement,
+        requestedModel: model,
+        requestedTokens: body.maxResponseTokens,
+        requestedTemperature: body.temperature,
+      });
+
+    if (!policy.ok) {
+      return policy.response;
+    }
+
     const maxTokens =
-      normalizeMaxTokens(
-        body.maxResponseTokens
+      Math.min(
+        policy.policy.maxTokens,
+        normalizeMaxTokens(
+          body.maxResponseTokens
+        )
       );
 
     const temperature =
-      normalizeTemperature(
-        body.temperature
-      );
+      policy.policy.temperature;
 
     const memoryEnabled =
       body.memoryEnabled !==
@@ -605,11 +649,15 @@ export async function POST(
         action,
       });
 
+    /*
+      SECURITY:
+
+      The user id is taken from the verified session. It was previously
+      read from the request body, which let a caller forge the identity
+      recorded in server logs.
+    */
     const userId =
-      typeof body.userId ===
-      "string"
-        ? body.userId
-        : null;
+      session.userId;
 
     console.log(
       "SYRAVEN STREAM:",
@@ -691,14 +739,24 @@ export async function POST(
             () => ""
           );
 
+      /*
+       * Phase 11 (reliability/observability).
+       *
+       * A provider error body can echo the request back — including the
+       * prompt, which carries user content — and can carry organisation
+       * ids and quota details. It is truncated to 300 characters, the
+       * same bound lib/ai/provider.ts and lib/search/openaiEmbedding.ts
+       * already apply, so one convention holds across every provider
+       * call site.
+       */
       console.error(
         "SYRAVEN AI PROVIDER ERROR:",
         {
           status:
             upstreamResponse.status,
 
-          body:
-            errorText,
+          detail:
+            errorText.slice(0, 300),
         }
       );
 
@@ -951,6 +1009,13 @@ export async function POST(
         },
       });
 
+    /*
+      Streamed responses report no token usage up front, so the
+      message is recorded without counts rather than not recorded at
+      all — otherwise streaming would be a quota bypass.
+    */
+    await guard.record({});
+
     return new Response(
       stream,
       {
@@ -997,4 +1062,4 @@ export async function POST(
       500
     );
   }
-}
+})

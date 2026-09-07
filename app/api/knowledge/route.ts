@@ -1,8 +1,23 @@
-import type { NextRequest} from "next/server";
 import { NextResponse } from "next/server";
 
-import { supabaseAdmin } from "@/lib/supabaseAdmin";
+/*
+  DATA ACCESS (Phase 4):
+
+  This route uses the CALLER'S OWN RLS-enforced client
+  (session.supabase), not the service-role client.
+
+  public.knowledge carries owner-scoped policies for select, insert,
+  update and delete, each `auth.uid() = user_id` — the same column and
+  the same identity this route already filtered on. RLS therefore
+  enforces the ownership rule underneath the explicit filters rather
+  than being bypassed (ARCHITECTURE_AUDIT.md §8.6).
+
+  The explicit .eq("user_id", …) filters below are RETAINED on purpose:
+  two independent controls is the point, not one.
+*/
 import { toJson } from "@/lib/supabase/json";
+import { withAuth } from "@/lib/api/withAuth";
+import { requireOptionalWorkspaceAccess } from "@/lib/api/tenantGuard";
 import type { Database } from "@/types/database";
 
 export const runtime = "nodejs";
@@ -244,15 +259,29 @@ function normalizeMetadata(
    GET KNOWLEDGE
 ================================================== */
 
-export async function GET(
-  request: NextRequest
-) {
+export const GET = withAuth(async (
+  request,
+  session
+) => {
   try {
+    /*
+      Phase 4: the caller's RLS-enforced client is the default data path.
+    */
+    const db = session.supabase;
+
     const { searchParams } =
       new URL(request.url);
 
+    /*
+      SECURITY:
+
+      Previously userId was an OPTIONAL query parameter, so omitting it
+      returned every user's knowledge records - including content and
+      embeddings (ARCHITECTURE_AUDIT.md 8.1). The listing is now always
+      scoped to the verified session owner.
+    */
     const userId =
-      searchParams.get("userId");
+      session.userId;
 
     const workspaceId =
       searchParams.get("workspaceId");
@@ -277,7 +306,7 @@ export async function GET(
       searchParams.get("offset")
     );
 
-    let query = supabaseAdmin
+    let query = db
       .from("knowledge")
       .select(
         `
@@ -318,11 +347,22 @@ export async function GET(
         offset + limit - 1
       );
 
-    if (userId) {
-      query = query.eq(
-        "user_id",
-        userId
+    query = query.eq(
+      "user_id",
+      userId
+    );
+
+    /*
+      SECURITY: prove the workspace before filtering by it.
+    */
+    const workspaceGuard =
+      await requireOptionalWorkspaceAccess(
+        session,
+        workspaceId
       );
+
+    if (workspaceGuard?.denied) {
+      return workspaceGuard.response;
     }
 
     if (workspaceId) {
@@ -415,38 +455,40 @@ export async function GET(
       500
     );
   }
-}
+});
 
 /* ==================================================
    CREATE KNOWLEDGE
 ================================================== */
 
-export async function POST(
-  request: NextRequest
-) {
+export const POST = withAuth(async (
+  request,
+  session
+) => {
   try {
+    /*
+      Phase 4: the caller's RLS-enforced client is the default data path.
+    */
+    const db = session.supabase;
+
     const body =
       (await request.json()) as
         CreateKnowledgeBody;
 
+    /*
+      SECURITY:
+
+      Ownership is taken from the verified session. A client-supplied
+      userId in the body is ignored.
+    */
     const userId =
-      normalizeString(
-        body.userId,
-        200
-      );
+      session.userId;
 
     const title =
       normalizeString(
         body.title,
         500
       );
-
-    if (!userId) {
-      return jsonError(
-        "userId is required.",
-        400
-      );
-    }
 
     if (!title) {
       return jsonError(
@@ -539,7 +581,7 @@ export async function POST(
     const {
       data,
       error,
-    } = await supabaseAdmin
+    } = await db
       .from("knowledge")
       .insert(insertData)
       .select(
@@ -601,16 +643,22 @@ export async function POST(
       500
     );
   }
-}
+});
 
 /* ==================================================
    UPDATE KNOWLEDGE
 ================================================== */
 
-export async function PATCH(
-  request: NextRequest
-) {
+export const PATCH = withAuth(async (
+  request,
+  session
+) => {
   try {
+    /*
+      Phase 4: the caller's RLS-enforced client is the default data path.
+    */
+    const db = session.supabase;
+
     const body =
       (await request.json()) as
         UpdateKnowledgeBody;
@@ -732,12 +780,16 @@ export async function PATCH(
     const {
       data,
       error,
-    } = await supabaseAdmin
+    } = await db
       .from("knowledge")
       .update(updateData)
       .eq(
         "id",
         id
+      )
+      .eq(
+        "user_id",
+        session.userId
       )
       .select(
         `
@@ -805,16 +857,22 @@ export async function PATCH(
       500
     );
   }
-}
+});
 
 /* ==================================================
    DELETE KNOWLEDGE
 ================================================== */
 
-export async function DELETE(
-  request: NextRequest
-) {
+export const DELETE = withAuth(async (
+  request,
+  session
+) => {
   try {
+    /*
+      Phase 4: the caller's RLS-enforced client is the default data path.
+    */
+    const db = session.supabase;
+
     const { searchParams } =
       new URL(request.url);
 
@@ -834,12 +892,16 @@ export async function DELETE(
     const {
       data,
       error,
-    } = await supabaseAdmin
+    } = await db
       .from("knowledge")
       .delete()
       .eq(
         "id",
         id
+      )
+      .eq(
+        "user_id",
+        session.userId
       )
       .select("id")
       .maybeSingle();
@@ -884,4 +946,4 @@ export async function DELETE(
       500
     );
   }
-}
+});

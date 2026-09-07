@@ -1,5 +1,7 @@
-import type { NextRequest} from "next/server";
 import { NextResponse } from "next/server";
+
+import { withAuth } from "@/lib/api/withAuth";
+import { enforceUsage } from "@/lib/api/usageGuard";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -321,9 +323,27 @@ async function requestTranscription({
    POST
 ================================================== */
 
-export async function POST(
-  request: NextRequest
-) {
+export const POST = withAuth(async (
+  request,
+  session
+) => {
+  /*
+    USAGE ENFORCEMENT (Phase 5)
+
+    Entitlement, burst rate limit and plan quota are all checked before
+    any paid provider call. Identity and plan come from the verified
+    session and public.profiles — never from the request
+    (ARCHITECTURE_AUDIT.md §17, §8.2).
+  */
+  const guard = await enforceUsage(
+    session,
+    "ai:voice",
+    "voiceRequest"
+  );
+
+  if (guard.denied) {
+    return guard.response;
+  }
   const requestId =
     crypto.randomUUID();
 
@@ -641,6 +661,8 @@ export async function POST(
        SUCCESS RESPONSE
     ============================================== */
 
+    await guard.record({});
+
     return NextResponse.json(
       {
         success: true,
@@ -692,7 +714,7 @@ export async function POST(
       requestId
     );
   }
-}
+});
 
 /* ==================================================
    OPTIONS

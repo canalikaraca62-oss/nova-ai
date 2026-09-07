@@ -20,10 +20,8 @@
  * lib/supabaseAdmin.ts
  */
 
-import {
-  createClient,
-  type SupabaseClient,
-} from "@supabase/supabase-js";
+import { createBrowserClient } from "@supabase/ssr";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { Database } from "@/types/database";
 
@@ -127,18 +125,28 @@ export function getSupabaseClient(): SupabaseClient<Database> {
 
   validateSupabaseConfig();
 
+  /*
+    SECURITY / CONSISTENCY (Phase 3):
+
+    createBrowserClient (from @supabase/ssr) stores the session in
+    COOKIES rather than localStorage.
+
+    This matters because the server reads sessions from cookies:
+    app/api/auth/register/route.ts sets an SSR cookie session, middleware
+    refreshes it, and lib/auth/session.ts reads it. The previous
+    createClient() stored the session in localStorage only, so the
+    browser and the server disagreed about whether a user was signed in —
+    a same-origin fetch carried no credential the server could see.
+
+    Using the cookie-backed client makes client and server agree, so
+    ordinary fetches from the app authenticate through withAuth without
+    each caller having to attach a bearer token by hand.
+  */
   browserClient =
-    createClient<Database>(
+    createBrowserClient<Database>(
       SUPABASE_URL!,
       SUPABASE_ANON_KEY!,
       {
-        auth: {
-          autoRefreshToken: true,
-          persistSession: true,
-          detectSessionInUrl: true,
-          flowType: "pkce",
-        },
-
         global: {
           headers: {
             "X-Client-Info":

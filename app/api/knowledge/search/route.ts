@@ -1,7 +1,29 @@
 import type { NextRequest} from "next/server";
 import { NextResponse } from "next/server";
 
-import { supabaseAdmin } from "@/lib/supabaseAdmin";
+/*
+  DATA ACCESS (Phase 4):
+
+  Knowledge search runs through the CALLER'S OWN RLS-enforced client.
+
+  public.knowledge carries an owner-scoped select policy
+  (auth.uid() = user_id), matching the column and identity this search
+  already filters on, so RLS now constrains results underneath the
+  explicit filter rather than being bypassed
+  (ARCHITECTURE_AUDIT.md §8.6).
+
+  Search is the easiest place to leak across tenants, so both controls
+  are kept: the explicit user_id filter AND the database policy.
+*/
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+import { withAuth } from "@/lib/api/withAuth";
+import type { Database } from "@/types/database";
+import {
+  requireOptionalProjectAccess,
+  requireOptionalWorkspaceAccess,
+} from "@/lib/api/tenantGuard";
+import type { AuthenticatedSession } from "@/lib/auth/session";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -62,10 +84,6 @@ type KnowledgeSearchResult = {
   updatedAt: string | null;
 };
 
-type AuthenticatedUser = {
-  id: string;
-  email: string | null;
-};
 
 type KnowledgeRow = {
   id?: unknown;
@@ -356,88 +374,6 @@ function createExcerpt(
    AUTH
 ================================================== */
 
-function getBearerToken(
-  request: NextRequest
-): string | null {
-  const authorization =
-    request.headers.get(
-      "authorization"
-    );
-
-  if (!authorization) {
-    return null;
-  }
-
-  const parts =
-    authorization
-      .trim()
-      .split(/\s+/);
-
-  if (parts.length !== 2) {
-    return null;
-  }
-
-  const scheme =
-    parts[0];
-
-  const token =
-    parts[1];
-
-  if (
-    typeof scheme !== "string" ||
-    typeof token !== "string"
-  ) {
-    return null;
-  }
-
-  if (
-    scheme.toLowerCase() !==
-    "bearer"
-  ) {
-    return null;
-  }
-
-  const normalizedToken =
-    token.trim();
-
-  if (!normalizedToken) {
-    return null;
-  }
-
-  return normalizedToken;
-}
-
-async function getAuthenticatedUser(
-  request: NextRequest
-): Promise<AuthenticatedUser | null> {
-  const token =
-    getBearerToken(request);
-
-  if (!token) {
-    return null;
-  }
-
-  const {
-    data,
-    error,
-  } =
-    await supabaseAdmin.auth.getUser(
-      token
-    );
-
-  if (
-    error ||
-    !data.user
-  ) {
-    return null;
-  }
-
-  return {
-    id: data.user.id,
-    email:
-      data.user.email ?? null,
-  };
-}
 
 /* ==================================================
    REQUEST PARSER
@@ -719,6 +655,7 @@ function normalizeKnowledgeRow(
 ================================================== */
 
 async function searchKnowledge({
+  db,
   userId,
   query,
   limit,
@@ -728,6 +665,7 @@ async function searchKnowledge({
   scope,
   sourceTypes,
 }: {
+  db: SupabaseClient<Database>;
   userId: string;
   query: string;
   limit: number;
@@ -741,7 +679,7 @@ async function searchKnowledge({
     escapeSearchTerm(query);
 
   let databaseQuery =
-    supabaseAdmin
+    db
       .from("knowledge")
       .select(
         `
@@ -762,6 +700,18 @@ async function searchKnowledge({
       .eq(
         "user_id",
         userId
+      )
+      /*
+        SECURITY (Phase 8): only ACTIVE records are searchable.
+
+        Without this filter, archived and soft-deleted knowledge was
+        still returned — and, because search results feed AI context,
+        deleted content could silently re-enter a prompt. "Deleted"
+        must mean unreachable, not merely hidden from a list view.
+      */
+      .eq(
+        "status",
+        "active"
       );
 
   /* ================================================
@@ -994,28 +944,16 @@ function buildResponse(
 ================================================== */
 
 async function handleSearch(
-  request: NextRequest
+  request: NextRequest,
+  session: AuthenticatedSession
 ) {
-  const user =
-    await getAuthenticatedUser(
-      request
-    );
-
-  if (!user) {
-    return NextResponse.json(
-      {
-        success: false,
-        error: "Unauthorized.",
-      },
-      {
-        status: 401,
-        headers: {
-          "Cache-Control":
-            "no-store",
-        },
-      }
-    );
-  }
+  /*
+    Authentication is performed by withAuth (lib/api/withAuth.ts) before
+    either handler runs, so the caller is already verified here.
+  */
+  const user = {
+    id: session.userId,
+  };
 
   const payload =
     await parseRequest(
@@ -1049,8 +987,46 @@ async function handleSearch(
       payload.limit
     );
 
+  /*
+    SECURITY:
+
+    projectId / workspaceId narrow the search. Each is proven before use
+    so a caller cannot name a tenant they do not belong to and rely on
+    the sibling user_id filter as the only barrier.
+
+    teamId is NOT guarded here: teams have no membership table in the
+    current schema (only teams.owner_id), so there is no relationship to
+    verify against. The search remains scoped by user_id, and this gap is
+    recorded for the team-membership work rather than guessed at.
+  */
+  const projectGuard =
+    await requireOptionalProjectAccess(
+      session,
+      typeof payload.projectId === "string"
+        ? payload.projectId
+        : null
+    );
+
+  if (projectGuard?.denied) {
+    return projectGuard.response;
+  }
+
+  const workspaceGuard =
+    await requireOptionalWorkspaceAccess(
+      session,
+      typeof payload.workspaceId === "string"
+        ? payload.workspaceId
+        : null
+    );
+
+  if (workspaceGuard?.denied) {
+    return workspaceGuard.response;
+  }
+
   const results =
     await searchKnowledge({
+      db: session.supabase,
+
       userId:
         user.id,
 
@@ -1098,12 +1074,14 @@ async function handleSearch(
    GET
 ================================================== */
 
-export async function GET(
-  request: NextRequest
-) {
+export const GET = withAuth(async (
+  request,
+  session
+) => {
   try {
     return await handleSearch(
-      request
+      request,
+      session
     );
   } catch (error) {
     console.error(
@@ -1122,18 +1100,20 @@ export async function GET(
       }
     );
   }
-}
+})
 
 /* ==================================================
    POST
 ================================================== */
 
-export async function POST(
-  request: NextRequest
-) {
+export const POST = withAuth(async (
+  request,
+  session
+) => {
   try {
     return await handleSearch(
-      request
+      request,
+      session
     );
   } catch (error) {
     console.error(
@@ -1152,7 +1132,7 @@ export async function POST(
       }
     );
   }
-}
+})
 
 /* ==================================================
    METHOD NOT ALLOWED

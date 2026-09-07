@@ -1,8 +1,22 @@
-import type { NextRequest} from "next/server";
 import { NextResponse } from "next/server";
 
+/*
+  DATA ACCESS (Phase 4):
+
+  Read, update and delete use the CALLER'S OWN RLS-enforced client.
+  public.notifications carries owner-scoped select/update/delete policies
+  (auth.uid() = user_id) matching this route's filters, so RLS enforces
+  ownership beneath them (ARCHITECTURE_AUDIT.md §8.6).
+
+  CREATE is the exception and still uses the service-role client:
+  20260901165535 deliberately grants NO insert policy on
+  public.notifications, because a notification is something the system
+  raises about a user, not something a user writes for themselves. The
+  POST handler is annotated at its query below.
+*/
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { toJson } from "@/lib/supabase/json";
+import { withAuth } from "@/lib/api/withAuth";
 import type { Database } from "@/types/database";
 
 export const runtime = "nodejs";
@@ -230,25 +244,29 @@ function normalizeMetadata(
    GET NOTIFICATIONS
 ================================================== */
 
-export async function GET(
-  request: NextRequest
-) {
+export const GET = withAuth(async (
+  request,
+  session
+) => {
   try {
+    /*
+      Phase 4: the caller's RLS-enforced client is the default data path.
+    */
+    const db = session.supabase;
+
     const { searchParams } =
       new URL(request.url);
 
-    const userId =
-      normalizeString(
-        searchParams.get("userId"),
-        200
-      );
+    /*
+      SECURITY:
 
-    if (!userId) {
-      return jsonError(
-        "userId is required.",
-        400
-      );
-    }
+      Identity comes from the verified session only. A userId request
+      parameter is deliberately NOT accepted: it previously allowed any
+      caller to read another user's notifications
+      (ARCHITECTURE_AUDIT.md 8.1).
+    */
+    const userId =
+      session.userId;
 
     const limit = normalizeLimit(
       searchParams.get("limit")
@@ -268,7 +286,7 @@ export async function GET(
     const priority =
       searchParams.get("priority");
 
-    let query = supabaseAdmin
+    let query = db
       .from("notifications")
       .select(
         `
@@ -375,25 +393,30 @@ export async function GET(
       500
     );
   }
-}
+});
 
 /* ==================================================
    CREATE NOTIFICATION
 ================================================== */
 
-export async function POST(
-  request: NextRequest
-) {
+export const POST = withAuth(async (
+  request,
+  session
+) => {
   try {
     const body =
       (await request.json()) as
         CreateNotificationBody;
 
+    /*
+      SECURITY:
+
+      Notifications are created for the authenticated caller only.
+      A client-supplied userId in the body is ignored, so a caller cannot
+      inject notifications into another user's feed.
+    */
     const userId =
-      normalizeString(
-        body.userId,
-        200
-      );
+      session.userId;
 
     const title =
       normalizeString(
@@ -406,13 +429,6 @@ export async function POST(
         body.message,
         10000
       );
-
-    if (!userId) {
-      return jsonError(
-        "userId is required.",
-        400
-      );
-    }
 
     if (!title) {
       return jsonError(
@@ -493,6 +509,16 @@ export async function POST(
     const {
       data,
       error,
+    /*
+      ELEVATED ACCESS — UNFORGEABLE_RECORD.
+
+      public.notifications has no insert policy by design: a notification
+      is raised BY the system ABOUT a user, not written by the user. The
+      caller's client would therefore be denied here.
+
+      Ownership is still enforced in code — user_id comes from the
+      verified session (see above), never from the request body.
+    */
     } = await supabaseAdmin
       .from("notifications")
       .insert(insertData)
@@ -547,16 +573,22 @@ export async function POST(
       500
     );
   }
-}
+});
 
 /* ==================================================
    UPDATE NOTIFICATION
 ================================================== */
 
-export async function PATCH(
-  request: NextRequest
-) {
+export const PATCH = withAuth(async (
+  request,
+  session
+) => {
   try {
+    /*
+      Phase 4: the caller's RLS-enforced client is the default data path.
+    */
+    const db = session.supabase;
+
     const body =
       (await request.json()) as
         UpdateNotificationBody;
@@ -680,12 +712,16 @@ export async function PATCH(
     const {
       data,
       error,
-    } = await supabaseAdmin
+    } = await db
       .from("notifications")
       .update(updateData)
       .eq(
         "id",
         id
+      )
+      .eq(
+        "user_id",
+        session.userId
       )
       .select(
         `
@@ -745,16 +781,22 @@ export async function PATCH(
       500
     );
   }
-}
+});
 
 /* ==================================================
    DELETE NOTIFICATION
 ================================================== */
 
-export async function DELETE(
-  request: NextRequest
-) {
+export const DELETE = withAuth(async (
+  request,
+  session
+) => {
   try {
+    /*
+      Phase 4: the caller's RLS-enforced client is the default data path.
+    */
+    const db = session.supabase;
+
     const { searchParams } =
       new URL(request.url);
 
@@ -774,12 +816,16 @@ export async function DELETE(
     const {
       data,
       error,
-    } = await supabaseAdmin
+    } = await db
       .from("notifications")
       .delete()
       .eq(
         "id",
         id
+      )
+      .eq(
+        "user_id",
+        session.userId
       )
       .select("id")
       .maybeSingle();
@@ -824,4 +870,4 @@ export async function DELETE(
       500
     );
   }
-}
+});

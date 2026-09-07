@@ -1,7 +1,25 @@
 import type { NextRequest} from "next/server";
 import { NextResponse } from "next/server";
 
-import { supabaseAdmin } from "@/lib/supabaseAdmin";
+/*
+  DATA ACCESS (Phase 4):
+
+  This route only READS, and both reads use the CALLER'S OWN
+  RLS-enforced client:
+    - public.profiles: owner-scoped select (auth.uid() = id)
+    - public.usage:    owner-scoped select (auth.uid() = user_id)
+
+  Both match the filters these helpers apply, so RLS constrains results
+  underneath them (ARCHITECTURE_AUDIT.md §8.6).
+
+  The asymmetry is deliberate: usage rows are READ-ONLY to their owner.
+  Writing metering needs an elevated client precisely so a client cannot
+  forge its own consumption (20260904122000_syraven_rls_coverage.sql).
+*/
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+import { withAuth } from "@/lib/api/withAuth";
+import type { Database } from "@/types/database";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -84,24 +102,6 @@ type UsageMetric = {
   percentage: number | null;
   status: UsageMetricStatus;
 };
-
-type AuthSuccess = {
-  success: true;
-  userId: string;
-};
-
-type AuthFailure = {
-  success: false;
-  error: string;
-  code:
-    | "MISSING_AUTHORIZATION"
-    | "INVALID_AUTHORIZATION"
-    | "UNAUTHORIZED";
-};
-
-type AuthResult =
-  | AuthSuccess
-  | AuthFailure;
 
 type ProfileRecord = {
   id: string;
@@ -246,115 +246,6 @@ function errorResponse(
   );
 }
 
-/* ==================================================
-   AUTHENTICATION
-================================================== */
-
-async function getAuthenticatedUser(
-  request: NextRequest
-): Promise<AuthResult> {
-  const authorization =
-    request.headers.get(
-      "authorization"
-    );
-
-  if (!authorization) {
-    return {
-      success: false,
-      error:
-        "Authorization header is required.",
-      code:
-        "MISSING_AUTHORIZATION",
-    };
-  }
-
-  const normalized =
-    authorization.trim();
-
-  if (!normalized) {
-    return {
-      success: false,
-      error:
-        "Authorization header is invalid.",
-      code:
-        "INVALID_AUTHORIZATION",
-    };
-  }
-
-  if (
-    !/^Bearer\s+/i.test(
-      normalized
-    )
-  ) {
-    return {
-      success: false,
-      error:
-        "Authorization header must use Bearer authentication.",
-      code:
-        "INVALID_AUTHORIZATION",
-    };
-  }
-
-  const token =
-    normalized.replace(
-      /^Bearer\s+/i,
-      ""
-    ).trim();
-
-  if (!token) {
-    return {
-      success: false,
-      error:
-        "Access token is missing.",
-      code:
-        "INVALID_AUTHORIZATION",
-    };
-  }
-
-  try {
-    const {
-      data,
-      error,
-    } =
-      await supabaseAdmin.auth.getUser(
-        token
-      );
-
-    if (
-      error ||
-      !data.user
-    ) {
-      return {
-        success: false,
-        error:
-          "Authentication failed.",
-        code:
-          "UNAUTHORIZED",
-      };
-    }
-
-    return {
-      success: true,
-      userId:
-        data.user.id,
-    };
-  } catch (
-    error
-  ) {
-    console.error(
-      "SYRAVEN USAGE AUTH ERROR:",
-      error
-    );
-
-    return {
-      success: false,
-      error:
-        "Authentication failed.",
-      code:
-        "UNAUTHORIZED",
-    };
-  }
-}
 
 /* ==================================================
    PLAN HELPERS
@@ -806,6 +697,7 @@ function buildMetric(
 ================================================== */
 
 async function getProfile(
+  db: SupabaseClient<Database>,
   userId: string
 ): Promise<
   ProfileRecord | null
@@ -814,7 +706,7 @@ async function getProfile(
     data,
     error,
   } =
-    await supabaseAdmin
+    await db
       .from("profiles")
       .select(
         `
@@ -856,6 +748,7 @@ async function getProfile(
 ================================================== */
 
 async function getUsageRecords(
+  db: SupabaseClient<Database>,
   userId: string,
   period: PeriodRange
 ): Promise<
@@ -865,7 +758,7 @@ async function getUsageRecords(
     data,
     error,
   } =
-    await supabaseAdmin
+    await db
       .from("usage")
       .select(
         `
@@ -1009,31 +902,22 @@ function createUsageSnapshot(
    GET USAGE
 ================================================== */
 
-export async function GET(
-  request: NextRequest
-) {
+export const GET = withAuth(async (
+  request,
+  session
+) => {
   try {
     /* ----------------------------------------------
        AUTHENTICATION
+
+       Handled by withAuth (lib/api/withAuth.ts), which verifies the
+       session before this handler runs and accepts both a Bearer token
+       and a cookie session. The route-local helper this replaced
+       accepted Bearer only.
     ---------------------------------------------- */
 
-    const auth =
-      await getAuthenticatedUser(
-        request
-      );
-
-    if (
-      !auth.success
-    ) {
-      return errorResponse(
-        auth.code,
-        auth.error,
-        401
-      );
-    }
-
     const userId =
-      auth.userId;
+      session.userId;
 
     /* ----------------------------------------------
        PERIOD
@@ -1069,10 +953,12 @@ export async function GET(
     ] =
       await Promise.all([
         getProfile(
+          session.supabase,
           userId
         ),
 
         getUsageRecords(
+          session.supabase,
           userId,
           period
         ),
@@ -1208,7 +1094,7 @@ export async function GET(
       500
     );
   }
-}
+});
 
 /* ==================================================
    METHOD NOT ALLOWED

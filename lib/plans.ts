@@ -938,6 +938,29 @@ export const TRIAL_DURATION_DAYS =
 export const TRIAL_PLAN_ID: PlanId = "free";
 
 /**
+ * The plan whose LIMITS apply during an active 14-day trial.
+ *
+ * Added in Phase 5, because enforcement needs an explicit answer to a
+ * question this module previously left open.
+ *
+ * The header of this file states: "During the trial, the user
+ * temporarily gets full-access limits", and TRIAL_CONFIG.fullAccess is
+ * true — but no constant said which plan's limits "full access" means.
+ * PLANS.free holds the RESTRICTED limits, so resolving a trial to
+ * TRIAL_PLAN_ID would have granted the opposite of what is advertised.
+ *
+ * `business` is chosen because it is the highest SELF-SERVE tier:
+ * `enterprise` is custom-priced (monthlyPrice: 0, contact sales) and is
+ * not something a trial should silently confer.
+ *
+ * Note the account's own plan stays TRIAL_PLAN_ID ("free") throughout —
+ * only the limits are elevated, and only until trial_ends_at passes.
+ * TRIAL_CONFIG.autoConvertToPaid is false, so nothing is ever charged
+ * when the trial ends.
+ */
+export const TRIAL_EFFECTIVE_PLAN: PlanId = "business";
+
+/**
  * ============================================================
  * PLAN HELPERS
  * ============================================================

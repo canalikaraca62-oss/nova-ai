@@ -1,5 +1,7 @@
 import type { NextRequest} from "next/server";
 import { NextResponse } from "next/server";
+
+import { withAuth } from "@/lib/api/withAuth";
 import { createClient } from "@supabase/supabase-js";
 
 export const runtime = "nodejs";
@@ -27,7 +29,7 @@ function getBaseUrl(request: NextRequest) {
   return (origin || new URL(request.url).origin).replace(/\/$/, "");
 }
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (request, session) => {
   try {
     const supabase = getSupabaseServer();
 
@@ -41,34 +43,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const authorization = request.headers.get("authorization");
-
-    if (!authorization?.startsWith("Bearer ")) {
-      return NextResponse.json(
-        {
-          error: "Oturum doğrulanamadı.",
-          code: "UNAUTHORIZED",
-        },
-        { status: 401 }
-      );
-    }
-
-    const token = authorization.replace("Bearer ", "").trim();
-
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser(token);
-
-    if (userError || !user) {
-      return NextResponse.json(
-        {
-          error: "Geçerli kullanıcı bulunamadı.",
-          code: "INVALID_SESSION",
-        },
-        { status: 401 }
-      );
-    }
+    /*
+      Authentication is performed by withAuth (lib/api/withAuth.ts)
+      before this handler runs. The inline Bearer check this replaced
+      accepted Bearer only, so a browser cookie session could not reach
+      this route; withAuth accepts both.
+    */
+    const user = {
+      id: session.userId,
+    };
 
     const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
 
@@ -233,4 +216,4 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+})

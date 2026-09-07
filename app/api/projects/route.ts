@@ -1,8 +1,52 @@
-import type { NextRequest} from "next/server";
 import { NextResponse } from "next/server";
 
-import { supabaseAdmin } from "@/lib/supabaseAdmin";
+/*
+  DATA ACCESS (Phase 4) — ownership mismatch RESOLVED
+
+  This route uses the CALLER'S OWN RLS-enforced client
+  (session.supabase). It was previously the one route that could not,
+  and this note records why that changed.
+
+  THE PROBLEM
+
+    public.projects RLS policies (20260901154222) predicate on:
+        owner_id = auth.uid()  OR  is_organization_member(organization_id)
+
+    This route read and wrote only `user_id`, a compatibility column
+    added later by 20260901165535 under the heading "PROJECT
+    COMPATIBILITY COLUMNS". Because owner_id was never populated, every
+    policy evaluated false and the caller's client would have returned no
+    rows for anybody.
+
+  THE CANONICAL MODEL
+
+    owner_id is canonical. It is the column the policies use, and it
+    follows the same convention as organizations.owner_id, which the
+    registration route already sets. user_id is a compatibility alias.
+
+  THE FIX (no migration required)
+
+    Both columns are nullable and optional in the schema, so the
+    reconciliation is a code change, not a database change: POST now
+    populates owner_id alongside user_id from the same verified session
+    id. The policies are satisfied and the RLS client works.
+
+    Existing rows needed no backfill — public.projects held 0 rows when
+    this was verified.
+
+  WHY user_id IS KEPT
+
+    Dropping it would be a breaking schema change affecting
+    projects_user_id_idx and the tasks route's project validator. Writing
+    both from one session id keeps them consistent by construction.
+
+  Explicit .eq("user_id", …) filters are RETAINED throughout: RLS is
+  defence in depth beneath them, not a replacement (ARCHITECTURE_AUDIT.md
+  §8.6).
+*/
 import { toJson } from "@/lib/supabase/json";
+import { withAuth } from "@/lib/api/withAuth";
+import { requireOptionalWorkspaceAccess } from "@/lib/api/tenantGuard";
 import type { Database } from "@/types/database";
 
 export const runtime = "nodejs";
@@ -273,25 +317,29 @@ const PROJECT_SELECT = `
    GET PROJECTS
 ================================================== */
 
-export async function GET(
-  request: NextRequest
-) {
+export const GET = withAuth(async (
+  request,
+  session
+) => {
   try {
+    /*
+      Phase 4: the caller RLS-enforced client is the default data path.
+    */
+    const db = session.supabase;
+
     const { searchParams } =
       new URL(request.url);
 
-    const userId =
-      normalizeString(
-        searchParams.get("userId"),
-        200
-      );
+    /*
+      SECURITY:
 
-    if (!userId) {
-      return jsonError(
-        "userId is required.",
-        400
-      );
-    }
+      The caller's identity comes from the verified session only.
+      A `userId` request parameter is deliberately NOT accepted here:
+      doing so previously allowed any caller to read another user's
+      projects (ARCHITECTURE_AUDIT.md §8.1).
+    */
+    const userId =
+      session.userId;
 
     const workspaceId =
       normalizeString(
@@ -321,7 +369,7 @@ export async function GET(
         searchParams.get("offset")
       );
 
-    let query = supabaseAdmin
+    let query = db
       .from("projects")
       .select(
         PROJECT_SELECT,
@@ -343,6 +391,24 @@ export async function GET(
         offset,
         offset + limit - 1
       );
+
+    /*
+      SECURITY:
+
+      A client-supplied workspace id is proven before it is used as a
+      filter. Without this the id is trusted because the sibling user_id
+      filter happens to be present — one missing filter away from
+      ARCHITECTURE_AUDIT.md §8.1.
+    */
+    const workspaceGuard =
+      await requireOptionalWorkspaceAccess(
+        session,
+        workspaceId
+      );
+
+    if (workspaceGuard?.denied) {
+      return workspaceGuard.response;
+    }
 
     if (workspaceId) {
       query = query.eq(
@@ -439,38 +505,40 @@ export async function GET(
       500
     );
   }
-}
+});
 
 /* ==================================================
    CREATE PROJECT
 ================================================== */
 
-export async function POST(
-  request: NextRequest
-) {
+export const POST = withAuth(async (
+  request,
+  session
+) => {
   try {
+    /*
+      Phase 4: the caller RLS-enforced client is the default data path.
+    */
+    const db = session.supabase;
+
     const body =
       (await request.json()) as
         CreateProjectBody;
 
+    /*
+      SECURITY:
+
+      Ownership is assigned from the verified session, never from the
+      request body. A client-supplied `userId` is ignored.
+    */
     const userId =
-      normalizeString(
-        body.userId,
-        200
-      );
+      session.userId;
 
     const name =
       normalizeString(
         body.name,
         500
       );
-
-    if (!userId) {
-      return jsonError(
-        "userId is required.",
-        400
-      );
-    }
 
     if (!name) {
       return jsonError(
@@ -517,6 +585,30 @@ export async function POST(
       new Date().toISOString();
 
     const insertData: ProjectInsert = {
+      /*
+        OWNERSHIP (Phase 4)
+
+        Both ownership columns are written, deliberately:
+
+          owner_id — the CANONICAL column. public.projects RLS policies
+                     (20260901154222) predicate on it, and it follows the
+                     same convention as organizations.owner_id. Setting
+                     it is what allows this route to use the caller's own
+                     RLS-enforced client.
+
+          user_id  — a compatibility column added later by
+                     20260901165535 ("PROJECT COMPATIBILITY COLUMNS").
+                     Existing queries and the projects_user_id_idx index
+                     use it, so it is kept populated and consistent
+                     rather than dropped, which would be a breaking
+                     schema change.
+
+        Both are set from the same verified session id, so they cannot
+        diverge for rows this route creates.
+      */
+      owner_id:
+        userId,
+
       user_id:
         userId,
 
@@ -563,7 +655,7 @@ export async function POST(
     const {
       data,
       error,
-    } = await supabaseAdmin
+    } = await db
       .from("projects")
       .insert(
         insertData
@@ -605,16 +697,22 @@ export async function POST(
       500
     );
   }
-}
+});
 
 /* ==================================================
    UPDATE PROJECT
 ================================================== */
 
-export async function PATCH(
-  request: NextRequest
-) {
+export const PATCH = withAuth(async (
+  request,
+  session
+) => {
   try {
+    /*
+      Phase 4: the caller RLS-enforced client is the default data path.
+    */
+    const db = session.supabase;
+
     const body =
       (await request.json()) as
         UpdateProjectBody;
@@ -732,10 +830,18 @@ export async function PATCH(
         );
     }
 
+    /*
+      SECURITY:
+
+      The ownership filter is what makes this update safe. Without it any
+      caller could modify any project by id (ARCHITECTURE_AUDIT.md §8.1).
+      A non-owner receives 404 rather than 403 so that project ids are not
+      enumerable.
+    */
     const {
       data: existingProject,
       error: existingError,
-    } = await supabaseAdmin
+    } = await db
       .from("projects")
       .select(
         `
@@ -747,6 +853,10 @@ export async function PATCH(
       .eq(
         "id",
         id
+      )
+      .eq(
+        "user_id",
+        session.userId
       )
       .maybeSingle();
 
@@ -798,7 +908,7 @@ export async function PATCH(
     const {
       data,
       error,
-    } = await supabaseAdmin
+    } = await db
       .from("projects")
       .update(
         updateData
@@ -806,6 +916,10 @@ export async function PATCH(
       .eq(
         "id",
         id
+      )
+      .eq(
+        "user_id",
+        session.userId
       )
       .select(
         PROJECT_SELECT
@@ -851,16 +965,22 @@ export async function PATCH(
       500
     );
   }
-}
+});
 
 /* ==================================================
    DELETE PROJECT
 ================================================== */
 
-export async function DELETE(
-  request: NextRequest
-) {
+export const DELETE = withAuth(async (
+  request,
+  session
+) => {
   try {
+    /*
+      Phase 4: the caller RLS-enforced client is the default data path.
+    */
+    const db = session.supabase;
+
     const { searchParams } =
       new URL(request.url);
 
@@ -870,11 +990,14 @@ export async function DELETE(
         200
       );
 
+    /*
+      SECURITY:
+
+      Deletion is scoped to the verified session owner. A client-supplied
+      `userId` parameter is no longer accepted.
+    */
     const userId =
-      normalizeString(
-        searchParams.get("userId"),
-        200
-      );
+      session.userId;
 
     if (!id) {
       return jsonError(
@@ -883,17 +1006,10 @@ export async function DELETE(
       );
     }
 
-    if (!userId) {
-      return jsonError(
-        "userId is required.",
-        400
-      );
-    }
-
     const {
       data,
       error,
-    } = await supabaseAdmin
+    } = await db
       .from("projects")
       .delete()
       .eq(
@@ -949,4 +1065,4 @@ export async function DELETE(
       500
     );
   }
-}
+});

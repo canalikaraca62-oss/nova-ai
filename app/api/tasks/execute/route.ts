@@ -1,10 +1,19 @@
-import type {
-  NextRequest} from "next/server";
 import {
   NextResponse,
 } from "next/server";
 
-import { supabaseAdmin } from "@/lib/supabaseAdmin";
+/*
+  DATA ACCESS (Phase 4):
+
+  Task reads and execution-status writes use the CALLER'S OWN
+  RLS-enforced client. public.tasks carries owner-scoped
+  select/update policies (auth.uid() = user_id) matching the filters
+  these helpers already apply, so RLS enforces ownership beneath them
+  (ARCHITECTURE_AUDIT.md §8.6).
+*/
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+import { withAuth } from "@/lib/api/withAuth";
 import { toJson } from "@/lib/supabase/json";
 import type { Database } from "@/types/database";
 
@@ -137,71 +146,6 @@ function failure(
       status,
     }
   );
-}
-
-/* ==================================================
-   AUTH
-================================================== */
-
-async function getAuthenticatedUser(
-  request: NextRequest
-): Promise<{
-  userId: string | null;
-  error: string | null;
-}> {
-  const authorization =
-    request.headers.get(
-      "authorization"
-    );
-
-  if (!authorization) {
-    return {
-      userId: null,
-      error:
-        "Missing authorization header.",
-    };
-  }
-
-  const token =
-    authorization.startsWith(
-      "Bearer "
-    )
-      ? authorization
-          .slice(7)
-          .trim()
-      : authorization.trim();
-
-  if (!token) {
-    return {
-      userId: null,
-      error:
-        "Invalid authorization token.",
-    };
-  }
-
-  const {
-    data,
-    error,
-  } =
-    await supabaseAdmin.auth.getUser(
-      token
-    );
-
-  if (
-    error ||
-    !data.user
-  ) {
-    return {
-      userId: null,
-      error: "Unauthorized.",
-    };
-  }
-
-  return {
-    userId:
-      data.user.id,
-    error: null,
-  };
 }
 
 /* ==================================================
@@ -446,6 +390,7 @@ function buildExecutionMetadata(
 ================================================== */
 
 async function getTask(
+  db: SupabaseClient<Database>,
   taskId: string,
   userId: string
 ): Promise<{
@@ -456,7 +401,7 @@ async function getTask(
     data,
     error,
   } =
-    await supabaseAdmin
+    await db
       .from("tasks")
       .select(
         `
@@ -499,11 +444,14 @@ async function getTask(
 ================================================== */
 
 async function updateTaskExecution({
+  db,
   taskId,
   userId,
   status,
   metadata,
 }: {
+  db: SupabaseClient<Database>;
+
   taskId: string;
 
   userId: string;
@@ -534,7 +482,7 @@ async function updateTaskExecution({
     data,
     error,
   } =
-    await supabaseAdmin
+    await db
       .from("tasks")
       .update(
         updateData
@@ -738,29 +686,22 @@ async function executeTask({
    POST EXECUTE TASK
 ================================================== */
 
-export async function POST(
-  request: NextRequest
-) {
+export const POST = withAuth(async (
+  request,
+  session
+) => {
   try {
     /* ----------------------------------------------
        AUTH
     ---------------------------------------------- */
 
-    const auth =
-      await getAuthenticatedUser(
-        request
-      );
-
-    if (
-      !auth.userId
-    ) {
-      return failure(
-        auth.error ??
-          "Unauthorized.",
-        401,
-        "UNAUTHORIZED"
-      );
-    }
+    /*
+      Authentication is performed by withAuth (lib/api/withAuth.ts)
+      before this handler runs.
+    */
+    const auth = {
+      userId: session.userId,
+    };
 
     /* ----------------------------------------------
        PARSE BODY
@@ -848,6 +789,7 @@ export async function POST(
       error: taskError,
     } =
       await getTask(
+        session.supabase,
         taskId,
         auth.userId
       );
@@ -962,6 +904,8 @@ export async function POST(
       error: runningError,
     } =
       await updateTaskExecution({
+        db: session.supabase,
+        
         taskId:
           task.id,
 
@@ -1074,6 +1018,8 @@ export async function POST(
         error: completionError,
       } =
         await updateTaskExecution({
+          db: session.supabase,
+          
           taskId:
             task.id,
 
@@ -1195,6 +1141,8 @@ export async function POST(
         error: failureUpdateError,
       } =
         await updateTaskExecution({
+          db: session.supabase,
+          
           taskId:
             task.id,
 
@@ -1237,4 +1185,4 @@ export async function POST(
       "INTERNAL_ERROR"
     );
   }
-}
+})

@@ -1,5 +1,8 @@
-import type { NextRequest} from "next/server";
 import { NextResponse } from "next/server";
+
+import { withAuth } from "@/lib/api/withAuth";
+import { enforceUsage } from "@/lib/api/usageGuard";
+import { selectModel } from "@/lib/ai/registry";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -266,9 +269,27 @@ export async function GET() {
    TEXT TO SPEECH
 ================================================== */
 
-export async function POST(
-  request: NextRequest
-) {
+export const POST = withAuth(async (
+  request,
+  session
+) => {
+  /*
+    USAGE ENFORCEMENT (Phase 5)
+
+    Entitlement, burst rate limit and plan quota are all checked before
+    any paid provider call. Identity and plan come from the verified
+    session and public.profiles — never from the request
+    (ARCHITECTURE_AUDIT.md §17, §8.2).
+  */
+  const guard = await enforceUsage(
+    session,
+    "ai:voice",
+    "voiceRequest"
+  );
+
+  if (guard.denied) {
+    return guard.response;
+  }
   const startedAt =
     Date.now();
 
@@ -387,9 +408,39 @@ export async function POST(
         body.model
       );
 
+    /*
+      AI POLICY (Phase 7)
+
+      The speech model is validated against the approved registry. This
+      route previously accepted any model string from the caller and
+      passed it to the provider.
+
+      No token clamp applies here: text-to-speech is not billed per
+      completion token, so the cost lever is the input length, bounded
+      separately by MAX_INPUT_LENGTH.
+    */
+    const speechModel =
+      selectModel(
+        requestedModel,
+        "speech",
+        guard.entitlement.effectivePlan
+      );
+
+    if (!speechModel.ok) {
+      return json(
+        {
+          error: {
+            code: "UNKNOWN_MODEL",
+            message:
+              "The requested voice model is not available.",
+          },
+        },
+        400
+      );
+    }
+
     const model =
-      requestedModel ??
-      DEFAULT_MODEL;
+      speechModel.model.id;
 
     const speed =
       clamp(
@@ -543,6 +594,8 @@ export async function POST(
     const audioBuffer =
       await response.arrayBuffer();
 
+    await guard.record({});
+
     return new NextResponse(
       audioBuffer,
       {
@@ -619,7 +672,7 @@ export async function POST(
         : 500
     );
   }
-}
+});
 
 /* ==================================================
    METHOD NOT ALLOWED

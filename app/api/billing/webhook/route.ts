@@ -2,7 +2,24 @@ import type { NextRequest} from "next/server";
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
 
+/*
+  SERVICE ROLE CLIENT — justification (ARCHITECTURE_AUDIT.md §8.6)
+
+  Stripe webhooks carry no user session, so there is no caller identity
+  for RLS to evaluate. The request is authenticated by signature
+  verification instead (stripe.webhooks.constructEvent below), and the
+  handler writes billing state that a client must never be able to set.
+
+  This route is intentionally public (see middleware.ts).
+*/
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import {
+  asBillingEventsClient,
+  claimEvent,
+  settleEvent,
+} from "@/lib/billing/idempotency";
+import { resolvePlan } from "@/lib/billing/planResolution";
+import type { PlanId } from "@/lib/plans";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -11,12 +28,20 @@ export const dynamic = "force-dynamic";
    SYRAVEN BILLING WEBHOOK
 ================================================== */
 
-type SyravenPlan =
-  | "free"
-  | "premium"
-  | "pro"
-  | "business"
-  | "enterprise";
+/*
+  PLAN VOCABULARY (Phase 6)
+
+  This route previously defined its own union including "premium", a
+  value lib/plans.ts does not recognise. Since Phase 5, profiles.plan
+  drives AI entitlement through isPlanId(), which rejected "premium" and
+  silently degraded the account to FREE — so a paying customer received
+  free-tier limits.
+
+  PlanId from lib/plans.ts is now the single vocabulary. Legacy names
+  are still ACCEPTED as input (see lib/billing/planResolution.ts) but
+  never written.
+*/
+type SyravenPlan = PlanId;
 
 type BillingStatus =
   | "active"
@@ -159,9 +184,14 @@ function normalizePlan(
       .trim();
 
   switch (normalized) {
+    /*
+      Legacy names. 'premium' was the checkout route's name for what
+      lib/plans.ts calls 'starter'; writing 'premium' produced a value
+      isPlanId() rejects, degrading paying users to free limits.
+    */
     case "premium":
     case "plus":
-      return "premium";
+      return "starter";
 
     case "pro":
     case "vip":
@@ -260,7 +290,7 @@ function getPlanFromPriceId(
     premiumPriceId &&
     normalizedPriceId === premiumPriceId
   ) {
-    return "premium";
+    return "starter";
   }
 
   if (
@@ -650,6 +680,36 @@ function getSubscriptionPlan(
 }
 
 /* ==================================================
+   CHECKOUT PRICE EXTRACTION
+================================================== */
+
+/**
+ * Reads the purchased price id from a checkout session.
+ *
+ * A Checkout Session does not carry line items unless they were
+ * expanded on retrieval, so this is best-effort: when the price cannot
+ * be determined, resolvePlan falls back to metadata and records that it
+ * did so via `source`.
+ */
+function extractCheckoutPriceId(
+  session: Stripe.Checkout.Session
+): string | null {
+  const lineItems =
+    (session as Stripe.Checkout.Session & {
+      line_items?: {
+        data?: Array<{
+          price?: { id?: string } | null;
+        }>;
+      };
+    }).line_items;
+
+  const first =
+    lineItems?.data?.[0]?.price?.id;
+
+  return getStringValue(first);
+}
+
+/* ==================================================
    CHECKOUT COMPLETED
 ================================================== */
 
@@ -690,14 +750,32 @@ async function handleCheckoutCompleted(
     return;
   }
 
-  const metadataPlan =
-    getPlanFromMetadata(
-      session.metadata
-    );
+  /*
+    SECURITY (ARCHITECTURE_AUDIT.md §8.5)
 
-  const plan =
-    metadataPlan ??
-    "free";
+    The plan is resolved from the PRICE actually purchased. Metadata is
+    a hint, honoured only when no price mapping exists, and any
+    disagreement is logged.
+
+    Previously this path took session.metadata.plan directly, so a
+    webhook payload claiming "enterprise" granted enterprise. Since
+    Phase 5 that is an authorization escalation, not just a billing
+    error.
+  */
+  const lineItemPriceId =
+    extractCheckoutPriceId(session);
+
+  const resolution =
+    resolvePlan({
+      priceId: lineItemPriceId,
+      metadataPlan:
+        session.metadata?.plan ??
+        session.metadata?.tier ??
+        session.metadata?.plan_name ??
+        null,
+    });
+
+  const plan = resolution.plan;
 
   /*
     Checkout payment status:
@@ -1107,8 +1185,52 @@ export async function POST(
     }
 
     /*
-      Event processing
+      IDEMPOTENCY (ARCHITECTURE_AUDIT.md §8.4, protocol §24)
+
+      Stripe guarantees AT-LEAST-ONCE delivery. The event id is claimed
+      here, before any side effect. A duplicate delivery loses the race
+      on the UNIQUE constraint and is acknowledged without repeating the
+      billing update.
+
+      A claim FAILURE (not a duplicate — a real database problem) returns
+      an error so Stripe retries, rather than silently dropping a
+      legitimate billing event.
     */
+    const events =
+      asBillingEventsClient(supabaseAdmin);
+
+    const claim =
+      await claimEvent(
+        events,
+        event.id,
+        event.type
+      );
+
+    if (!claim.claimed) {
+      if (claim.reason === "ALREADY_PROCESSED") {
+        return successResponse({
+          received: true,
+          configured: true,
+          duplicate: true,
+          eventId: event.id,
+          eventType: event.type,
+        });
+      }
+
+      return errorResponse(
+        "Billing event could not be recorded.",
+        503
+      );
+    }
+
+    let outcomeStatus:
+      | "processed"
+      | "ignored"
+      | "failed" = "processed";
+
+    let outcomeError: string | null = null;
+
+    try {
 
     switch (event.type) {
       case "checkout.session.completed": {
@@ -1154,10 +1276,12 @@ export async function POST(
 
       default: {
         /*
-          Stripe birçok event gönderir.
-          Desteklenmeyen eventler hata
-          üretmeden acknowledge edilir.
+          Stripe sends many event types. Unsupported ones are
+          acknowledged without error, and recorded as 'ignored' so the
+          audit trail distinguishes them from events that were applied.
         */
+
+        outcomeStatus = "ignored";
 
         console.log(
           "SYRAVEN WEBHOOK EVENT IGNORED:",
@@ -1172,6 +1296,34 @@ export async function POST(
         break;
       }
     }
+
+    } catch (handlerError) {
+      /*
+        The side effect failed after the event was claimed. Record it as
+        failed and rethrow so Stripe retries; the claim row remains and
+        the retry is refused as a duplicate, which is deliberate — a
+        handler that failed halfway must be investigated rather than
+        blindly re-applied.
+      */
+      outcomeStatus = "failed";
+
+      outcomeError =
+        handlerError instanceof Error
+          ? handlerError.message
+          : "Unknown handler error";
+
+      await settleEvent(events, event.id, {
+        status: "failed",
+        errorMessage: outcomeError,
+      });
+
+      throw handlerError;
+    }
+
+    await settleEvent(events, event.id, {
+      status: outcomeStatus,
+      errorMessage: outcomeError,
+    });
 
     return successResponse({
       received: true,

@@ -1,5 +1,9 @@
-import type { NextRequest} from "next/server";
 import { NextResponse } from "next/server";
+
+import { withAuth } from "@/lib/api/withAuth";
+import { enforceUsage } from "@/lib/api/usageGuard";
+import { resolveAiPolicy } from "@/lib/api/aiPolicy";
+import { AI_REQUEST_POLICY } from "@/lib/ai/provider";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -227,9 +231,27 @@ export async function OPTIONS() {
 /*                                   POST                                     */
 /* -------------------------------------------------------------------------- */
 
-export async function POST(
-  request: NextRequest
-) {
+export const POST = withAuth(async (
+  request,
+  session
+) => {
+  /*
+    USAGE ENFORCEMENT (Phase 5)
+
+    Entitlement, burst rate limit and plan quota are all checked before
+    any paid provider call. Identity and plan come from the verified
+    session and public.profiles — never from the request
+    (ARCHITECTURE_AUDIT.md §17, §8.2).
+  */
+  const guard = await enforceUsage(
+    session,
+    "ai:agent",
+    "agentRun"
+  );
+
+  if (guard.denied) {
+    return guard.response;
+  }
   const executionId = createExecutionId();
 
   try {
@@ -332,27 +354,34 @@ export async function POST(
       );
     }
 
+    /*
+      AI POLICY (Phase 7)
+
+      Model validated against the approved registry and token budget
+      clamped by plan. This route previously allowed ANY model string
+      and up to 32,768 tokens regardless of plan.
+    */
+    const policy =
+      resolveAiPolicy({
+        capability: "chat",
+        entitlement: guard.entitlement,
+        requestedModel: model,
+        requestedTokens: maxTokens,
+        requestedTemperature: temperature,
+      });
+
+    if (!policy.ok) {
+      return policy.response;
+    }
+
     const selectedModel =
-      typeof model === "string" &&
-      model.trim()
-        ? model.trim()
-        : DEFAULT_MODEL;
+      policy.policy.model.id;
 
     const selectedTemperature =
-      clampNumber(
-        temperature,
-        0,
-        2,
-        0.7
-      );
+      policy.policy.temperature;
 
     const selectedMaxTokens =
-      clampNumber(
-        maxTokens,
-        1,
-        32768,
-        4096
-      );
+      policy.policy.maxTokens;
 
     const requestPayload = {
       model: selectedModel,
@@ -386,7 +415,14 @@ export async function POST(
           body: JSON.stringify(
             requestPayload
           ),
-          signal: request.signal,
+          /*
+            SECURITY/RELIABILITY: a SERVER-owned timeout. Passing the
+            caller's signal let a client hold a provider connection
+            open indefinitely.
+          */
+          signal: AbortSignal.timeout(
+            AI_REQUEST_POLICY.timeoutMs
+          ),
         }
       );
 
@@ -394,13 +430,14 @@ export async function POST(
         const errorText =
           await aiResponse.text();
 
+        /* Phase 11: provider bodies echo the request; bound to 300. */
         console.error(
           "[SYRAVEN AGENT STREAM ERROR]",
           {
             executionId,
             status:
               aiResponse.status,
-            error: errorText,
+            detail: errorText.slice(0, 300),
           }
         );
 
@@ -474,7 +511,14 @@ export async function POST(
         body: JSON.stringify(
           requestPayload
         ),
-        signal: request.signal,
+        /*
+            SECURITY/RELIABILITY: a SERVER-owned timeout. Passing the
+            caller's signal let a client hold a provider connection
+            open indefinitely.
+          */
+          signal: AbortSignal.timeout(
+            AI_REQUEST_POLICY.timeoutMs
+          ),
       }
     );
 
@@ -482,6 +526,7 @@ export async function POST(
       const errorText =
         await aiResponse.text();
 
+      /* Phase 11: provider bodies echo the request; bound to 300. */
       console.error(
         "[SYRAVEN AGENT EXECUTION ERROR]",
         {
@@ -489,7 +534,7 @@ export async function POST(
           status: aiResponse.status,
           agentId,
           agentName,
-          error: errorText,
+          detail: errorText.slice(0, 300),
         }
       );
 
@@ -534,6 +579,17 @@ export async function POST(
         "EMPTY_AI_RESPONSE"
       );
     }
+
+    /*
+      Record the agent run. Token counts come from the provider
+      response, so a caller cannot under-report consumption.
+    */
+    await guard.record({
+      model: selectedModel,
+      promptTokens: data.usage?.prompt_tokens ?? null,
+      completionTokens: data.usage?.completion_tokens ?? null,
+      totalTokens: data.usage?.total_tokens ?? null,
+    });
 
     return NextResponse.json(
       {
@@ -613,4 +669,4 @@ export async function POST(
       "INTERNAL_ERROR"
     );
   }
-}
+});

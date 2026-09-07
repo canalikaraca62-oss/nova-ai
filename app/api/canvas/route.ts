@@ -1,7 +1,9 @@
-import type { NextRequest} from "next/server";
 import { NextResponse } from "next/server";
 
 import OpenAI from "openai";
+
+import { withAuth } from "@/lib/api/withAuth";
+import { enforceUsage } from "@/lib/api/usageGuard";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -262,9 +264,28 @@ function createFallbackCanvas(
    POST
 ================================================== */
 
-export async function POST(
-  request: NextRequest
-) {
+export const POST = withAuth(async (
+  request,
+  session
+) => {
+  /*
+    USAGE ENFORCEMENT (Phase 5)
+
+    Entitlement, burst rate limit and plan quota are all checked before
+    any paid provider call. Identity and plan come from the verified
+    session and public.profiles — never from the request
+    (ARCHITECTURE_AUDIT.md §17, §8.2).
+  */
+  const guard = await enforceUsage(
+    session,
+    "ai:canvas",
+    "chatMessage",
+      ["chatMessageMonthly"]
+  );
+
+  if (guard.denied) {
+    return guard.response;
+  }
   try {
     const body =
       (await request.json()) as CanvasRequest;
@@ -427,6 +448,8 @@ ${sourceText}
         parsed
       );
 
+    await guard.record({});
+
     return NextResponse.json(
       {
         success: true,
@@ -457,7 +480,7 @@ ${sourceText}
       }
     );
   }
-}
+});
 
 /* ==================================================
    GET

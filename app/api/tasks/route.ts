@@ -1,7 +1,36 @@
 import type { NextRequest} from "next/server";
 import { NextResponse } from "next/server";
 
-import { supabaseAdmin } from "@/lib/supabaseAdmin";
+/*
+  DATA ACCESS (Phase 4):
+
+  Task queries use the CALLER'S OWN RLS-enforced client
+  (session.supabase). public.tasks and public.agents both carry
+  owner-scoped policies keyed on user_id — the same column and identity
+  this route filters on — so RLS now enforces ownership beneath the
+  explicit filters instead of being bypassed
+  (ARCHITECTURE_AUDIT.md §8.6).
+
+  validateProjectAccess() also uses the caller's client. It previously
+  could not: public.projects predicates its policies on owner_id /
+  organization membership (20260901154222) while this lookup uses
+  user_id (added later by 20260901165535), so the caller's client found
+  no rows.
+
+  That is now resolved in app/api/projects/route.ts, which populates
+  owner_id — the canonical column — alongside user_id on insert. No
+  migration was needed: both columns are nullable and optional, and
+  public.projects held 0 rows when this was verified.
+
+  CAVEAT: any project row created BEFORE that change would have a null
+  owner_id and would be invisible through this validator. None exist
+  today, and rows created by this application from now on always carry
+  both columns.
+*/
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+import { withAuth } from "@/lib/api/withAuth";
+import { requireOptionalProjectAccess } from "@/lib/api/tenantGuard";
 import { toJson } from "@/lib/supabase/json";
 import type { Database } from "@/types/database";
 
@@ -171,74 +200,6 @@ function failure(
       status,
     }
   );
-}
-
-/* ==================================================
-   AUTH
-================================================== */
-
-async function getAuthenticatedUser(
-  request: NextRequest
-): Promise<{
-  userId: string | null;
-  error: string | null;
-}> {
-  const authorization =
-    request.headers.get("authorization");
-
-  if (!authorization) {
-    return {
-      userId: null,
-      error: "Missing authorization header.",
-    };
-  }
-
-  const token =
-    authorization.startsWith("Bearer ")
-      ? authorization.slice(7).trim()
-      : authorization.trim();
-
-  if (!token) {
-    return {
-      userId: null,
-      error: "Invalid authorization token.",
-    };
-  }
-
-  try {
-    const {
-      data,
-      error,
-    } =
-      await supabaseAdmin.auth.getUser(
-        token
-      );
-
-    if (
-      error ||
-      !data.user
-    ) {
-      return {
-        userId: null,
-        error: "Unauthorized.",
-      };
-    }
-
-    return {
-      userId: data.user.id,
-      error: null,
-    };
-  } catch (error) {
-    console.error(
-      "SYRAVEN AUTH ERROR:",
-      error
-    );
-
-    return {
-      userId: null,
-      error: "Authentication failed.",
-    };
-  }
 }
 
 /* ==================================================
@@ -747,17 +708,31 @@ function parseCreateInput(
 ================================================== */
 
 async function validateProjectAccess(
+  client: SupabaseClient<Database>,
   projectId: string,
   userId: string
 ): Promise<{
   valid: boolean;
   databaseError: boolean;
 }> {
+  /*
+    ELEVATED ACCESS — RLS_PREDICATE_MISMATCH.
+
+    public.projects policies predicate on owner_id / organization
+    membership (20260901154222). This lookup uses user_id, which
+    20260901165535 added later. The two ownership models disagree, so the
+    caller's RLS client would return no rows and every project-scoped
+    task operation would break.
+
+    The explicit user_id + id filters below are what enforce ownership
+    here. Reconciling the two models is a migration, not a code change,
+    and is recorded in the Phase 4 report.
+  */
   const {
     data,
     error,
   } =
-    await supabaseAdmin
+    await client
       .from("projects")
       .select("id")
       .eq(
@@ -793,6 +768,7 @@ async function validateProjectAccess(
 ================================================== */
 
 async function validateAgentAccess(
+  client: SupabaseClient<Database>,
   agentId: string,
   userId: string
 ): Promise<{
@@ -803,7 +779,7 @@ async function validateAgentAccess(
     data,
     error,
   } =
-    await supabaseAdmin
+    await client
       .from("agents")
       .select("id")
       .eq(
@@ -838,23 +814,24 @@ async function validateAgentAccess(
    GET TASKS
 ================================================== */
 
-export async function GET(
-  request: NextRequest
-) {
+export const GET = withAuth(async (
+  request,
+  session
+) => {
   try {
-    const auth =
-      await getAuthenticatedUser(
-        request
-      );
+    /*
+      Phase 4: the caller's RLS-enforced client is the default data path.
+    */
+    const db = session.supabase;
 
-    if (!auth.userId) {
-      return failure(
-        auth.error ??
-          "Unauthorized.",
-        401,
-        "UNAUTHORIZED"
-      );
-    }
+    /*
+      Authentication is performed by withAuth (lib/api/withAuth.ts)
+      before this handler runs. `auth` binds the verified session so the
+      existing ownership filters below continue to read naturally.
+    */
+    const auth = {
+      userId: session.userId,
+    };
 
     const searchParams =
       request.nextUrl.searchParams;
@@ -913,7 +890,7 @@ export async function GET(
       );
 
     let query =
-      supabaseAdmin
+      db
         .from("tasks")
         .select(
           TASK_SELECT,
@@ -960,6 +937,19 @@ export async function GET(
           "priority",
           rawPriority
         );
+    }
+
+    /*
+      SECURITY: prove the project before filtering by it.
+    */
+    const projectGuard =
+      await requireOptionalProjectAccess(
+        session,
+        projectId
+      );
+
+    if (projectGuard?.denied) {
+      return projectGuard.response;
     }
 
     if (projectId) {
@@ -1034,33 +1024,34 @@ export async function GET(
       "INTERNAL_ERROR"
     );
   }
-}
+})
 
 /* ==================================================
    CREATE TASK
 ================================================== */
 
-export async function POST(
-  request: NextRequest
-) {
+export const POST = withAuth(async (
+  request,
+  session
+) => {
   try {
+    /*
+      Phase 4: the caller's RLS-enforced client is the default data path.
+    */
+    const db = session.supabase;
+
     /* ----------------------------------------------
        AUTH
     ---------------------------------------------- */
 
-    const auth =
-      await getAuthenticatedUser(
-        request
-      );
-
-    if (!auth.userId) {
-      return failure(
-        auth.error ??
-          "Unauthorized.",
-        401,
-        "UNAUTHORIZED"
-      );
-    }
+    /*
+      Authentication is performed by withAuth (lib/api/withAuth.ts)
+      before this handler runs. `auth` binds the verified session so the
+      existing ownership filters below continue to read naturally.
+    */
+    const auth = {
+      userId: session.userId,
+    };
 
     /* ----------------------------------------------
        BODY
@@ -1109,6 +1100,7 @@ export async function POST(
     if (input.projectId) {
       const projectValidation =
         await validateProjectAccess(
+          db,
           input.projectId,
           auth.userId
         );
@@ -1141,6 +1133,7 @@ export async function POST(
     if (input.agentId) {
       const agentValidation =
         await validateAgentAccess(
+          db,
           input.agentId,
           auth.userId
         );
@@ -1214,7 +1207,7 @@ export async function POST(
       data,
       error,
     } =
-      await supabaseAdmin
+      await db
         .from("tasks")
         .insert(
           insertData
@@ -1255,33 +1248,34 @@ export async function POST(
       "INTERNAL_ERROR"
     );
   }
-}
+})
 
 /* ==================================================
    UPDATE TASK
 ================================================== */
 
-export async function PATCH(
-  request: NextRequest
-) {
+export const PATCH = withAuth(async (
+  request,
+  session
+) => {
   try {
+    /*
+      Phase 4: the caller's RLS-enforced client is the default data path.
+    */
+    const db = session.supabase;
+
     /* ----------------------------------------------
        AUTH
     ---------------------------------------------- */
 
-    const auth =
-      await getAuthenticatedUser(
-        request
-      );
-
-    if (!auth.userId) {
-      return failure(
-        auth.error ??
-          "Unauthorized.",
-        401,
-        "UNAUTHORIZED"
-      );
-    }
+    /*
+      Authentication is performed by withAuth (lib/api/withAuth.ts)
+      before this handler runs. `auth` binds the verified session so the
+      existing ownership filters below continue to read naturally.
+    */
+    const auth = {
+      userId: session.userId,
+    };
 
     /* ----------------------------------------------
        BODY
@@ -1341,7 +1335,7 @@ export async function PATCH(
       data: existingTask,
       error: existingTaskError,
     } =
-      await supabaseAdmin
+      await db
         .from("tasks")
         .select(
           `
@@ -1696,6 +1690,7 @@ export async function PATCH(
 
         const validation =
           await validateProjectAccess(
+            db,
             projectId,
             auth.userId
           );
@@ -1768,6 +1763,7 @@ export async function PATCH(
 
         const validation =
           await validateAgentAccess(
+            db,
             agentId,
             auth.userId
           );
@@ -1819,7 +1815,7 @@ export async function PATCH(
       data,
       error,
     } =
-      await supabaseAdmin
+      await db
         .from("tasks")
         .update(
           updateData
@@ -1873,33 +1869,34 @@ export async function PATCH(
       "INTERNAL_ERROR"
     );
   }
-}
+})
 
 /* ==================================================
    DELETE TASK
 ================================================== */
 
-export async function DELETE(
-  request: NextRequest
-) {
+export const DELETE = withAuth(async (
+  request,
+  session
+) => {
   try {
+    /*
+      Phase 4: the caller's RLS-enforced client is the default data path.
+    */
+    const db = session.supabase;
+
     /* ----------------------------------------------
        AUTH
     ---------------------------------------------- */
 
-    const auth =
-      await getAuthenticatedUser(
-        request
-      );
-
-    if (!auth.userId) {
-      return failure(
-        auth.error ??
-          "Unauthorized.",
-        401,
-        "UNAUTHORIZED"
-      );
-    }
+    /*
+      Authentication is performed by withAuth (lib/api/withAuth.ts)
+      before this handler runs. `auth` binds the verified session so the
+      existing ownership filters below continue to read naturally.
+    */
+    const auth = {
+      userId: session.userId,
+    };
 
     /* ----------------------------------------------
        TASK ID
@@ -1929,7 +1926,7 @@ export async function DELETE(
       data,
       error,
     } =
-      await supabaseAdmin
+      await db
         .from("tasks")
         .delete()
         .eq(
@@ -1983,4 +1980,4 @@ export async function DELETE(
       "INTERNAL_ERROR"
     );
   }
-}
+})

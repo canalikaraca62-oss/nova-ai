@@ -1,7 +1,17 @@
-import type { NextRequest} from "next/server";
 import { NextResponse } from "next/server";
 
+/*
+  SERVICE ROLE CLIENT — justification (ARCHITECTURE_AUDIT.md §8.6)
+
+  supabaseAdmin is used here for Supabase Storage operations. Storage
+  access is governed by bucket policies rather than table RLS, and the
+  upload path writes to a server-controlled storage prefix.
+
+  Ownership is enforced in code: every write is keyed to session.userId,
+  which withAuth verifies before this handler runs.
+*/
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { withAuth } from "@/lib/api/withAuth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,10 +27,6 @@ const STORAGE_BUCKET = "files";
    TYPES
 ================================================== */
 
-type AuthenticatedUser = {
-  id: string;
-  email?: string | null;
-};
 
 type UploadResponse = {
   success: boolean;
@@ -231,111 +237,11 @@ function createStoragePath({
   ].join("/");
 }
 
-function getBearerToken(
-  request: NextRequest
-) {
-  const authorization =
-    request.headers.get("authorization");
-
-  if (!authorization) {
-    return null;
-  }
-
-  const [type, token] =
-    authorization.split(" ");
-
-  if (
-    type?.toLowerCase() !== "bearer" ||
-    !token
-  ) {
-    return null;
-  }
-
-  return token.trim();
-}
 
 /* ==================================================
    AUTHENTICATE USER
 ================================================== */
 
-async function getAuthenticatedUser(
-  request: NextRequest
-): Promise<AuthenticatedUser | null> {
-  const bearerToken =
-    getBearerToken(request);
-
-  /*
-    Authorization header varsa doğrudan
-    Supabase access token doğrulanır.
-  */
-
-  if (bearerToken) {
-    const {
-      data,
-      error,
-    } = await supabaseAdmin.auth.getUser(
-      bearerToken
-    );
-
-    if (!error && data.user) {
-      return {
-        id: data.user.id,
-        email: data.user.email,
-      };
-    }
-  }
-
-  /*
-    Cookie tabanlı auth kullanan client'lar için
-    Supabase auth cookie içindeki token denenir.
-  */
-
-  const cookies = request.cookies.getAll();
-
-  const authCookie = cookies.find(
-    (cookie) =>
-      cookie.name.includes(
-        "auth-token"
-      ) ||
-      cookie.name.startsWith(
-        "sb-"
-      )
-  );
-
-  if (!authCookie?.value) {
-    return null;
-  }
-
-  try {
-    const parsedValue =
-      JSON.parse(authCookie.value);
-
-    const accessToken =
-      parsedValue?.access_token;
-
-    if (!accessToken) {
-      return null;
-    }
-
-    const {
-      data,
-      error,
-    } = await supabaseAdmin.auth.getUser(
-      accessToken
-    );
-
-    if (error || !data.user) {
-      return null;
-    }
-
-    return {
-      id: data.user.id,
-      email: data.user.email,
-    };
-  } catch {
-    return null;
-  }
-}
 
 /* ==================================================
    GET FILE
@@ -363,28 +269,24 @@ function getUploadedFile(
    POST
 ================================================== */
 
-export async function POST(
-  request: NextRequest
-) {
+export const POST = withAuth(async (
+  request,
+  session
+) => {
   try {
     /* ----------------------------------------------
        AUTH
     ---------------------------------------------- */
 
-    const user =
-      await getAuthenticatedUser(request);
-
-    if (!user) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Unauthorized.",
-        } satisfies UploadResponse,
-        {
-          status: 401,
-        }
-      );
-    }
+    /*
+      Authentication is performed by withAuth (lib/api/withAuth.ts)
+      before this handler runs. The route-local helper this replaced
+      also parsed a Supabase auth cookie by hand; withAuth handles both
+      Bearer and cookie sessions through @supabase/ssr.
+    */
+    const user = {
+      id: session.userId,
+    };
 
     /* ----------------------------------------------
        CONTENT TYPE CHECK
@@ -632,7 +534,7 @@ export async function POST(
       }
     );
   }
-}
+})
 
 /* ==================================================
    METHOD NOT ALLOWED
