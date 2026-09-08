@@ -1079,9 +1079,19 @@ export const POST = withAuth(async (
         );
       }
 
+      /*
+        The upstream status is echoed so the cause is diagnosable
+        from the response. A 400 or 404 here means a MODEL problem --
+        typically a decommissioned model id -- while 5xx is a genuine
+        provider outage. Only the status is included: the provider's
+        body echoes the request and may contain the user's prompt, so
+        it stays in the server log.
+      */
       return jsonError(
-        "The AI provider could not complete this request.",
-        502
+        `The AI provider could not complete this request ` +
+          `(${activeProvider.provider} returned ${response.status}).`,
+        502,
+        "PROVIDER_REQUEST_FAILED"
       );
     }
 

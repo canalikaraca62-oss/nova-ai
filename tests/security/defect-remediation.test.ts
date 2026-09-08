@@ -214,10 +214,23 @@ void describe("D3: /api/chat classifies provider failures", () => {
 
   void test("a genuine upstream failure is still 502", () => {
     /* The fix must not flatten every failure into a config error. */
+    /*
+      Tests the STATUS, not one message spelling. The message now
+      carries the upstream status so a production failure is
+      diagnosable from the response; pinning the old literal made a
+      diagnostic improvement look like a regression.
+    */
     assert.match(
       CHAT,
-      /"The AI provider could not complete this request\.",\s*\n?\s*502/,
+      /could not complete this request[\s\S]{0,220}?502/,
       "Non-auth provider failures must remain 502.",
+    );
+
+    assert.match(
+      CHAT,
+      /PROVIDER_REQUEST_FAILED/,
+      "The generic provider failure needs a code too, so a caller can " +
+        "tell it from a configuration problem.",
     );
   });
 
