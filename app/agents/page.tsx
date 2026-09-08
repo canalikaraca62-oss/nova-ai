@@ -71,7 +71,7 @@ const agents: Agent[] = [
     id: "research-agent",
     name: "Research Agent",
     description:
-      "Araştırır, kaynakları karşılaştırır, doğrular ve karar vermeye hazır sonuçlar üretir.",
+      "Researches, compares sources, verifies them and produces decision-ready results.",
     category: "Research",
     icon: <FileSearch size={23} />,
     featured: true,
@@ -83,7 +83,7 @@ const agents: Agent[] = [
     id: "coding-agent",
     name: "Coding Agent",
     description:
-      "Kod yazar, hataları analiz eder, refactor yapar ve proje mimarisini geliştirir.",
+      "Writes code, analyses bugs, refactors and improves project architecture.",
     category: "Development",
     icon: <Code2 size={23} />,
     featured: true,
@@ -95,7 +95,7 @@ const agents: Agent[] = [
     id: "website-agent",
     name: "Website Agent",
     description:
-      "Web sitelerini analiz eder, geliştirme planı çıkarır ve yeni özellikler için çözüm üretir.",
+      "Analyses websites, produces an improvement plan and proposes solutions for new features.",
     category: "Development",
     icon: <Globe2 size={23} />,
     featured: true,
@@ -107,7 +107,7 @@ const agents: Agent[] = [
     id: "business-agent",
     name: "Business Agent",
     description:
-      "İş fikirleri, strateji, operasyon ve büyüme planları için AI iş ortağın.",
+      "Your AI partner for business ideas, strategy, operations and growth plans.",
     category: "Business",
     icon: <BriefcaseBusiness size={23} />,
     featured: true,
@@ -118,7 +118,7 @@ const agents: Agent[] = [
     id: "marketing-agent",
     name: "Marketing Agent",
     description:
-      "Kampanyalar, içerik fikirleri, hedef kitle ve büyüme stratejileri oluşturur.",
+      "Builds campaigns, content ideas, audience definitions and growth strategies.",
     category: "Business",
     icon: <Megaphone size={23} />,
     popular: true,
@@ -129,7 +129,7 @@ const agents: Agent[] = [
     id: "data-agent",
     name: "Data Analyst",
     description:
-      "Verileri analiz eder, önemli eğilimleri bulur ve anlaşılır içgörüler oluşturur.",
+      "Analyses data, finds meaningful trends and turns them into clear insights.",
     category: "Research",
     icon: <Database size={23} />,
     premium: true,
@@ -140,7 +140,7 @@ const agents: Agent[] = [
     id: "writing-agent",
     name: "Writing Agent",
     description:
-      "Makale, e-posta, içerik, senaryo ve profesyonel metinler üretir.",
+      "Produces articles, emails, content, scripts and professional copy.",
     category: "Creative",
     icon: <MessageSquareText size={23} />,
     color: "from-purple-500/20 via-violet-500/10 to-transparent",
@@ -150,7 +150,7 @@ const agents: Agent[] = [
     id: "design-agent",
     name: "Design Agent",
     description:
-      "Ürün fikirlerini, tasarım sistemlerini ve yaratıcı yönlendirmeleri geliştirir.",
+      "Develops product ideas, design systems and creative direction.",
     category: "Creative",
     icon: <WandSparkles size={23} />,
     premium: true,
@@ -161,7 +161,7 @@ const agents: Agent[] = [
     id: "personal-agent",
     name: "Personal Assistant",
     description:
-      "Gününü organize eder, önemli işleri takip eder ve sana proaktif öneriler sunar.",
+      "Organises your day, tracks important work and offers proactive suggestions.",
     category: "Personal",
     icon: <Brain size={23} />,
     featured: true,
@@ -172,7 +172,7 @@ const agents: Agent[] = [
     id: "email-agent",
     name: "Email Agent",
     description:
-      "E-postaları özetlemek, taslak hazırlamak ve önemli konuları ayıklamak için tasarlandı.",
+      "Designed to summarise email, draft replies and surface what matters.",
     category: "Productivity",
     icon: <Mail size={23} />,
     color: "from-cyan-500/20 via-sky-500/10 to-transparent",
@@ -182,7 +182,7 @@ const agents: Agent[] = [
     id: "calendar-agent",
     name: "Calendar Agent",
     description:
-      "Takvimini anlamlandırır, programını düzenler ve yaklaşan işleri takip eder.",
+      "Makes sense of your calendar, organises your schedule and tracks what is coming up.",
     category: "Productivity",
     icon: <CalendarDays size={23} />,
     color: "from-green-500/20 via-emerald-500/10 to-transparent",
@@ -192,7 +192,7 @@ const agents: Agent[] = [
     id: "shopping-agent",
     name: "Shopping Research",
     description:
-      "Ürünleri araştırır, seçenekleri karşılaştırır ve karar vermeni kolaylaştırır.",
+      "Researches products, compares options and makes the decision easier.",
     category: "Personal",
     icon: <ShoppingBag size={23} />,
     color: "from-yellow-500/20 via-orange-500/10 to-transparent",
@@ -303,18 +303,16 @@ export default function AgentsPage() {
               </div>
 
               <h1 className="max-w-3xl text-4xl font-semibold tracking-[-0.04em] text-white sm:text-5xl lg:text-6xl">
-                Tek bir AI değil.
+                Not a single AI.
                 <span className="block bg-gradient-to-r from-violet-300 via-white to-cyan-300 bg-clip-text text-transparent">
                   Kendi AI ekibin.
                 </span>
               </h1>
 
               <p className="mt-5 max-w-2xl text-sm leading-7 text-zinc-400 sm:text-base">
-                Araştırma, kodlama, tasarım,
-                iş geliştirme ve günlük yaşam için
-                uzmanlaşmış SYRAVEN Agent’larını kullan.
-                İstersen tamamen kendine özel bir
-                agent oluştur.
+                Use SYRAVEN agents built for research,
+                engineering, design, business and everyday
+                work — or create one entirely your own.
               </p>
             </div>
 
@@ -324,7 +322,7 @@ export default function AgentsPage() {
                 className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl bg-white px-5 text-sm font-semibold text-black transition hover:bg-zinc-200"
               >
                 <Plus size={18} />
-                Agent Oluştur
+                Create agent
               </Link>
 
               <Link
@@ -346,7 +344,7 @@ export default function AgentsPage() {
               </p>
 
               <p className="mt-1 text-xs text-zinc-500">
-                Hazır uzman agent
+                Ready-made expert agents
               </p>
             </div>
 
@@ -356,7 +354,7 @@ export default function AgentsPage() {
               </p>
 
               <p className="mt-1 text-xs text-zinc-500">
-                AI çalışma kapasitesi
+                AI working capacity
               </p>
             </div>
 
@@ -366,7 +364,7 @@ export default function AgentsPage() {
               </p>
 
               <p className="mt-1 text-xs text-zinc-500">
-                Kendi workflow imkanın
+                Build your own workflow
               </p>
             </div>
           </div>
@@ -381,11 +379,11 @@ export default function AgentsPage() {
             <div>
               <div className="mb-2 flex items-center gap-2 text-xs font-medium text-violet-300">
                 <Star size={14} />
-                Öne Çıkanlar
+                Featured
               </div>
 
               <h2 className="text-2xl font-semibold tracking-tight">
-                En güçlü agentlar
+                The most capable agents
               </h2>
             </div>
 
@@ -393,7 +391,7 @@ export default function AgentsPage() {
               href="/marketplace"
               className="hidden items-center gap-1 text-sm text-zinc-400 transition hover:text-white sm:inline-flex"
             >
-              Tümünü gör
+              See all
               <ChevronRight size={16} />
             </Link>
           </div>
@@ -434,12 +432,12 @@ export default function AgentsPage() {
               </div>
 
               <h2 className="text-2xl font-semibold tracking-tight">
-                İhtiyacın için doğru agentı bul
+                Find the right agent for the job
               </h2>
 
               <p className="mt-2 text-sm text-zinc-500">
-                Uzmanlık alanına göre filtrele
-                veya doğrudan ara.
+                Filter by speciality, or search
+                directly.
               </p>
             </div>
 
@@ -540,12 +538,12 @@ export default function AgentsPage() {
                 </div>
 
                 <h3 className="mt-5 text-lg font-semibold">
-                  Agent bulunamadı
+                  No agents found
                 </h3>
 
                 <p className="mt-2 max-w-sm text-sm leading-6 text-zinc-500">
                   Arama ifadenizi veya kategori
-                  seçiminizi değiştirmeyi deneyin.
+                  try changing your selection.
                 </p>
               </div>
             )}
@@ -565,16 +563,15 @@ export default function AgentsPage() {
               </div>
 
               <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-                Kendi AI uzmanını oluştur.
+                Create your own AI specialist.
               </h2>
 
               <p className="mt-3 text-sm leading-7 text-zinc-400">
-                Agent’ın rolünü, uzmanlık alanını,
-                çalışma şeklini ve davranışlarını
+                Define an agent’s role, speciality,
+                way of working and behaviour
                 sen belirle. SYRAVEN agent sistemi
                 gelecekte workflow, memory, tools ve
-                otomasyonlarla birlikte çalışacak şekilde
-                tasarlanmıştır.
+                so it works alongside your automations.
               </p>
 
               <div className="mt-5 flex flex-wrap gap-3 text-xs text-zinc-400">
@@ -609,7 +606,7 @@ export default function AgentsPage() {
               className="inline-flex h-13 shrink-0 items-center justify-center gap-2 rounded-2xl bg-white px-6 py-3 text-sm font-semibold text-black transition hover:bg-zinc-200"
             >
               <Plus size={18} />
-              Yeni Agent Oluştur
+              Create new agent
             </Link>
           </div>
         </section>
@@ -625,8 +622,8 @@ export default function AgentsPage() {
                 size={20}
               />
             }
-            title="Kullanıcı kontrolü"
-            description="Agent dış dünyada işlem yapmadan önce gerekli durumlarda açık kullanıcı onayı ister."
+            title="User control"
+            description="An agent asks for explicit confirmation before taking action in the outside world."
           />
 
           <InfoCard
@@ -634,15 +631,15 @@ export default function AgentsPage() {
               <Users size={20} />
             }
             title="Ekip uyumlu"
-            description="Agent mimarisi gelecekte personal, workspace, team ve enterprise kullanımlarına uyumludur."
+            description="The agent architecture supports personal, workspace, team and enterprise use."
           />
 
           <InfoCard
             icon={
               <TrendingUp size={20} />
             }
-            title="Ölçeklenebilir yapı"
-            description="Marketplace, workflow, memory ve bağlı uygulamalarla büyüyebilecek şekilde tasarlanmıştır."
+            title="Scalable architecture"
+            description="Designed to grow with marketplace, workflow, memory and connected applications."
           />
         </section>
       </main>
@@ -737,7 +734,7 @@ function AgentCard({
           href={`/agents/${agent.id}`}
           className="mt-6 flex h-11 items-center justify-between rounded-xl border border-white/[0.08] bg-black/20 px-4 text-sm font-medium text-zinc-300 transition hover:border-white/[0.16] hover:bg-white/[0.07] hover:text-white"
         >
-          Agent’ı Aç
+          Open agent
 
           <ArrowRight
             size={17}

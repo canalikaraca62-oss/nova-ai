@@ -37,35 +37,35 @@ const STARTER_MESSAGES: ChatMessage[] = [
     id: "welcome",
     role: "assistant",
     content:
-      "Merhaba. Ben SYRAVEN AI. Araştırma, analiz, yazılım, strateji, içerik ve karmaşık görevlerde sana yardımcı olmaya hazırım.",
+      "Hello. I am SYRAVEN AI. I can help with research, analysis, engineering, strategy, content and other complex work.",
     createdAt: new Date().toISOString(),
   },
 ];
 
 const SUGGESTIONS = [
   {
-    title: "Derin araştırma",
-    description: "Bir konuyu kapsamlı şekilde analiz et",
+    title: "Deep research",
+    description: "Analyse a topic in depth",
     prompt:
-      "Bu konu hakkında kapsamlı bir araştırma yap ve önemli noktaları yapılandırılmış şekilde açıkla:",
+      "Research this topic thoroughly and set out the key points in a structured way:",
   },
   {
-    title: "Kod oluştur",
-    description: "Production-ready çözüm geliştir",
+    title: "Write code",
+    description: "Build a production-ready solution",
     prompt:
-      "Production-ready, güvenli ve ölçeklenebilir bir çözüm geliştir:",
+      "Build a production-ready, secure and scalable solution:",
   },
   {
-    title: "Strateji hazırla",
-    description: "Adım adım uygulanabilir plan oluştur",
+    title: "Draft a strategy",
+    description: "Create a step-by-step, actionable plan",
     prompt:
-      "Bu hedef için ayrıntılı ve uygulanabilir bir strateji oluştur:",
+      "Create a detailed, actionable strategy for this goal:",
   },
   {
-    title: "Analiz et",
+    title: "Analyse",
     description: "Veriyi ve problemi derinlemesine incele",
     prompt:
-      "Aşağıdaki konuyu derinlemesine analiz et, riskleri ve fırsatları belirt:",
+      "Analyse the following in depth, identifying risks and opportunities:",
   },
 ];
 
@@ -319,7 +319,7 @@ export default function ChatPage() {
         if (!response.ok) {
           throw new Error(
             rawText ||
-              "SYRAVEN AI isteği işleyemedi."
+              "SYRAVEN AI could not process that request."
           );
         }
 
@@ -331,7 +331,7 @@ export default function ChatPage() {
       if (!response.ok) {
         throw new Error(
           data.error ||
-            "Mesaj gönderilirken bir hata oluştu."
+            "The message could not be sent."
         );
       }
 
@@ -340,7 +340,7 @@ export default function ChatPage() {
 
       if (!assistantContent) {
         throw new Error(
-          "AI tarafından geçerli bir yanıt alınamadı."
+          "No valid response was returned."
         );
       }
 
@@ -355,7 +355,7 @@ export default function ChatPage() {
       const message =
         caughtError instanceof Error
           ? caughtError.message
-          : "Beklenmeyen bir hata oluştu.";
+          : "Something went wrong.";
 
       setError(message);
     } finally {
@@ -411,7 +411,7 @@ export default function ChatPage() {
       }, 1600);
     } catch {
       setError(
-        "Mesaj panoya kopyalanamadı."
+        "The message could not be copied."
       );
     }
   }
@@ -476,7 +476,7 @@ export default function ChatPage() {
                 </svg>
 
                 <span className="hidden sm:inline">
-                  Yeni sohbet
+                  New chat
                 </span>
               </button>
 
@@ -507,17 +507,17 @@ export default function ChatPage() {
                   </div>
 
                   <h2 className="text-3xl font-semibold tracking-tight text-white sm:text-5xl">
-                    Ne inşa etmek
+                    What do you want to
                     <span className="text-cyan-300">
                       {" "}
-                      istiyorsun?
+                      build?
                     </span>
                   </h2>
 
                   <p className="mx-auto mt-4 max-w-2xl text-sm leading-7 text-white/45 sm:text-base">
-                    Karmaşık problemleri analiz et,
-                    araştır, üret ve projelerini
-                    daha hızlı ilerlet.
+                    Analyse complex problems, research,
+                    create, and move your projects
+                    forward faster.
                   </p>
                 </div>
 
@@ -644,7 +644,7 @@ export default function ChatPage() {
                           >
                             {copiedMessageId ===
                             message.id
-                              ? "Kopyalandı"
+                              ? "Copied"
                               : "Kopyala"}
                           </button>
                         )}
@@ -732,7 +732,7 @@ export default function ChatPage() {
                   onKeyDown={handleKeyDown}
                   disabled={isSending}
                   rows={1}
-                  placeholder="SYRAVEN AI ile konuş..."
+                  placeholder="Message SYRAVEN AI..."
                   className="max-h-60 min-h-[52px] w-full resize-none bg-transparent px-3 py-3 text-sm leading-6 text-white outline-none placeholder:text-white/25 disabled:cursor-not-allowed disabled:opacity-50"
                 />
 
@@ -742,7 +742,7 @@ export default function ChatPage() {
                       Enter
                     </kbd>
 
-                    <span>gönder</span>
+                    <span>to send</span>
 
                     <span className="text-white/10">
                       ·
@@ -752,7 +752,7 @@ export default function ChatPage() {
                       Shift + Enter
                     </kbd>
 
-                    <span>yeni satır</span>
+                    <span>for a new line</span>
                   </div>
 
                   <div className="ml-auto flex items-center gap-2">
@@ -767,7 +767,7 @@ export default function ChatPage() {
                         isSending
                       }
                       className="flex h-9 w-9 items-center justify-center rounded-xl bg-cyan-300 text-[#061014] transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-30"
-                      aria-label="Mesaj gönder"
+                      aria-label="Send message"
                     >
                       {isSending ? (
                         <svg
@@ -799,9 +799,8 @@ export default function ChatPage() {
               </div>
 
               <p className="mt-2 text-center text-[10px] text-white/20">
-                SYRAVEN AI yanıtları hata
-                içerebilir. Kritik bilgileri
-                doğrulayın.
+                SYRAVEN AI can make mistakes.
+                Verify important information.
               </p>
             </form>
           </div>

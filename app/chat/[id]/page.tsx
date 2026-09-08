@@ -103,7 +103,7 @@ function createTitle(
     );
 
   if (!firstUserMessage) {
-    return "Yeni sohbet";
+    return "New chat";
   }
 
   const value =
@@ -220,8 +220,8 @@ function saveConversation(
     );
   } catch {
     /*
-      localStorage erişimi başarısız olursa
-      sohbet yine aktif oturum boyunca çalışmaya devam eder.
+      If localStorage is unavailable the chat still works for the
+      duration of the active session.
     */
   }
 }
@@ -262,7 +262,7 @@ export default function ChatConversationPage() {
     useState("");
 
   const [title, setTitle] =
-    useState("Yeni sohbet");
+    useState("New chat");
 
   const [isLoadingConversation, setIsLoadingConversation] =
     useState(true);
@@ -320,7 +320,7 @@ export default function ChatConversationPage() {
       );
     } else {
       setMessages([]);
-      setTitle("Yeni sohbet");
+      setTitle("New chat");
     }
 
     setIsLoadingConversation(false);
@@ -467,7 +467,7 @@ export default function ChatConversationPage() {
         if (!response.ok) {
           throw new Error(
             rawText ||
-              "SYRAVEN AI isteği işleyemedi."
+              "SYRAVEN AI could not process that request."
           );
         }
 
@@ -479,7 +479,7 @@ export default function ChatConversationPage() {
       if (!response.ok) {
         throw new Error(
           data.error ||
-            "Mesaj gönderilirken bir hata oluştu."
+            "The message could not be sent."
         );
       }
 
@@ -488,7 +488,7 @@ export default function ChatConversationPage() {
 
       if (!assistantContent) {
         throw new Error(
-          "AI tarafından geçerli bir yanıt alınamadı."
+          "No valid response was returned."
         );
       }
 
@@ -507,7 +507,7 @@ export default function ChatConversationPage() {
       const message =
         caughtError instanceof Error
           ? caughtError.message
-          : "Beklenmeyen bir hata oluştu.";
+          : "Something went wrong.";
 
       setError(message);
     } finally {
@@ -564,7 +564,7 @@ export default function ChatConversationPage() {
       }, 1600);
     } catch {
       setError(
-        "Mesaj panoya kopyalanamadı."
+        "The message could not be copied."
       );
     }
   }
@@ -589,7 +589,7 @@ export default function ChatConversationPage() {
     setMessages([]);
     setInput("");
     setError(null);
-    setTitle("Yeni sohbet");
+    setTitle("New chat");
 
     requestAnimationFrame(() => {
       textareaRef.current?.focus();
@@ -619,12 +619,11 @@ export default function ChatConversationPage() {
           </div>
 
           <h1 className="mt-5 text-xl font-semibold">
-            Geçersiz sohbet
+            Invalid chat
           </h1>
 
           <p className="mt-2 text-sm leading-6 text-white/45">
-            Bu sohbet kimliği
-            kullanılamıyor.
+            This chat id cannot be used.
           </p>
 
           <button
@@ -634,7 +633,7 @@ export default function ChatConversationPage() {
             }
             className="mt-6 rounded-xl border border-white/[0.09] bg-white/[0.04] px-4 py-2.5 text-sm text-white/80 transition hover:bg-white/[0.08]"
           >
-            Sohbetlere dön
+            Back to chats
           </button>
         </div>
       </main>
@@ -653,7 +652,7 @@ export default function ChatConversationPage() {
                   router.push("/chat")
                 }
                 className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.03] text-white/55 transition hover:bg-white/[0.07] hover:text-white"
-                aria-label="Sohbetlere dön"
+                aria-label="Back to chats"
               >
                 <svg
                   viewBox="0 0 24 24"
@@ -689,7 +688,7 @@ export default function ChatConversationPage() {
                 }
                 className="hidden h-9 items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 text-xs text-white/55 transition hover:border-red-400/20 hover:bg-red-400/[0.06] hover:text-red-200 sm:inline-flex"
               >
-                Temizle
+                Clear
               </button>
 
               <button
@@ -709,7 +708,7 @@ export default function ChatConversationPage() {
                 </svg>
 
                 <span className="hidden sm:inline">
-                  Yeni sohbet
+                  New chat
                 </span>
               </button>
             </div>
@@ -722,7 +721,7 @@ export default function ChatConversationPage() {
               <div className="flex flex-1 items-center justify-center py-20">
                 <div className="flex items-center gap-3 text-sm text-white/40">
                   <span className="h-5 w-5 animate-spin rounded-full border-2 border-cyan-300/20 border-t-cyan-300" />
-                  Sohbet yükleniyor...
+                  Loading chat...
                 </div>
               </div>
             ) : (
@@ -736,13 +735,13 @@ export default function ChatConversationPage() {
                     </div>
 
                     <h1 className="mt-6 text-2xl font-semibold tracking-tight sm:text-4xl">
-                      Sohbete başlayalım.
+                      Let's start a conversation.
                     </h1>
 
                     <p className="mt-3 max-w-xl text-sm leading-7 text-white/40">
-                      SYRAVEN AI ile araştır,
-                      analiz et, üret ve
-                      projeni ileri taşı.
+                      Research, analyse, create and move
+                      your project forward with
+                      SYRAVEN AI.
                     </p>
                   </div>
                 )}
@@ -817,7 +816,7 @@ export default function ChatConversationPage() {
                                 >
                                   {copiedMessageId ===
                                   message.id
-                                    ? "Kopyalandı"
+                                    ? "Copied"
                                     : "Kopyala"}
                                 </button>
                               )}
@@ -934,7 +933,7 @@ export default function ChatConversationPage() {
                       Enter
                     </kbd>
 
-                    <span>gönder</span>
+                    <span>to send</span>
 
                     <span className="text-white/10">
                       ·
@@ -944,7 +943,7 @@ export default function ChatConversationPage() {
                       Shift + Enter
                     </kbd>
 
-                    <span>yeni satır</span>
+                    <span>for a new line</span>
                   </div>
 
                   <div className="ml-auto flex items-center gap-2">
@@ -960,7 +959,7 @@ export default function ChatConversationPage() {
                         isLoadingConversation
                       }
                       className="flex h-9 w-9 items-center justify-center rounded-xl bg-cyan-300 text-[#061014] transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-30"
-                      aria-label="Mesaj gönder"
+                      aria-label="Send message"
                     >
                       {isSending ? (
                         <svg
@@ -992,9 +991,8 @@ export default function ChatConversationPage() {
               </div>
 
               <p className="mt-2 text-center text-[10px] text-white/20">
-                SYRAVEN AI yanıtları hata
-                içerebilir. Kritik bilgileri
-                doğrulayın.
+                SYRAVEN AI can make mistakes.
+                Verify important information.
               </p>
             </form>
           </div>
