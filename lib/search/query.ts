@@ -175,7 +175,29 @@ const ENTITIES: Readonly<Record<SearchableEntity, EntityConfig>> = {
     titleField: "title",
     snippetField: "description",
     updatedField: "updated_at",
-    searchableStatuses: ["active"],
+    /*
+     * The vocabulary public.knowledge ACTUALLY uses.
+     *
+     * This read ["active"], which no knowledge row has ever had.
+     * app/api/knowledge/route.ts writes draft | processing | ready |
+     * failed | archived and defaults to "ready"; the column default
+     * is 'active', but the route always supplies a value so that
+     * default is never reached. There is no CHECK constraint to catch
+     * the divergence.
+     *
+     * The result: every knowledge record was invisible to search.
+     * Verified in production -- all rows were "ready", none "active",
+     * and /api/search returned 0 results for a title that existed and
+     * listed fine through /api/knowledge.
+     *
+     * "active" is retained because the column default can still
+     * produce it if a row is ever inserted without a status.
+     * "processing" and "failed" are excluded: a document still being
+     * ingested, or one that failed, has no meaningful content to
+     * match. "archived" is excluded for the same reason it is
+     * excluded everywhere else.
+     */
+    searchableStatuses: ["draft", "ready", "active"],
     supportsWorkspace: true,
     supportsProject: true,
   },

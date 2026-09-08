@@ -89,8 +89,8 @@ type KnowledgeRow = {
   id?: unknown;
   title?: unknown;
   content?: unknown;
-  source_type?: unknown;
-  source_id?: unknown;
+  type?: unknown;
+  source_url?: unknown;
   project_id?: unknown;
   workspace_id?: unknown;
   team_id?: unknown;
@@ -590,7 +590,7 @@ function normalizeKnowledgeRow(
 
   const sourceType =
     normalizeSourceType(
-      row.source_type
+      row.type
     );
 
   return {
@@ -608,7 +608,7 @@ function normalizeKnowledgeRow(
 
     sourceId:
       toNullableString(
-        row.source_id
+        row.source_url
       ),
 
     projectId:
@@ -681,14 +681,21 @@ async function searchKnowledge({
   let databaseQuery =
     db
       .from("knowledge")
+      /*
+        `type` and `source_url` are the real columns. This selected
+        `source_type` and `source_id`, which do not exist on
+        public.knowledge, so Postgres rejected every query with 42703
+        -- and the handler's catch-all reported it as a generic 500.
+        Knowledge search failed for every user, with no clue why.
+      */
       .select(
         `
           id,
           user_id,
           title,
           content,
-          source_type,
-          source_id,
+          type,
+          source_url,
           project_id,
           workspace_id,
           team_id,
@@ -816,7 +823,7 @@ async function searchKnowledge({
   ) {
     databaseQuery =
       databaseQuery.in(
-        "source_type",
+        "type",
         sourceTypes
       );
   }

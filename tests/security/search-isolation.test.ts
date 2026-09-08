@@ -995,13 +995,40 @@ void describe("Source invariants — query.ts", () => {
     assert.doesNotMatch(QUERY_CODE, /\.neq\(\s*"status"/);
   });
 
-  void test("knowledge is restricted to active rows", () => {
+  void test("knowledge excludes archived and unusable rows", () => {
+    /*
+      This required searchableStatuses to be exactly ["active"] -- a
+      status no knowledge row has ever had. The route writes
+      draft | processing | ready | failed | archived and defaults to
+      "ready", so the invariant this test protected WAS the defect:
+      every knowledge record was invisible to search.
+
+      It now asserts the security property -- unusable and archived
+      rows stay out -- rather than one literal spelling, matching how
+      the sibling project test is written.
+    */
     const block = QUERY_CODE.slice(
       QUERY_CODE.indexOf("knowledge: {"),
       QUERY_CODE.indexOf("};", QUERY_CODE.indexOf("knowledge: {")),
     );
 
-    assert.match(block, /searchableStatuses:\s*\["active"\]/);
+    const m = block.match(/searchableStatuses:\s*\[([^\]]*)\]/);
+
+    assert.ok(m, "knowledge must declare an explicit status allowlist.");
+
+    const listed = [...(m[1] ?? "").matchAll(/"([a-z_]+)"/g)].map((x) => x[1]);
+
+    assert.ok(
+      listed.length > 0,
+      "An empty allowlist would search every row, archived included.",
+    );
+
+    for (const excluded of ["archived", "failed", "processing"]) {
+      assert.ok(
+        !listed.includes(excluded),
+        `"${excluded}" must not be searchable.`,
+      );
+    }
   });
 
   void test("archived projects are excluded", () => {

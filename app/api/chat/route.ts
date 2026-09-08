@@ -96,12 +96,18 @@ const encoder = new TextEncoder();
 
 function jsonError(
   message: string,
-  status: number
+  status: number,
+  /*
+    Optional machine-readable code. Lets a caller distinguish a
+    configuration failure from an upstream one without parsing prose.
+  */
+  code?: string
 ) {
   return NextResponse.json(
     {
       success: false,
       error: message,
+      ...(code ? { code } : {}),
     },
     {
       status,
@@ -1034,6 +1040,44 @@ export const POST = withAuth(async (
             errorText.slice(0, 300),
         }
       );
+
+      /*
+        Distinguish a CONFIGURATION failure from an upstream one.
+
+        A 401 or 403 from the provider means the API key is missing,
+        invalid or revoked -- an environment problem the operator must
+        fix, and one no retry will resolve. Reporting it as 502
+        "could not complete this request" described it as an upstream
+        outage and sent everyone looking in the wrong place: chat
+        failed identically for every model, every payload and every
+        user, which is the signature of a credential, not a provider.
+
+        429 is the provider's own rate limit and is passed through as
+        503 with a retry hint rather than being flattened into 502.
+
+        No secret is echoed: the response names the variable, never a
+        value, and the provider's body stays in the server log.
+      */
+      if (
+        response.status === 401 ||
+        response.status === 403
+      ) {
+        return jsonError(
+          `The ${activeProvider.provider} API key is missing or ` +
+            `invalid. Set a valid credential for this provider.`,
+          503,
+          "PROVIDER_NOT_CONFIGURED"
+        );
+      }
+
+      if (response.status === 429) {
+        return jsonError(
+          "The AI provider is rate limiting this request. " +
+            "Please try again shortly.",
+          503,
+          "PROVIDER_RATE_LIMITED"
+        );
+      }
 
       return jsonError(
         "The AI provider could not complete this request.",

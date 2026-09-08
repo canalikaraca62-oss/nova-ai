@@ -79,6 +79,13 @@ const PUBLIC_ROUTES: Record<string, string> = {
     "Password recovery: a user who cannot sign in has no session. The " +
     "route issues no session, writes no credential, and replies " +
     "identically for every address so it cannot enumerate accounts.",
+  "app/api/auth/logout/route.ts":
+    "Sign out: must work when the session is ALREADY invalid, which " +
+    "is exactly when a user needs their cookies cleared. Behind the " +
+    "gate it would answer 401 and leave the stale session in place. " +
+    "The route grants nothing -- it can only remove credentials the " +
+    "caller already presented -- issues no session, and uses the anon " +
+    "client, never service-role.",
 };
 
 /**

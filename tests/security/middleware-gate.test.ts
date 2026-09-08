@@ -28,6 +28,7 @@ const PUBLIC_API_ROUTES: readonly string[] = [
    * to Supabase GoTrue.
    */
   "/api/auth/login",
+  "/api/auth/logout",
   "/api/auth/reset-password",
   "/api/billing/webhook",
 ];

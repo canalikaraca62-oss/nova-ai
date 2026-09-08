@@ -423,6 +423,7 @@ void describe("The login route is safe by construction", () => {
       routes,
       [
         '"/api/auth/login"',
+        '"/api/auth/logout"',
         '"/api/auth/register"',
         '"/api/auth/reset-password"',
         '"/api/billing/webhook"',

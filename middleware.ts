@@ -45,6 +45,15 @@ const PUBLIC_API_ROUTES: readonly string[] = [
   "/api/auth/login",
 
   /*
+   * Sign out — must work even when the session is ALREADY invalid,
+   * which is exactly when a user needs their cookies cleared. Behind
+   * the gate it would answer 401 and leave the stale session in
+   * place. The route grants nothing: it can only remove credentials
+   * the caller already presented.
+   */
+  "/api/auth/logout",
+
+  /*
    * Password recovery — a user who cannot sign in has no session, so
    * requiring one would make recovery unreachable. The route issues no
    * session and replies identically for every address (see its
