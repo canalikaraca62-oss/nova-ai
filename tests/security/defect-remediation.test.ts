@@ -338,3 +338,42 @@ void describe("D4: /api/auth/logout ends a session", () => {
     );
   });
 });
+
+/* -------------------------------------------------------------------------- */
+/*                     D6 — project links must resolve                        */
+/* -------------------------------------------------------------------------- */
+
+/*
+ * app/projects/[id]/page.tsx linked to /edit, /new, /intelligence and
+ * /settings under the project id. None of those routes exist -- the
+ * directory contains only page.tsx -- so every one 404d when clicked,
+ * and Next.js prefetched them on hover, which is how they surfaced as
+ * failed network requests during the production browser run.
+ */
+
+void describe("D6: the project detail page has no dead links", () => {
+  const DETAIL = stripComments(read("app", "projects", "[id]", "page.tsx"));
+
+  void test("it links to no nonexistent project subroute", () => {
+    const dead = [
+      ...DETAIL.matchAll(
+        /href=\{`\/projects\/\$\{project\.id\}\/([a-z]+)`\}/g,
+      ),
+    ].map((m) => m[1]);
+
+    assert.deepEqual(
+      dead,
+      [],
+      `CRITICAL: /projects/<id>/${dead.join(", ")} do not exist and ` +
+        "404 when clicked or prefetched.",
+    );
+  });
+
+  void test("the hero CTA reaches a real page", () => {
+    assert.match(
+      DETAIL,
+      /href="\/tasks"/,
+      "Add task must lead somewhere that exists.",
+    );
+  });
+});

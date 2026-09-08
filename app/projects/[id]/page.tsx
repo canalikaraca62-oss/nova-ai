@@ -320,7 +320,7 @@ export default function ProjectDetailPage() {
 
           <div className="flex items-center gap-3">
             <Link
-              href={`/projects/${project.id}/edit`}
+              href={`/projects/${project.id}`}
               className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted"
             >
               <Edit3 className="h-4 w-4" />
@@ -368,7 +368,7 @@ export default function ProjectDetailPage() {
 
             <div className="grid grid-cols-2 gap-3 sm:flex lg:flex-col">
               <Link
-                href={`/projects/${project.id}/new`}
+                href="/tasks"
                 className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-primary px-5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
               >
                 <Plus className="h-4 w-4" />
@@ -493,7 +493,7 @@ export default function ProjectDetailPage() {
                 </div>
 
                 <Link
-                  href={`/projects/${project.id}/intelligence`}
+                  href={`/projects/${project.id}`}
                   className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl border border-border px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted"
                 >
                   View insights
@@ -619,7 +619,7 @@ export default function ProjectDetailPage() {
 
               <div className="mt-5 space-y-2">
                 <QuickAction
-                  href={`/projects/${project.id}/new`}
+                  href="/tasks"
                   icon={Plus}
                   label="Create new task"
                 />
@@ -637,7 +637,7 @@ export default function ProjectDetailPage() {
                 />
 
                 <QuickAction
-                  href={`/projects/${project.id}/settings`}
+                  href={`/projects/${project.id}`}
                   icon={Settings}
                   label="Project settings"
                 />
