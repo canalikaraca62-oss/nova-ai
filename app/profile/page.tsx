@@ -4,11 +4,9 @@ import Link from "next/link";
 import {
   Bell,
   Camera,
-  Check,
   ChevronRight,
   CreditCard,
   KeyRound,
-  Loader2,
   Lock,
   Mail,
   Save,
@@ -53,12 +51,6 @@ export default function ProfilePage() {
   const [activeTab, setActiveTab] =
     useState<TabId>("profile");
 
-  const [isSaving, setIsSaving] =
-    useState(false);
-
-  const [saved, setSaved] =
-    useState(false);
-
   const [form, setForm] =
     useState<ProfileForm>({
       fullName: "SYRAVEN User",
@@ -84,25 +76,27 @@ export default function ProfilePage() {
       ...current,
       [field]: value,
     }));
-
-    setSaved(false);
   }
 
-  async function handleSave() {
-    setIsSaving(true);
-    setSaved(false);
+  /*
+    Profile editing has no storage.
 
-    await new Promise((resolve) =>
-      setTimeout(resolve, 700)
-    );
+    public.profiles holds billing columns only -- id, plan,
+    subscription_status, the Stripe ids and trial dates. There is no
+    name, bio, avatar, role, location or timezone column anywhere in
+    the schema, and public.user_settings holds a single
+    memory_enabled flag.
 
-    setIsSaving(false);
-    setSaved(true);
+    This handler used to await a 700ms timeout and then report
+    "Changes saved successfully." Nothing was written -- not even to
+    localStorage -- so every edit vanished on reload while the UI
+    claimed success.
 
-    setTimeout(() => {
-      setSaved(false);
-    }, 3000);
-  }
+    Giving these fields a home needs a migration, which is out of
+    scope for this pass. Until then the form states plainly that it
+    cannot save, which is the one behaviour that does not mislead.
+  */
+  const profileStorageAvailable = false;
 
   return (
     <main className="min-h-screen bg-background">
@@ -342,33 +336,19 @@ export default function ProfilePage() {
 
                   <div className="mt-8 flex items-center justify-between border-t border-border pt-6">
                     <p className="text-sm text-muted-foreground">
-                      {saved
-                        ? "Changes saved successfully."
-                        : "Your changes will be saved to your account."}
+                      {profileStorageAvailable
+                        ? "Your changes will be saved to your account."
+                        : "Profile editing is not available yet — these fields cannot be saved."}
                     </p>
 
                     <button
                       type="button"
-                      onClick={handleSave}
-                      disabled={isSaving}
-                      className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-primary px-5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                      disabled
+                      title="Profile editing is not available yet."
+                      className="inline-flex h-11 cursor-not-allowed items-center justify-center gap-2 rounded-xl bg-primary px-5 text-sm font-semibold text-primary-foreground opacity-60"
                     >
-                      {isSaving ? (
-                        <>
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          Saving...
-                        </>
-                      ) : saved ? (
-                        <>
-                          <Check className="h-4 w-4" />
-                          Saved
-                        </>
-                      ) : (
-                        <>
-                          <Save className="h-4 w-4" />
-                          Save changes
-                        </>
-                      )}
+                      <Save className="h-4 w-4" />
+                      Save changes
                     </button>
                   </div>
                 </div>

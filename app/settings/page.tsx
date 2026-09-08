@@ -856,6 +856,32 @@ function SecuritySettings({
     value: SyravenSettings[K]
   ) => void;
 }) {
+  const [pwState, setPwState] = useState<
+    "idle" | "sending" | "sent" | "error"
+  >("idle");
+
+  /*
+    Change password sends the account a recovery email through the
+    existing reset route -- the same flow the sign-in page uses. The
+    card previously did nothing at all.
+  */
+  async function requestPasswordChange() {
+    if (!settings.email) { setPwState("error"); return; }
+
+    setPwState("sending");
+
+    try {
+      const response = await fetch("/api/auth/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: settings.email }),
+      });
+
+      setPwState(response.ok ? "sent" : "error");
+    } catch {
+      setPwState("error");
+    }
+  }
   return (
     <SettingsPanel
       icon={<Shield className="h-5 w-5" />}
@@ -874,6 +900,18 @@ function SecuritySettings({
               value
             )
           }
+          /*
+            There is no 2FA implementation anywhere in the codebase --
+            no MFA enrolment, no TOTP, no challenge on sign-in. The
+            toggle wrote a boolean to localStorage and the UI then
+            reported two-factor authentication as enabled.
+
+            A false security assurance is worse than an absent
+            feature: it tells someone their account is protected when
+            nothing changed. Until enrolment exists, the control says
+            so.
+          */
+          unavailable="Two-factor authentication is not available yet."
         />
       </div>
 
@@ -882,6 +920,8 @@ function SecuritySettings({
           icon={<KeyRound className="h-5 w-5" />}
           title="Change password"
           description="Update your account password."
+          onClick={() => void requestPasswordChange()}
+          busy={pwState === "sending"}
           action="Manage password"
         />
 
@@ -889,9 +929,35 @@ function SecuritySettings({
           icon={<Smartphone className="h-5 w-5" />}
           title="Active sessions"
           description="Review devices signed into SYRAVEN."
+          /*
+            SYRAVEN has no session-listing endpoint, and Supabase does
+            not expose one to the client. Rather than leave a control
+            that silently does nothing, the card states that it is
+            unavailable.
+          */
+          disabledReason="Not available yet"
           action="View sessions"
         />
       </div>
+
+      {pwState === "sent" ? (
+        <p
+          role="status"
+          className="mt-4 rounded-xl border border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground"
+        >
+          If an account exists for that address, a password reset email
+          has been sent.
+        </p>
+      ) : null}
+
+      {pwState === "error" ? (
+        <p
+          role="alert"
+          className="mt-4 rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+        >
+          The reset email could not be sent. Please try again.
+        </p>
+      ) : null}
 
       <div className="mt-8 rounded-2xl border border-destructive/20 bg-destructive/[0.04] p-5">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -907,10 +973,17 @@ function SecuritySettings({
 
           <button
             type="button"
-            className="inline-flex h-10 items-center justify-center rounded-xl border border-destructive/30 px-4 text-sm font-medium text-destructive transition-colors hover:bg-destructive hover:text-destructive-foreground"
+            disabled
+            title="Account deletion is not available yet. Contact support to close your account."
+            className="inline-flex h-10 cursor-not-allowed items-center justify-center rounded-xl border border-destructive/30 px-4 text-sm font-medium text-destructive opacity-60"
           >
             Delete account
           </button>
+
+          <p className="mt-2 text-xs text-muted-foreground">
+            Account deletion is not available yet. Contact support to
+            close your account.
+          </p>
         </div>
       </div>
     </SettingsPanel>
@@ -918,6 +991,42 @@ function SecuritySettings({
 }
 
 function BillingSettings() {
+  const [portalState, setPortalState] = useState<"idle" | "opening" | "error">(
+    "idle",
+  );
+
+  /*
+    Both billing cards open the Stripe customer portal, which is where
+    cards and invoices actually live. They previously did nothing.
+
+    When Stripe is not configured the route answers 503, and that is
+    surfaced rather than swallowed -- billing is currently
+    unconfigured in production, so this is the path a user hits.
+  */
+  async function openPortal() {
+    setPortalState("opening");
+
+    try {
+      const response = await fetch("/api/billing/portal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+
+      const payload = (await response.json().catch(() => null)) as {
+        url?: string;
+      } | null;
+
+      if (response.ok && payload?.url) {
+        window.location.href = payload.url;
+        return;
+      }
+
+      setPortalState("error");
+    } catch {
+      setPortalState("error");
+    }
+  }
   return (
     <SettingsPanel
       icon={<CreditCard className="h-5 w-5" />}
@@ -961,6 +1070,8 @@ function BillingSettings() {
           icon={<CreditCard className="h-5 w-5" />}
           title="Payment methods"
           description="Manage cards and billing information."
+          onClick={() => void openPortal()}
+          busy={portalState === "opening"}
           action="Manage billing"
         />
 
@@ -968,6 +1079,8 @@ function BillingSettings() {
           icon={<Globe2 className="h-5 w-5" />}
           title="Invoices"
           description="Access your billing history and invoices."
+          onClick={() => void openPortal()}
+          busy={portalState === "opening"}
           action="View invoices"
         />
       </div>
@@ -1041,12 +1154,15 @@ function ToggleRow({
   description,
   checked,
   onChange,
+  unavailable,
 }: {
   icon: React.ReactNode;
   title: string;
   description: string;
   checked: boolean;
   onChange: (value: boolean) => void;
+  /* Shown, explained, and non-interactive. See the 2FA row. */
+  unavailable?: string;
 }) {
   return (
     <div className="flex gap-4 py-5 first:pt-0 last:pb-0">
@@ -1062,13 +1178,21 @@ function ToggleRow({
         <p className="mt-1 max-w-xl text-sm leading-6 text-muted-foreground">
           {description}
         </p>
+
+        {unavailable ? (
+          <p className="mt-1 text-xs text-muted-foreground">
+            {unavailable}
+          </p>
+        ) : null}
       </div>
 
       <button
         type="button"
         role="switch"
         aria-checked={checked}
-        onClick={() => onChange(!checked)}
+        onClick={() => { if (!unavailable) onChange(!checked); }}
+        disabled={Boolean(unavailable)}
+        title={unavailable}
         className={`relative mt-1 h-6 w-11 shrink-0 rounded-full transition-colors ${
           checked
             ? "bg-primary"
@@ -1125,21 +1249,40 @@ function ThemeOption({
   );
 }
 
+/*
+  ActionCard had no onClick in its signature, so all four instances
+  were inert by construction: Change password, Active sessions,
+  Payment methods and Invoices each rendered a chevron and a call to
+  action that did nothing when clicked.
+
+  `onClick` is now required. A card with nothing to do must say so
+  through `disabledReason` rather than silently absorbing the click,
+  so an unimplemented control cannot look implemented.
+*/
 function ActionCard({
   icon,
   title,
   description,
   action,
+  onClick,
+  disabledReason,
+  busy,
 }: {
   icon: React.ReactNode;
   title: string;
   description: string;
   action: string;
+  onClick?: () => void;
+  disabledReason?: string;
+  busy?: boolean;
 }) {
   return (
     <button
       type="button"
-      className="group rounded-xl border border-border bg-background p-5 text-left transition-all hover:border-primary/40 hover:bg-primary/[0.02]"
+      className="group rounded-xl border border-border bg-background p-5 text-left transition-all hover:border-primary/40 hover:bg-primary/[0.02] disabled:cursor-not-allowed disabled:opacity-60"
+      onClick={onClick}
+      disabled={Boolean(disabledReason) || busy}
+      title={disabledReason}
     >
       <div className="flex items-center justify-between">
         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted text-muted-foreground transition-colors group-hover:bg-primary/10 group-hover:text-primary">
@@ -1158,7 +1301,7 @@ function ActionCard({
       </p>
 
       <span className="mt-4 inline-block text-xs font-medium text-primary">
-        {action}
+        {busy ? "Working..." : disabledReason ? disabledReason : action}
       </span>
     </button>
   );
