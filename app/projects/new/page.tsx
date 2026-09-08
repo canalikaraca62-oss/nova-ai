@@ -17,7 +17,13 @@ import {
   Users,
 } from "lucide-react";
 
-type ProjectStatus = "planning" | "active";
+/*
+  These must be values public.projects accepts. The column is
+  constrained to draft | active | archived | completed, so the
+  previous "planning" would have been rejected by the database the
+  moment this form actually persisted anything.
+*/
+type ProjectStatus = "draft" | "active";
 
 const workspaceOptions = [
   "SYRAVEN Core",
@@ -33,26 +39,16 @@ export default function NewProjectPage() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [workspace, setWorkspace] = useState("SYRAVEN Core");
-  const [status, setStatus] = useState<ProjectStatus>("planning");
+  const [status, setStatus] = useState<ProjectStatus>("draft");
   const [deadline, setDeadline] = useState("");
   const [members, setMembers] = useState("1");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [showWorkspaces, setShowWorkspaces] = useState(false);
 
   const isValid = useMemo(() => {
     return name.trim().length >= 3 && description.trim().length >= 10;
   }, [name, description]);
-
-  function createProjectId(projectName: string) {
-    const slug = projectName
-      .toLowerCase()
-      .trim()
-      .replace(/[^a-z0-9\s-]/g, "")
-      .replace(/\s+/g, "-")
-      .replace(/-+/g, "-");
-
-    return slug || `project-${Date.now()}`;
-  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -62,16 +58,56 @@ export default function NewProjectPage() {
     }
 
     setIsSubmitting(true);
+    setSubmitError(null);
 
-    const projectId = createProjectId(name);
+    try {
+      /*
+        Persist through the API rather than faking it.
 
-    // Future integration point:
-    // ProjectContext / API persistence can be connected here.
-    await new Promise((resolve) => {
-      window.setTimeout(resolve, 700);
-    });
+        This handler previously awaited a 700ms timeout and then
+        redirected to /projects/<slug>, which fell through to a
+        hardcoded fallback project. The user saw a success animation
+        and a detail page containing none of what they had typed, and
+        nothing was ever written.
 
-    router.push(`/projects/${projectId}`);
+        Ownership is NOT sent: the route derives owner_id and user_id
+        from the verified session and ignores any client-supplied
+        identity.
+      */
+      const response = await fetch("/api/projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: name.trim(),
+          description: description.trim(),
+          status,
+          dueDate: deadline || undefined,
+        }),
+      });
+
+      const payload = (await response.json().catch(() => null)) as {
+        success?: boolean;
+        data?: { id?: string };
+        error?: string;
+      } | null;
+
+      if (!response.ok || !payload?.success || !payload.data?.id) {
+        throw new Error(
+          payload?.error ?? "The project could not be created.",
+        );
+      }
+
+      /* Navigate by the real id, so the detail page can load it. */
+      router.push(`/projects/${payload.data.id}`);
+    } catch (error) {
+      setSubmitError(
+        error instanceof Error
+          ? error.message
+          : "The project could not be created.",
+      );
+
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -256,14 +292,14 @@ export default function NewProjectPage() {
                     <div className="mt-2 grid grid-cols-2 gap-2">
                       <button
                         type="button"
-                        onClick={() => setStatus("planning")}
+                        onClick={() => setStatus("draft")}
                         className={`h-12 rounded-xl border px-4 text-sm font-medium transition-colors ${
-                          status === "planning"
+                          status === "draft"
                             ? "border-primary bg-primary/10 text-primary"
                             : "border-border bg-background text-muted-foreground hover:bg-muted"
                         }`}
                       >
-                        Planning
+                        Draft
                       </button>
 
                       <button
@@ -403,6 +439,15 @@ export default function NewProjectPage() {
                 </div>
 
                 <div className="mt-7 border-t border-border pt-6">
+                  {submitError ? (
+                    <p
+                      role="alert"
+                      className="mb-3 rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+                    >
+                      {submitError}
+                    </p>
+                  ) : null}
+
                   <button
                     type="submit"
                     disabled={!isValid || isSubmitting}

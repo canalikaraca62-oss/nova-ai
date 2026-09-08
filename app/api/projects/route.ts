@@ -359,6 +359,19 @@ export const GET = withAuth(async (
     const userId =
       session.userId;
 
+    /*
+      Single-project lookup.
+
+      The detail page needs one project by id. Without this it had no
+      way to ask for one and rendered a hardcoded fallback instead,
+      so a freshly created project opened as fabricated data.
+
+      This adds a filter to the SAME session-scoped query -- it does
+      not bypass the ownership predicate or RLS below.
+    */
+    const id =
+      searchParams.get("id");
+
     const workspaceId =
       normalizeString(
         searchParams.get("workspaceId"),
@@ -426,6 +439,13 @@ export const GET = withAuth(async (
 
     if (workspaceGuard?.denied) {
       return workspaceGuard.response;
+    }
+
+    if (id) {
+      query = query.eq(
+        "id",
+        id
+      );
     }
 
     if (workspaceId) {

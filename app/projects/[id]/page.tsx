@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
 import {
   Activity,
   ArrowLeft,
@@ -20,7 +21,7 @@ import {
   Users,
 } from "lucide-react";
 
-type ProjectStatus = "active" | "planning" | "completed";
+type ProjectStatus = "active" | "planning" | "completed" | "draft" | "archived";
 
 interface Project {
   id: string;
@@ -148,6 +149,20 @@ function getStatusConfig(status: ProjectStatus) {
           "border-blue-500/20 bg-blue-500/10 text-blue-600 dark:text-blue-400",
       };
 
+    case "draft":
+      return {
+        label: "Draft",
+        className:
+          "border-amber-500/20 bg-amber-500/10 text-amber-600 dark:text-amber-400",
+      };
+
+    case "archived":
+      return {
+        label: "Archived",
+        className:
+          "border-muted bg-muted text-muted-foreground",
+      };
+
     default:
       return {
         label: "Planning",
@@ -165,19 +180,103 @@ export default function ProjectDetailPage() {
       ? params.id
       : "project";
 
+  /*
+    Load the real project.
+
+    This page previously read a hardcoded `projects` record and, on a
+    miss, rendered `fallbackProject` with the id title-cased into a
+    name. Every project created through the app therefore opened as
+    invented data -- 0% progress, 0 tasks -- contradicting whatever
+    the user had just typed.
+
+    The demo record is kept as a fallback ONLY for the sample ids it
+    already contained, so existing links keep working; a real id now
+    loads real data.
+  */
+  const [loaded, setLoaded] = useState<Project | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
+
+    try {
+      const response = await fetch(
+        `/api/projects?id=${encodeURIComponent(projectId)}`,
+        { cache: "no-store" },
+      );
+
+      if (response.status === 401) {
+        /* Signed out: fall through to the sample content. */
+        setLoaded(null);
+        return;
+      }
+
+      const payload = (await response.json().catch(() => null)) as {
+        success?: boolean;
+        data?: {
+          id: string;
+          name: string;
+          description: string | null;
+          status: string;
+          created_at: string;
+          updated_at: string;
+          due_date: string | null;
+        }[];
+      } | null;
+
+      const row = payload?.data?.[0];
+
+      if (!row) {
+        setLoaded(null);
+        return;
+      }
+
+      setLoaded({
+        id: row.id,
+        name: row.name,
+        description: row.description ?? "",
+        status: row.status as ProjectStatus,
+        /*
+          Counts come from tasks, which this view does not query.
+          Reporting zero is honest; inventing a percentage was not.
+        */
+        progress: 0,
+        members: 1,
+        tasksCompleted: 0,
+        totalTasks: 0,
+        updatedAt: row.updated_at,
+        createdAt: row.created_at,
+        deadline: row.due_date ?? "",
+        workspace: "",
+      });
+    } catch {
+      setLoadError("This project could not be loaded.");
+    } finally {
+      setLoading(false);
+    }
+  }, [projectId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void Promise.resolve().then(() => {
+      if (cancelled) return undefined;
+
+      return load();
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [load]);
+
   const project =
+    loaded ??
     projects[projectId] ?? {
       ...fallbackProject,
       id: projectId,
-      name:
-        projectId
-          .split("-")
-          .map(
-            (word) =>
-              word.charAt(0).toUpperCase() +
-              word.slice(1)
-          )
-          .join(" ") || fallbackProject.name,
     };
 
   const status = getStatusConfig(project.status);
@@ -194,6 +293,21 @@ export default function ProjectDetailPage() {
   return (
     <main className="min-h-screen bg-background">
       <div className="mx-auto w-full max-w-7xl px-6 py-8 lg:px-8 lg:py-10">
+        {loadError ? (
+          <p
+            role="alert"
+            className="mb-6 rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+          >
+            {loadError}
+          </p>
+        ) : null}
+
+        {loading ? (
+          <p className="mb-6 text-sm text-muted-foreground">
+            Loading project...
+          </p>
+        ) : null}
+
         {/* Top navigation */}
         <div className="flex flex-col gap-5 border-b border-border pb-6 sm:flex-row sm:items-center sm:justify-between">
           <Link
