@@ -450,6 +450,8 @@ export default function CanvasDetailPage() {
                   "application/json",
               },
               body: JSON.stringify({
+                /* The URL id, so a later save addresses this row. */
+                id: canvasId,
                 title: target.name,
                 description:
                   target.description ?? null,

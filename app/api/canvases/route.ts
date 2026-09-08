@@ -83,6 +83,32 @@ function text(value: unknown, max: number): string | null {
  * That makes this the only place bounds can be enforced: without it a
  * caller could store an unbounded document.
  */
+/**
+ * Accepts a caller-supplied canvas id, but only a well-formed UUID.
+ *
+ * The editor addresses a canvas by the id in its URL. If the server
+ * minted a different id on create, every save would PATCH an id that
+ * does not exist, fall through to POST, and create ANOTHER row --
+ * observed in production as two orphan rows from a single session,
+ * with the reload still 404ing.
+ *
+ * This is not an ownership claim: user_id still comes from the
+ * session, and canvases_insert_own rejects any row that is not the
+ * caller's. The worst a hostile id achieves is colliding with the
+ * caller's own primary key, which Postgres refuses.
+ */
+function parseId(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+
+  const trimmed = value.trim();
+
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+    trimmed,
+  )
+    ? trimmed
+    : null;
+}
+
 function parseDocument(
   body: Record<string, unknown>,
 ):
@@ -224,6 +250,11 @@ export const POST = withAuth(
       .from("canvases")
       .insert({
         /* Server-derived. Never from the request body. */
+        /*
+          The editor's URL id, when it supplied one, so a later save
+          addresses the row it just created.
+        */
+        ...(parseId(record.id) ? { id: parseId(record.id) as string } : {}),
         user_id: session.userId,
         workspace_id: workspaceId,
         title:
