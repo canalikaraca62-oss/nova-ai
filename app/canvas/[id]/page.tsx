@@ -297,7 +297,7 @@ export default function CanvasDetailPage() {
       setError(null);
 
       const response = await fetch(
-        `/api/canvas?id=${encodeURIComponent(
+        `/api/canvases?id=${encodeURIComponent(
           canvasId
         )}`,
         {
@@ -305,6 +305,26 @@ export default function CanvasDetailPage() {
           cache: "no-store",
         }
       );
+
+      /*
+        404 means this id has no row yet -- the usual case when a
+        user opens a fresh canvas from the list. Starting an empty
+        editor is the correct response; the first save creates it.
+        Treating it as an error would put a failure banner in front
+        of every new canvas.
+      */
+      if (response.status === 404) {
+        setCanvas({
+          id: canvasId,
+          name: "Untitled Canvas",
+          description: null,
+          nodes: [],
+          edges: [],
+        });
+
+        setIsDirty(false);
+        return;
+      }
 
       const payload = await response.json();
 
@@ -326,10 +346,12 @@ export default function CanvasDetailPage() {
             ? source.id
             : canvasId,
         name:
-          typeof source?.name === "string" &&
-          source.name.trim()
-            ? source.name
-            : "Untitled Canvas",
+          /* The column is `title`; the editor calls it `name`. */
+          typeof source?.title === "string" && source.title.trim()
+            ? source.title
+            : typeof source?.name === "string" && source.name.trim()
+              ? source.name
+              : "Untitled Canvas",
         description:
           typeof source?.description === "string"
             ? source.description
@@ -387,8 +409,20 @@ export default function CanvasDetailPage() {
       try {
         setSaving(true);
 
-        const response = await fetch(
-          "/api/canvas",
+        /*
+          Save through the persistence route.
+
+          This used to PATCH /api/canvas, which exports only POST and
+          GET -- Next.js answered 405, and the debounced autosave runs
+          with silent = true, so every failure was invisible. The user
+          watched it report saved and lost the work on navigation.
+
+          PATCH first: the common case is an existing canvas. A 404
+          means this id has no row yet, so the first save creates it.
+          Ordering it this way keeps the autosave path to one request.
+        */
+        let response = await fetch(
+          `/api/canvases`,
           {
             method: "PATCH",
             headers: {
@@ -397,7 +431,7 @@ export default function CanvasDetailPage() {
             },
             body: JSON.stringify({
               id: canvasId,
-              name: target.name,
+              title: target.name,
               description:
                 target.description ?? null,
               nodes: target.nodes,
@@ -405,6 +439,26 @@ export default function CanvasDetailPage() {
             }),
           }
         );
+
+        if (response.status === 404) {
+          response = await fetch(
+            `/api/canvases`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type":
+                  "application/json",
+              },
+              body: JSON.stringify({
+                title: target.name,
+                description:
+                  target.description ?? null,
+                nodes: target.nodes,
+                edges: target.edges,
+              }),
+            }
+          );
+        }
 
         const payload =
           await response.json().catch(
@@ -433,13 +487,20 @@ export default function CanvasDetailPage() {
           saveError
         );
 
-        if (!silent) {
-          setError(
-            saveError instanceof Error
-              ? saveError.message
-              : "Canvas could not be saved."
-          );
-        }
+        /*
+          Shown even for an autosave. Suppressing it is how the
+          original defect hid: PATCH answered 405 every time and the
+          editor went on reporting the canvas as saved while the work
+          was being discarded.
+        */
+        setError(
+          saveError instanceof Error
+            ? saveError.message
+            : "Canvas could not be saved."
+        );
+
+        /* Unsaved work is still unsaved: keep the dirty flag. */
+        setIsDirty(true);
       } finally {
         setSaving(false);
       }

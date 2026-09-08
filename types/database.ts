@@ -12,6 +12,31 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       agent_approvals: {
@@ -1850,6 +1875,53 @@ export type Database = {
         }
         Relationships: []
       }
+      canvases: {
+        Row: {
+          created_at: string
+          description: string | null
+          edges: Json
+          id: string
+          metadata: Json
+          nodes: Json
+          title: string
+          updated_at: string
+          user_id: string
+          workspace_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          edges?: Json
+          id?: string
+          metadata?: Json
+          nodes?: Json
+          title?: string
+          updated_at?: string
+          user_id: string
+          workspace_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          edges?: Json
+          id?: string
+          metadata?: Json
+          nodes?: Json
+          title?: string
+          updated_at?: string
+          user_id?: string
+          workspace_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "canvases_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       chats: {
         Row: {
           created_at: string | null
@@ -3172,6 +3244,21 @@ export type Database = {
         Args: { target_organization_id: string }
         Returns: boolean
       }
+      match_knowledge_chunks: {
+        Args: {
+          knowledge_base?: string
+          match_count?: number
+          match_threshold?: number
+          query_embedding: string
+        }
+        Returns: {
+          chunk_index: number
+          content: string
+          id: string
+          knowledge_document_id: string
+          similarity: number
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never
@@ -3300,6 +3387,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {},
   },
