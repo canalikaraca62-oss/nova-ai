@@ -225,7 +225,61 @@ export default function DashboardPage() {
                   Your most recently updated workspaces.
                 </p>
               </div>
+
+              <button
+                type="button"
+                onClick={() => setShowCreate((open) => !open)}
+                className="inline-flex h-10 shrink-0 items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+                disabled={isCreating}
+              >
+                {showCreate ? "Cancel" : "New workspace"}
+              </button>
             </div>
+
+            {showCreate ? (
+              <div className="border-b border-border px-5 py-4">
+                <label
+                  className="sr-only"
+                  htmlFor="dashboard-new-workspace"
+                >
+                  Workspace name
+                </label>
+
+                <input
+                  id="dashboard-new-workspace"
+                  value={newWorkspaceName}
+                  onChange={(event) =>
+                    setNewWorkspaceName(event.target.value)
+                  }
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      void handleCreateWorkspace();
+                    }
+                  }}
+                  placeholder="e.g. Product Team"
+                  maxLength={120}
+                  className="h-11 w-full rounded-xl border border-border bg-background px-4 text-sm text-foreground outline-none transition focus:border-foreground/30"
+                />
+
+                {createError ? (
+                  <p
+                    role="alert"
+                    className="mt-2 text-sm text-red-500"
+                  >
+                    {createError}
+                  </p>
+                ) : null}
+
+                <button
+                  type="button"
+                  onClick={() => void handleCreateWorkspace()}
+                  disabled={isCreating}
+                  className="mt-3 h-11 w-full rounded-xl bg-foreground px-5 text-sm font-semibold text-background transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isCreating ? "Creating..." : "Create workspace"}
+                </button>
+              </div>
+            ) : null}
 
             <div className="divide-y divide-border">
               {isLoading ? (
@@ -322,73 +376,13 @@ export default function DashboardPage() {
                     The action the copy above asks for. Without it this
                     empty state was a dead end for every new account.
                   */}
-                  {showCreate ? (
-                    <div className="mx-auto mt-6 flex max-w-sm flex-col gap-3">
-                      <label
-                        className="sr-only"
-                        htmlFor="new-workspace-name"
-                      >
-                        Workspace name
-                      </label>
-
-                      <input
-                        id="new-workspace-name"
-                        value={newWorkspaceName}
-                        onChange={(event) =>
-                          setNewWorkspaceName(event.target.value)
-                        }
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter") {
-                            void handleCreateWorkspace();
-                          }
-                        }}
-                        placeholder="e.g. Product Team"
-                        autoFocus
-                        maxLength={120}
-                        className="h-11 w-full rounded-xl border border-border bg-background px-4 text-sm text-foreground outline-none transition focus:border-foreground/30"
-                      />
-
-                      {createError ? (
-                        <p
-                          role="alert"
-                          className="text-left text-sm text-red-500"
-                        >
-                          {createError}
-                        </p>
-                      ) : null}
-
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          onClick={() => void handleCreateWorkspace()}
-                          disabled={isCreating}
-                          className="h-11 flex-1 rounded-xl bg-foreground px-5 text-sm font-semibold text-background transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          {isCreating ? "Creating..." : "Create workspace"}
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setShowCreate(false);
-                            setCreateError(null);
-                          }}
-                          disabled={isCreating}
-                          className="h-11 rounded-xl border border-border px-5 text-sm font-medium text-foreground transition hover:bg-muted/50 disabled:opacity-60"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => setShowCreate(true)}
-                      className="mt-6 inline-flex h-11 items-center justify-center rounded-xl bg-foreground px-6 text-sm font-semibold text-background transition hover:opacity-90"
-                    >
-                      Create workspace
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => setShowCreate(true)}
+                    className="mt-6 inline-flex h-11 items-center justify-center rounded-xl bg-foreground px-6 text-sm font-semibold text-background transition hover:opacity-90"
+                  >
+                    Create workspace
+                  </button>
                 </div>
               )}
             </div>

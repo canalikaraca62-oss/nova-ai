@@ -679,3 +679,71 @@ void describe("The self-membership migration is minimal", () => {
     assert.match(MIGRATION_SQL, /drop\s+policy\s+if\s+exists/i);
   });
 });
+
+/* -------------------------------------------------------------------------- */
+/*                THE CREATE CONTROL MUST BE STATE-INDEPENDENT                */
+/* -------------------------------------------------------------------------- */
+
+/*
+ * The first fix put a Create workspace control in the dashboard's EMPTY
+ * state. That branch never renders for a real user: registration
+ * provisions an organisation and a workspace, so a new account always
+ * lands on the populated view. The dead end had simply moved one state
+ * over, and only a browser run against production caught it -- every
+ * source-level assertion still passed.
+ */
+
+void describe("Creating a workspace is reachable in every state", () => {
+  const panel = DASHBOARD.slice(
+    DASHBOARD.indexOf("Recent Workspaces"),
+    DASHBOARD.indexOf("No workspaces yet"),
+  );
+
+  void test("a create control exists outside the empty state", () => {
+    assert.ok(
+      panel.length > 0,
+      "Could not isolate the populated workspace panel.",
+    );
+
+    assert.match(
+      panel,
+      /setShowCreate/,
+      "CRITICAL: a user who already has a workspace has no way to " +
+        "create another -- the original dead end, one state over.",
+    );
+  });
+
+  void test("the control is a real button, not text", () => {
+    assert.match(panel, /<button/);
+    assert.match(panel, /onClick=/);
+  });
+
+  void test("the form it opens is not nested in the empty state", () => {
+    /*
+      If the only input lives inside the `No workspaces yet` branch,
+      the button above opens nothing for a populated account.
+    */
+    const beforeEmpty = DASHBOARD.slice(
+      0, DASHBOARD.indexOf("No workspaces yet"),
+    );
+
+    assert.match(
+      beforeEmpty,
+      /newWorkspaceName/,
+      "The create form must render for accounts that already have a " +
+        "workspace.",
+    );
+  });
+
+  void test("the workspace name input has exactly one id", () => {
+    /* Two copies of the form would duplicate a DOM id. */
+    const ids =
+      DASHBOARD.match(/id="[a-z-]*new-workspace[a-z-]*"/g) ?? [];
+
+    assert.equal(
+      ids.length,
+      1,
+      "Duplicate create forms produce a duplicate id: " + ids.join(", "),
+    );
+  });
+});
