@@ -16,7 +16,7 @@ import {
   Sparkles,
   Trash2,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 type NotificationType =
   | "system"
@@ -37,86 +37,6 @@ interface NotificationItem {
   actionHref?: string;
   actionLabel?: string;
 }
-
-const INITIAL_NOTIFICATIONS: NotificationItem[] = [
-  {
-    id: "notification-1",
-    title: "Research analysis completed",
-    description:
-      "Your deep research workspace has finished processing the latest intelligence sources.",
-    type: "project",
-    createdAt: "2 minutes ago",
-    unread: true,
-    actionHref: "/knowledge",
-    actionLabel: "View research",
-  },
-  {
-    id: "notification-2",
-    title: "New AI capability available",
-    description:
-      "A new autonomous capability has been added to the SYRAVEN marketplace.",
-    type: "update",
-    createdAt: "18 minutes ago",
-    unread: true,
-    actionHref: "/marketplace",
-    actionLabel: "Explore marketplace",
-  },
-  {
-    id: "notification-3",
-    title: "Workspace memory updated",
-    description:
-      "SYRAVEN successfully extracted and stored new long-term knowledge from your recent activity.",
-    type: "system",
-    createdAt: "1 hour ago",
-    unread: true,
-    actionHref: "/memory",
-    actionLabel: "Open memory",
-  },
-  {
-    id: "notification-4",
-    title: "New message in your workspace",
-    description:
-      "Your latest conversation has received a new AI-generated response.",
-    type: "message",
-    createdAt: "3 hours ago",
-    unread: false,
-    actionHref: "/dashboard",
-    actionLabel: "Open workspace",
-  },
-  {
-    id: "notification-5",
-    title: "Usage threshold approaching",
-    description:
-      "Your current workspace usage is approaching the configured notification threshold.",
-    type: "alert",
-    createdAt: "Yesterday",
-    unread: false,
-    actionHref: "/pricing",
-    actionLabel: "View plans",
-  },
-  {
-    id: "notification-6",
-    title: "Project successfully archived",
-    description:
-      "A completed project was archived and its workspace state has been preserved.",
-    type: "project",
-    createdAt: "Yesterday",
-    unread: false,
-    actionHref: "/dashboard",
-    actionLabel: "View projects",
-  },
-  {
-    id: "notification-7",
-    title: "SYRAVEN platform update",
-    description:
-      "Performance improvements and new workspace capabilities are now available.",
-    type: "update",
-    createdAt: "2 days ago",
-    unread: false,
-    actionHref: "/",
-    actionLabel: "Learn more",
-  },
-];
 
 function NotificationIcon({
   type,
@@ -145,12 +65,86 @@ function NotificationIcon({
 }
 
 export default function NotificationsPage() {
-  const [notifications, setNotifications] = useState<
-    NotificationItem[]
-  >(INITIAL_NOTIFICATIONS);
+  /*
+    Notifications are loaded from the API rather than seeded.
+
+    This page previously rendered a hardcoded array and every action
+    -- mark read, mark all read, delete, clear read -- only called
+    setState. A reload restored the same four fabricated items, so a
+    notification a user had dismissed came straight back and a real
+    one never appeared at all.
+  */
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const [filter, setFilter] =
     useState<NotificationFilter>("all");
+
+  const load = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch("/api/notifications", {
+        cache: "no-store",
+      });
+
+      if (response.status === 401) {
+        /* Signed out: an empty list is the correct view. */
+        setNotifications([]);
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error("Notifications could not be loaded.");
+      }
+
+      const payload = (await response.json()) as {
+        data?: {
+          id: string;
+          title: string;
+          message: string | null;
+          type: string;
+          read: boolean;
+          created_at: string;
+          action_url: string | null;
+          action_label: string | null;
+        }[];
+      };
+
+      setNotifications(
+        (payload.data ?? []).map((row) => ({
+          id: row.id,
+          title: row.title,
+          description: row.message ?? "",
+          type: row.type as NotificationType,
+          createdAt: row.created_at,
+          unread: !row.read,
+          actionHref: row.action_url ?? undefined,
+          actionLabel: row.action_label ?? undefined,
+        })),
+      );
+    } catch {
+      setError("Notifications could not be loaded.");
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void Promise.resolve().then(() => {
+      if (cancelled) return undefined;
+
+      return load();
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [load]);
 
   const unreadCount = useMemo(() => {
     return notifications.filter(
@@ -176,42 +170,121 @@ export default function NotificationsPage() {
     }
   }, [filter, notifications]);
 
-  function markAsRead(id: string) {
+  /*
+    Every mutation writes through the API and then reconciles local
+    state, so the change survives a reload.
+
+    Local state is updated OPTIMISTICALLY and rolled back on failure:
+    the list is small and the actions are trivially reversible, so
+    waiting on a round trip would make the UI feel broken. What is not
+    acceptable is the previous behaviour -- updating local state and
+    never telling the server at all.
+  */
+  async function markAsRead(id: string) {
+    const previous = notifications;
+
     setNotifications((current) =>
       current.map((notification) =>
         notification.id === id
-          ? {
-              ...notification,
-              unread: false,
-            }
-          : notification
-      )
+          ? { ...notification, unread: false }
+          : notification,
+      ),
     );
+
+    try {
+      const response = await fetch("/api/notifications", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, read: true }),
+      });
+
+      if (!response.ok) throw new Error("failed");
+    } catch {
+      setNotifications(previous);
+      setError("That notification could not be updated.");
+    }
   }
 
-  function markAllAsRead() {
+  async function markAllAsRead() {
+    const unread = notifications.filter((n) => n.unread);
+
+    if (unread.length === 0) return;
+
+    const previous = notifications;
+
     setNotifications((current) =>
-      current.map((notification) => ({
-        ...notification,
-        unread: false,
-      }))
+      current.map((notification) => ({ ...notification, unread: false })),
     );
+
+    try {
+      /*
+        The API has no bulk endpoint, so this is one request per unread
+        notification. Acceptable at this list size (the page fetches at
+        most a page of rows); a bulk route would be the fix if it grew.
+      */
+      const results = await Promise.all(
+        unread.map((notification) =>
+          fetch("/api/notifications", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: notification.id, read: true }),
+          }),
+        ),
+      );
+
+      if (results.some((r) => !r.ok)) throw new Error("failed");
+    } catch {
+      setNotifications(previous);
+      setError("Some notifications could not be updated.");
+    }
   }
 
-  function deleteNotification(id: string) {
+  async function deleteNotification(id: string) {
+    const previous = notifications;
+
     setNotifications((current) =>
-      current.filter(
-        (notification) => notification.id !== id
-      )
+      current.filter((notification) => notification.id !== id),
     );
+
+    try {
+      const response = await fetch(
+        `/api/notifications?id=${encodeURIComponent(id)}`,
+        { method: "DELETE" },
+      );
+
+      if (!response.ok) throw new Error("failed");
+    } catch {
+      setNotifications(previous);
+      setError("That notification could not be removed.");
+    }
   }
 
-  function clearReadNotifications() {
+  async function clearReadNotifications() {
+    const read = notifications.filter((n) => !n.unread);
+
+    if (read.length === 0) return;
+
+    const previous = notifications;
+
     setNotifications((current) =>
-      current.filter(
-        (notification) => notification.unread
-      )
+      current.filter((notification) => notification.unread),
     );
+
+    try {
+      const results = await Promise.all(
+        read.map((notification) =>
+          fetch(
+            `/api/notifications?id=${encodeURIComponent(notification.id)}`,
+            { method: "DELETE" },
+          ),
+        ),
+      );
+
+      if (results.some((r) => !r.ok)) throw new Error("failed");
+    } catch {
+      setNotifications(previous);
+      setError("Some notifications could not be removed.");
+    }
   }
 
   return (
@@ -295,7 +368,7 @@ export default function NotificationsPage() {
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
-                onClick={markAllAsRead}
+                onClick={() => void markAllAsRead()}
                 disabled={unreadCount === 0}
                 className="inline-flex h-10 items-center gap-2 rounded-xl border border-border bg-card px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
               >
@@ -305,7 +378,7 @@ export default function NotificationsPage() {
 
               <button
                 type="button"
-                onClick={clearReadNotifications}
+                onClick={() => void clearReadNotifications()}
                 className="inline-flex h-10 items-center gap-2 rounded-xl border border-border bg-card px-4 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-destructive"
               >
                 <Trash2 className="h-4 w-4" />
@@ -314,6 +387,21 @@ export default function NotificationsPage() {
             </div>
           </div>
         </section>
+
+        {error ? (
+          <p
+            role="alert"
+            className="mt-6 rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+          >
+            {error}
+          </p>
+        ) : null}
+
+        {isLoading ? (
+          <p className="mt-6 text-sm text-muted-foreground">
+            Loading notifications...
+          </p>
+        ) : null}
 
         {/* Summary */}
         <section className="mt-8 grid gap-4 sm:grid-cols-3">

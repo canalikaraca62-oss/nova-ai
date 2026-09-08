@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArrowRight,
   Calendar,
@@ -32,52 +32,37 @@ type Task = {
   createdAt: string;
 };
 
-const initialTasks: Task[] = [
-  {
-    id: "task-1",
-    title: "Prepare AI infrastructure strategy",
-    description:
-      "Define the core architecture and implementation roadmap.",
-    status: "in-progress",
-    priority: "high",
-    dueDate: "2026-09-05",
-    project: "Global AI Platform",
-    createdAt: "2026-08-29",
-  },
-  {
-    id: "task-2",
-    title: "Review product architecture",
-    description:
-      "Review application modules and improve system scalability.",
-    status: "todo",
-    priority: "high",
-    dueDate: "2026-09-10",
-    project: "Core Platform",
-    createdAt: "2026-08-29",
-  },
-  {
-    id: "task-3",
-    title: "Create marketplace strategy",
-    description:
-      "Define marketplace categories and partner ecosystem.",
-    status: "todo",
-    priority: "medium",
-    dueDate: "2026-09-15",
-    project: "Marketplace",
-    createdAt: "2026-08-28",
-  },
-  {
-    id: "task-4",
-    title: "Design AI Studio workflow",
-    description:
-      "Connect image, video, audio and presentation generation.",
-    status: "completed",
-    priority: "medium",
-    dueDate: "2026-08-28",
-    project: "AI Studio",
-    createdAt: "2026-08-27",
-  },
-];
+/*
+  public.tasks.status is free text with a default of 'pending', while
+  this page's vocabulary is todo | in-progress | completed. Mapping
+  both ways keeps an unrecognised value from rendering as a blank
+  column rather than silently dropping the task.
+*/
+function normalizeTaskStatus(value: string): TaskStatus {
+  switch (value) {
+    case "in-progress":
+    case "in_progress":
+      return "in-progress";
+
+    case "completed":
+    case "done":
+      return "completed";
+
+    default:
+      return "todo";
+  }
+}
+
+function normalizeTaskPriority(value: string): TaskPriority {
+  switch (value) {
+    case "low":
+    case "high":
+      return value;
+
+    default:
+      return "medium";
+  }
+}
 
 const statusOptions: Array<{
   id: "all" | TaskStatus;
@@ -122,10 +107,6 @@ const priorityOptions: Array<{
     label: "Low",
   },
 ];
-
-function getTodayDate(): string {
-  return new Date().toISOString().slice(0, 10);
-}
 
 function formatDate(date: string): string {
   const parsedDate = new Date(`${date}T00:00:00`);
@@ -190,7 +171,79 @@ function getStatusClass(status: TaskStatus): string {
 }
 
 export default function TasksPage() {
-  const [tasks, setTasks] = useState<Task[]>(initialTasks);
+  /*
+    Tasks come from the API.
+
+    This page rendered a hardcoded array and every action -- create,
+    status change, delete -- only called setState, so a task a user
+    created vanished on reload and one they deleted came back. The
+    full CRUD API existed and was never called.
+  */
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [taskError, setTaskError] = useState<string | null>(null);
+
+  const loadTasks = useCallback(async () => {
+    setIsLoading(true);
+    setTaskError(null);
+
+    try {
+      const response = await fetch("/api/tasks", { cache: "no-store" });
+
+      if (response.status === 401) {
+        setTasks([]);
+        return;
+      }
+
+      if (!response.ok) throw new Error("failed");
+
+      const payload = (await response.json()) as {
+        data?: {
+          tasks?: {
+            id: string;
+            title: string;
+            description: string | null;
+            status: string;
+            priority: string;
+            due_date: string | null;
+            created_at: string;
+          }[];
+        };
+      };
+
+      setTasks(
+        (payload.data?.tasks ?? []).map((row) => ({
+          id: row.id,
+          title: row.title,
+          description: row.description ?? "No description provided.",
+          status: normalizeTaskStatus(row.status),
+          priority: normalizeTaskPriority(row.priority),
+          dueDate: row.due_date ?? "",
+          /* The API has no project name on a task row. */
+          project: "General",
+          createdAt: row.created_at.slice(0, 10),
+        })),
+      );
+    } catch {
+      setTaskError("Tasks could not be loaded.");
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void Promise.resolve().then(() => {
+      if (cancelled) return undefined;
+
+      return loadTasks();
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [loadTasks]);
 
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -274,30 +327,55 @@ export default function TasksPage() {
     };
   }, [tasks]);
 
-  const updateTaskStatus = (
+  /*
+    Mutations write through the API and reconcile on failure, so a
+    change survives a reload. Local state moves first because these
+    are instant, reversible interactions.
+  */
+  const updateTaskStatus = async (
     taskId: string,
     status: TaskStatus,
   ) => {
-    setTasks((currentTasks) =>
-      currentTasks.map((task) => {
-        if (task.id !== taskId) {
-          return task;
-        }
+    const previous = tasks;
 
-        return {
-          ...task,
-          status,
-        };
-      }),
-    );
-  };
-
-  const deleteTask = (taskId: string) => {
     setTasks((currentTasks) =>
-      currentTasks.filter(
-        (task) => task.id !== taskId,
+      currentTasks.map((task) =>
+        task.id === taskId ? { ...task, status } : task,
       ),
     );
+
+    try {
+      const response = await fetch("/api/tasks", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: taskId, status }),
+      });
+
+      if (!response.ok) throw new Error("failed");
+    } catch {
+      setTasks(previous);
+      setTaskError("That task could not be updated.");
+    }
+  };
+
+  const deleteTask = async (taskId: string) => {
+    const previous = tasks;
+
+    setTasks((currentTasks) =>
+      currentTasks.filter((task) => task.id !== taskId),
+    );
+
+    try {
+      const response = await fetch(
+        `/api/tasks?id=${encodeURIComponent(taskId)}`,
+        { method: "DELETE" },
+      );
+
+      if (!response.ok) throw new Error("failed");
+    } catch {
+      setTasks(previous);
+      setTaskError("That task could not be removed.");
+    }
   };
 
   const resetCreateForm = () => {
@@ -312,41 +390,78 @@ export default function TasksPage() {
     setIsCreateModalOpen(false);
   };
 
-  const createTask = () => {
+  const [isCreating, setIsCreating] = useState(false);
+
+  const createTask = async () => {
     const title = newTaskTitle.trim();
 
-    if (!title) {
+    if (!title || isCreating) {
       return;
     }
 
-    const today = getTodayDate();
+    setIsCreating(true);
+    setTaskError(null);
 
-    const newTask: Task = {
-      id:
-        typeof crypto !== "undefined" &&
-        typeof crypto.randomUUID === "function"
-          ? crypto.randomUUID()
-          : `task-${Date.now()}-${Math.random()
-              .toString(36)
-              .slice(2, 9)}`,
-      title,
-      description:
-        newTaskDescription.trim() ||
-        "No description provided.",
-      status: "todo",
-      priority: newTaskPriority,
-      dueDate: newTaskDueDate || today,
-      project: "General",
-      createdAt: today,
-    };
+    try {
+      /*
+        The id comes from the SERVER. This handler used to mint one
+        with crypto.randomUUID() and push it into local state, so the
+        task existed only in the browser and its id matched no row.
+      */
+      const response = await fetch("/api/tasks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title,
+          description: newTaskDescription.trim() || undefined,
+          priority: newTaskPriority,
+          dueDate: newTaskDueDate || undefined,
+          status: "todo",
+        }),
+      });
 
-    setTasks((currentTasks) => [
-      newTask,
-      ...currentTasks,
-    ]);
+      const payload = (await response.json().catch(() => null)) as {
+        data?: {
+          task?: {
+            id: string;
+            title: string;
+            description: string | null;
+            status: string;
+            priority: string;
+            due_date: string | null;
+            created_at: string;
+          };
+        };
+      } | null;
 
-    resetCreateForm();
-    setIsCreateModalOpen(false);
+      const created = payload?.data?.task;
+
+      if (!response.ok || !created) {
+        throw new Error("failed");
+      }
+
+      setTasks((currentTasks) => [
+        {
+          id: created.id,
+          title: created.title,
+          description:
+            created.description ?? "No description provided.",
+          status: normalizeTaskStatus(created.status),
+          priority: normalizeTaskPriority(created.priority),
+          dueDate: created.due_date ?? "",
+          project: "General",
+          createdAt: created.created_at.slice(0, 10),
+        },
+        ...currentTasks,
+      ]);
+
+      resetCreateForm();
+      setIsCreateModalOpen(false);
+    } catch {
+      setTaskError("The task could not be created.");
+    } finally {
+      setIsCreating(false);
+    }
   };
 
   const clearFilters = () => {
@@ -358,6 +473,21 @@ export default function TasksPage() {
   return (
     <main className="min-h-screen bg-background text-foreground">
       <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+        {taskError ? (
+          <p
+            role="alert"
+            className="mb-6 rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+          >
+            {taskError}
+          </p>
+        ) : null}
+
+        {isLoading ? (
+          <p className="mb-6 text-sm text-muted-foreground">
+            Loading tasks...
+          </p>
+        ) : null}
+
         {/* HEADER */}
 
         <div className="mb-8 flex flex-col gap-6 border-b border-border pb-8 lg:flex-row lg:items-end lg:justify-between">
@@ -571,7 +701,7 @@ export default function TasksPage() {
                     <button
                       type="button"
                       onClick={() =>
-                        updateTaskStatus(
+                        void updateTaskStatus(
                           task.id,
                           isCompleted
                             ? "todo"
@@ -638,7 +768,7 @@ export default function TasksPage() {
                       <select
                         value={task.status}
                         onChange={(event) =>
-                          updateTaskStatus(
+                          void updateTaskStatus(
                             task.id,
                             event.target
                               .value as TaskStatus,
@@ -669,7 +799,7 @@ export default function TasksPage() {
                       <button
                         type="button"
                         onClick={() =>
-                          deleteTask(task.id)
+                          void deleteTask(task.id)
                         }
                         className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive"
                         aria-label="Delete task"
@@ -830,7 +960,7 @@ export default function TasksPage() {
 
                 <button
                   type="button"
-                  onClick={createTask}
+                  onClick={() => void createTask()}
                   disabled={!newTaskTitle.trim()}
                   className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                 >
