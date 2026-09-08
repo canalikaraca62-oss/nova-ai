@@ -305,7 +305,7 @@ export default function AgentsPage() {
               <h1 className="max-w-3xl text-4xl font-semibold tracking-[-0.04em] text-white sm:text-5xl lg:text-6xl">
                 Not a single AI.
                 <span className="block bg-gradient-to-r from-violet-300 via-white to-cyan-300 bg-clip-text text-transparent">
-                  Kendi AI ekibin.
+                  Your own AI team.
                 </span>
               </h1>
 
