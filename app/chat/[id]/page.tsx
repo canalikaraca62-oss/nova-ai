@@ -735,7 +735,7 @@ export default function ChatConversationPage() {
                     </div>
 
                     <h1 className="mt-6 text-2xl font-semibold tracking-tight sm:text-4xl">
-                      Let's start a conversation.
+                      Let’s start a conversation.
                     </h1>
 
                     <p className="mt-3 max-w-xl text-sm leading-7 text-white/40">
