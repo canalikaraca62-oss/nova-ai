@@ -189,3 +189,7 @@ test-results/
 playwright-report/
 blob-report/
 .playwright/
+
+# Throwaway verification scripts (never committed).
+*.tmp.cjs
+*.tmp.json
