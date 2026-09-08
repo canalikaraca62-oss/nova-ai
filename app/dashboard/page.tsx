@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
 import { useWorkspace } from "../context/WorkspaceContext";
 
 function formatDate(value: string): string {
@@ -17,6 +17,19 @@ function formatDate(value: string): string {
   }).format(date);
 }
 
+/*
+  Reads the CLOCK, so it must not run during render.
+
+  This page is a client component, but Next.js still prerenders it on
+  the server. The greeting was computed once there and again in the
+  browser: whenever the two land either side of noon or 18:00 -- or
+  simply in different timezones -- the markup disagreed and React
+  threw a hydration mismatch (#418), observed on /dashboard in
+  production on both desktop and mobile.
+
+  It is now resolved after mount, so the server and the first client
+  render always agree.
+*/
 function getGreeting(): string {
   const hour = new Date().getHours();
 
@@ -51,6 +64,19 @@ export default function DashboardPage() {
    * forward from the dashboard. Kept inline rather than adding a modal
    * or a new page: the dashboard is not being redesigned.
    */
+  /*
+    Empty on the server and on the first client render, so the two
+    always match; the real greeting appears immediately after
+    hydration. useSyncExternalStore is the sanctioned way to express
+    a value that legitimately differs between server and client --
+    the same pattern this codebase already uses on /chat.
+  */
+  const greeting = useSyncExternalStore(
+    () => () => {},
+    () => getGreeting(),
+    () => "Welcome back",
+  );
+
   const [showCreate, setShowCreate] = useState(false);
   const [newWorkspaceName, setNewWorkspaceName] = useState("");
   const [createError, setCreateError] = useState<string | null>(null);
@@ -144,7 +170,7 @@ export default function DashboardPage() {
               </p>
 
               <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
-                {getGreeting()}
+                {greeting}
               </h1>
 
               <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
