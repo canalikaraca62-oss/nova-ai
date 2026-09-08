@@ -515,6 +515,32 @@ export const POST = withAuth(async (
         200
       );
 
+    /*
+      TENANT GUARD.
+
+      `workspaceId` comes from the REQUEST BODY, and the insert policy
+      (`knowledge_insert_own`) only checks `auth.uid() = user_id` -- so
+      RLS accepts a row that is legitimately the caller's while
+      pointing at a workspace they do not belong to.
+
+      Verified against production before the fix: user B created a
+      knowledge record carrying user A's workspace id and received 201.
+      Retrieval happens to filter by owner as well, so nothing leaked
+      today -- but the row was inside another tenant's workspace, and
+      any future query scoped by workspace alone would surface it.
+
+      GET already guards the same parameter; the write path did not.
+    */
+    const workspaceGuard =
+      await requireOptionalWorkspaceAccess(
+        session,
+        workspaceId
+      );
+
+    if (workspaceGuard?.denied) {
+      return workspaceGuard.response;
+    }
+
     const sourceUrl =
       normalizeString(
         body.sourceUrl,

@@ -2,7 +2,6 @@ import type { NextRequest} from "next/server";
 import { NextResponse } from "next/server";
 
 import { withAuth } from "@/lib/api/withAuth";
-import { createClient } from "@supabase/supabase-js";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -62,11 +61,7 @@ type QueryOptions = {
 /*                                ENVIRONMENT                                 */
 /* -------------------------------------------------------------------------- */
 
-const SUPABASE_URL =
-  process.env.NEXT_PUBLIC_SUPABASE_URL;
 
-const SUPABASE_SERVICE_ROLE_KEY =
-  process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 /* -------------------------------------------------------------------------- */
 /*                              RESPONSE HELPERS                              */
@@ -109,28 +104,6 @@ function successResponse(
 /* -------------------------------------------------------------------------- */
 /*                              SUPABASE CLIENT                               */
 /* -------------------------------------------------------------------------- */
-
-function getSupabaseAdmin() {
-  if (
-    !SUPABASE_URL ||
-    !SUPABASE_SERVICE_ROLE_KEY
-  ) {
-    throw new Error(
-      "Supabase server configuration is missing."
-    );
-  }
-
-  return createClient(
-    SUPABASE_URL,
-    SUPABASE_SERVICE_ROLE_KEY,
-    {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-      },
-    }
-  );
-}
 
 
 /* -------------------------------------------------------------------------- */
@@ -373,7 +346,7 @@ export const GET = withAuth(async (
     };
 
     const supabase =
-      getSupabaseAdmin();
+      session.supabase;
 
     let query = supabase
       .from("agents")
@@ -384,16 +357,11 @@ export const GET = withAuth(async (
           name,
           description,
           system_prompt,
-          category,
           visibility,
           status,
           model,
-          temperature,
-          max_tokens,
-          icon,
-          color,
-          tags,
-          metadata,
+          avatar_url,
+          configuration,
           created_at,
           updated_at
         `,
@@ -424,6 +392,22 @@ export const GET = withAuth(async (
 
     /*
      * Genel Agent Store
+     *
+     * NOTE ON VISIBILITY.
+     *
+     * This route now runs on the caller's RLS client. The only SELECT
+     * policy on public.agents is `agents_select_own`
+     * (auth.uid() = user_id), so the database returns the caller's own
+     * agents whatever this filter says -- the `.or()` below can narrow
+     * but can no longer widen.
+     *
+     * That is the safe direction. Previously this ran on the
+     * service-role client, where RLS never executed and a single
+     * malformed filter would have returned every tenant's agents.
+     *
+     * A genuinely public agent store therefore needs a public-select
+     * policy, which is a migration. Nothing is lost today: the table
+     * holds zero rows, because creation was broken until this change.
      */
 
     if (
@@ -446,8 +430,14 @@ export const GET = withAuth(async (
      */
 
     if (options.category) {
+      /*
+        `category` is not a column -- it lives inside the
+        `configuration` jsonb. Filtering the column would have thrown
+        at runtime; the service-role client simply returned the error
+        as a 500 instead of failing the type check.
+      */
       query = query.eq(
-        "category",
+        "configuration->>category",
         options.category
       );
     }
@@ -749,7 +739,7 @@ export const POST = withAuth(async (
         : {};
 
     const supabase =
-      getSupabaseAdmin();
+      session.supabase;
 
     const {
       data,
@@ -765,26 +755,30 @@ export const POST = withAuth(async (
         system_prompt:
           systemPrompt,
 
-        category,
-
         visibility,
-
         status,
-
         model,
 
-        temperature,
+        /*
+          public.agents has no category / temperature / max_tokens /
+          icon / color / tags / metadata columns. Writing them made
+          EVERY agent creation fail with a 500 -- verified against
+          production, where the table holds zero rows because no
+          create has ever succeeded.
 
-        max_tokens:
+          The schema provides `configuration` (jsonb, NOT NULL) for
+          exactly this, so the tunables live there rather than in
+          columns that would need a migration to add.
+        */
+        configuration: {
+          category,
+          temperature,
           maxTokens,
-
-        icon,
-
-        color,
-
-        tags,
-
-        metadata,
+          icon,
+          color,
+          tags,
+          metadata: metadata as Record<string, never>,
+        },
       })
       .select(
         `
@@ -793,16 +787,11 @@ export const POST = withAuth(async (
           name,
           description,
           system_prompt,
-          category,
           visibility,
           status,
           model,
-          temperature,
-          max_tokens,
-          icon,
-          color,
-          tags,
-          metadata,
+          avatar_url,
+          configuration,
           created_at,
           updated_at
         `

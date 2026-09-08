@@ -591,6 +591,31 @@ export const POST = withAuth(async (
         200
       );
 
+    /*
+      TENANT GUARD.
+
+      `workspaceId` arrives in the REQUEST BODY. Without this check a
+      caller could place a project into a workspace they are not a
+      member of: RLS permits the row because it only tests
+      `owner_id = auth.uid()`, so the record is legitimately theirs
+      while pointing at someone else's tenant.
+
+      Verified against production before the fix: user B created a
+      project carrying user A's workspace id and received 201.
+
+      GET already guards the same parameter (see above); the write
+      paths did not.
+    */
+    const workspaceGuard =
+      await requireOptionalWorkspaceAccess(
+        session,
+        workspaceId
+      );
+
+    if (workspaceGuard?.denied) {
+      return workspaceGuard.response;
+    }
+
     const description =
       normalizeString(
         body.description,
@@ -805,11 +830,30 @@ export const PATCH = withAuth(async (
     if (
       body.workspaceId !== undefined
     ) {
-      updateData.workspace_id =
+      const targetWorkspace =
         normalizeString(
           body.workspaceId,
           200
         );
+
+      /*
+        Moving a project between workspaces is a tenant change, so it
+        needs the same membership check as creating one. Without it a
+        caller could relocate their own project into another
+        organisation's workspace.
+      */
+      const moveGuard =
+        await requireOptionalWorkspaceAccess(
+          session,
+          targetWorkspace
+        );
+
+      if (moveGuard?.denied) {
+        return moveGuard.response;
+      }
+
+      updateData.workspace_id =
+        targetWorkspace;
     }
 
     if (
