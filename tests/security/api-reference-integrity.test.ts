@@ -195,12 +195,21 @@ void describe("Every live API reference resolves to a route handler", () => {
    */
   const OPTIONAL_ENHANCEMENTS: readonly string[] = [
     /*
-     * Presentation generation. `generatePresentationWithApi` returns
-     * null on any non-OK response and the caller falls back to
-     * `createFallbackSlides`, so the feature works without a backend and
-     * improves if one appears.
+     * Empty on purpose.
+     *
+     * /api/presentations/generate was the sole entry. The reasoning was
+     * that the caller "degrades gracefully" — but what it degraded to
+     * was createFallbackSlides(), a string template that produced a
+     * whole deck from the user's topic and captioned the cover slide
+     * "SYRAVEN AI-generated strategic narrative" without any model
+     * having been called. That is not graceful degradation; it is the
+     * fabricated-success defect wearing its clothes.
+     *
+     * The route is implemented, the fallback is deleted, and a failure
+     * now surfaces to the user. Adding an entry here again requires
+     * showing that absence is genuinely a normal outcome the user is
+     * told about — not that it is quietly papered over.
      */
-    "/api/presentations/generate",
   ];
 
   void test("no live fetch targets a nonexistent route", () => {
@@ -223,34 +232,42 @@ void describe("Every live API reference resolves to a route handler", () => {
     );
   });
 
-  void test("optional enhancements really do degrade gracefully", () => {
+  void test("presentations are generated, never templated", () => {
     /*
-     * Guards the allowance above. If a caller stops handling absence,
-     * the endpoint stops being optional and becomes a broken call — this
-     * fails rather than letting the exemption hide it.
+     * The inverse of the test that used to live here.
+     *
+     * A deck must come from the provider or not at all. The template
+     * that stood in for it produced slides indistinguishable from
+     * generated ones, under a cover that claimed they were AI-written.
      */
     const page = readFileSync(
       join(ROOT, "app", "studio", "presentation", "page.tsx"),
       "utf8",
     );
 
-    const fn = page.slice(
-      page.indexOf("async function generatePresentationWithApi"),
-      page.indexOf("function getProjectExportContent"),
-    );
+    const source = page
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .split("\n")
+      .filter((line) => !line.trim().startsWith("//"))
+      .join("\n");
 
-    assert.ok(fn.length > 0, "The presentation API helper is missing.");
-
-    assert.match(
-      fn,
-      /if\s*\(\s*!response\.ok\s*\)\s*\{\s*return null;/,
-      "The helper must return null when the endpoint is absent.",
+    assert.ok(
+      !/createFallbackSlides\s*\(/.test(source),
+      "A local template must not stand in for a generated deck.",
     );
 
     assert.match(
-      page,
-      /createFallbackSlides\s*\(/,
-      "The caller must fall back to locally generated slides.",
+      source,
+      /setError\(/,
+      "A failed generation must be reported to the user.",
+    );
+  });
+
+  void test("the presentation route exists", () => {
+    assert.ok(
+      apiRouteExists("/api/presentations/generate"),
+      "/api/presentations/generate is missing, so every generation " +
+        "404s and the page has nothing honest to show.",
     );
   });
 

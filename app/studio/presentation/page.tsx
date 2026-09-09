@@ -142,156 +142,20 @@ function normalizeSlide(
   };
 }
 
-function createFallbackSlides(
-  request: GeneratePresentationRequest,
-): PresentationSlide[] {
-  const {
-    topic,
-    audience,
-    instructions,
-    slideCount,
-  } = request;
-
-  const audienceLabel = audience.trim()
-    ? audience.trim()
-    : "decision-makers and stakeholders";
-
-  const instructionLabel = instructions.trim()
-    ? instructions.trim()
-    : "Focus on strategic clarity, measurable value, and scalable execution.";
-
-  const baseSlides: PresentationSlide[] = [
-    {
-      id: createId("cover"),
-      title: topic,
-      subtitle: `A strategic presentation for ${audienceLabel}`,
-      content: [
-        "SYRAVEN AI-generated strategic narrative",
-      ],
-      type: "cover",
-    },
-    {
-      id: createId("context"),
-      title: "Executive Context",
-      subtitle: "Why this topic matters now",
-      content: [
-        `The strategic relevance of ${topic}`,
-        `Key implications for ${audienceLabel}`,
-        "The market, technology, and operational forces shaping the opportunity",
-      ],
-      type: "content",
-    },
-    {
-      id: createId("challenge"),
-      title: "The Core Challenge",
-      subtitle: "Understanding the problem before designing the solution",
-      content: [
-        "Increasing complexity across technology, operations, and decision-making",
-        "Growing expectations for speed, intelligence, and measurable outcomes",
-        "The need to connect fragmented systems into a scalable operating model",
-      ],
-      type: "content",
-    },
-    {
-      id: createId("opportunity"),
-      title: "Strategic Opportunity",
-      subtitle: "Where transformation can create disproportionate value",
-      content: [
-        `Create a differentiated approach around ${topic}`,
-        "Build reusable intelligence and operational capabilities",
-        "Turn strategic insight into repeatable execution",
-      ],
-      type: "content",
-    },
-    {
-      id: createId("solution"),
-      title: "Recommended Strategy",
-      subtitle: "A structured path from ambition to execution",
-      content: [
-        "Establish a clear foundation and governance model",
-        "Prioritize high-impact workflows and measurable use cases",
-        "Scale through modular systems, automation, and intelligence",
-      ],
-      type: "content",
-    },
-    {
-      id: createId("impact"),
-      title: "Projected Impact",
-      subtitle: "The potential value of successful execution",
-      content: [
-        "Faster decision cycles through connected intelligence",
-        "Higher operational efficiency through automation",
-        "Long-term scalability through reusable infrastructure",
-      ],
-      type: "metrics",
-    },
-    {
-      id: createId("roadmap"),
-      title: "Implementation Roadmap",
-      subtitle: "A phased approach to sustainable transformation",
-      content: [
-        "Phase 1 — Strategy, architecture, and foundations",
-        "Phase 2 — Product deployment and workflow integration",
-        "Phase 3 — Optimization, expansion, and ecosystem scale",
-      ],
-      type: "content",
-    },
-    {
-      id: createId("recommendations"),
-      title: "Strategic Recommendations",
-      subtitle: "Key actions for leadership and execution teams",
-      content: [
-        instructionLabel,
-        "Define measurable success criteria before scaling",
-        "Maintain strong alignment between technology, operations, and business goals",
-      ],
-      type: "summary",
-    },
-    {
-      id: createId("future"),
-      title: "Future Vision",
-      subtitle: "Building for long-term competitive advantage",
-      content: [
-        "AI-native operational intelligence",
-        "Global scalability and ecosystem expansion",
-        "A continuously improving strategic platform",
-      ],
-      type: "summary",
-    },
-    {
-      id: createId("summary"),
-      title: "Key Takeaways",
-      subtitle: "The strategic conclusion",
-      content: [
-        `${topic} represents a meaningful transformation opportunity`,
-        "A structured execution model reduces risk and improves speed",
-        "Long-term value depends on scalable systems and disciplined implementation",
-      ],
-      type: "summary",
-    },
-  ];
-
-  if (slideCount <= baseSlides.length) {
-    return baseSlides.slice(0, slideCount);
-  }
-
-  const additionalSlides = Array.from(
-    { length: slideCount - baseSlides.length },
-    (_, index): PresentationSlide => ({
-      id: createId(`insight-${index + 1}`),
-      title: `Strategic Insight ${index + 1}`,
-      subtitle: `Additional analysis for ${audienceLabel}`,
-      content: [
-        `Deepen understanding of ${topic}`,
-        "Identify high-leverage opportunities",
-        "Convert insight into measurable execution priorities",
-      ],
-      type: "content",
-    }),
-  );
-
-  return [...baseSlides, ...additionalSlides];
-}
+/*
+ * createFallbackSlides() stood here.
+ *
+ * /api/presentations/generate did not exist, so every request 404'd
+ * and this page swallowed that, falling through to a string template
+ * that assembled a whole deck out of the user's own topic ("The
+ * strategic relevance of {topic}") and captioned the cover slide
+ * "SYRAVEN AI-generated strategic narrative". No model was ever
+ * called, and nothing distinguished that deck from a generated one.
+ *
+ * The route exists now and calls the configured text provider. When
+ * it fails, this page says so rather than quietly manufacturing a
+ * deck and labelling it AI-generated.
+ */
 
 async function generatePresentationWithApi(
   request: GeneratePresentationRequest,
@@ -306,6 +170,16 @@ async function generatePresentationWithApi(
     });
 
     if (!response.ok) {
+      /*
+        Logged rather than surfaced verbatim: the route's message is
+        already client-safe, but the page shows one consistent line so a
+        provider's phrasing does not leak into the interface.
+      */
+      console.error(
+        "SYRAVEN PRESENTATION: generation failed.",
+        response.status,
+      );
+
       return null;
     }
 
@@ -443,13 +317,22 @@ export default function PresentationStudioPage() {
     };
 
     try {
-      const apiSlides =
+      const slides =
         await generatePresentationWithApi(request);
 
-      const slides =
-        apiSlides && apiSlides.length > 0
-          ? apiSlides
-          : createFallbackSlides(request);
+      if (!slides || slides.length === 0) {
+        /*
+          This used to fall through to a template deck, so a 404 from a
+          route that did not exist looked exactly like a successful
+          generation.
+        */
+        setStatus("error");
+        setError(
+          "The deck could not be generated. Please try again.",
+        );
+
+        return;
+      }
 
       const project: PresentationProject = {
         id: createId("project"),
