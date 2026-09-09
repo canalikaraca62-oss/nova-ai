@@ -1,19 +1,15 @@
 "use client";
 
-import type { ChangeEvent, DragEvent} from "react";
-import { useMemo, useRef, useState } from "react";
+import {
+  type ChangeEvent,
+  type DragEvent,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import Link from "next/link";
 
-type GenerationStatus = "idle" | "generating" | "completed" | "error";
-
-type GeneratedImage = {
-  id: string;
-  url: string;
-  prompt: string;
-  createdAt: string;
-  style: string;
-  aspectRatio: string;
-};
+import CapabilityUnavailable from "@/app/components/ui/CapabilityUnavailable";
 
 const IMAGE_STYLES = [
   {
@@ -83,9 +79,7 @@ export default function StudioImagePage() {
   const [selectedQuality, setSelectedQuality] = useState("high");
   const [imageCount, setImageCount] = useState(1);
 
-  const [status, setStatus] = useState<GenerationStatus>("idle");
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
-  const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const selectedStyleData = useMemo(
@@ -132,90 +126,27 @@ export default function StudioImagePage() {
     handleFile(event.dataTransfer.files?.[0]);
   };
 
-  const generateImages = async () => {
-    if (!prompt.trim()) {
-      setError("Please describe the image you want to create.");
-      return;
-    }
-
-    setError(null);
-    setStatus("generating");
-
-    try {
-      /*
-       * API entegrasyonu burada yapılacak.
-       *
-       * Örnek:
-       *
-       * const response = await fetch("/api/studio/image", {
-       *   method: "POST",
-       *   headers: {
-       *     "Content-Type": "application/json",
-       *   },
-       *   body: JSON.stringify({
-       *     prompt,
-       *     negativePrompt,
-       *     style: selectedStyle,
-       *     aspectRatio: selectedRatio,
-       *     quality: selectedQuality,
-       *     imageCount,
-       *     referenceImage: uploadedImage,
-       *   }),
-       * });
-       *
-       * const data = await response.json();
-       */
-
-      await new Promise((resolve) => setTimeout(resolve, 1800));
-
-      const newImages: GeneratedImage[] = Array.from(
-        { length: imageCount },
-        (_, index) => ({
-          id: `${Date.now()}-${index}`,
-          url:
-            uploadedImage ||
-            `https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1200&q=80`,
-          prompt,
-          createdAt: new Date().toISOString(),
-          style: selectedStyleData?.name || selectedStyle,
-          aspectRatio: selectedRatioData?.name || selectedRatio,
-        })
-      );
-
-      setGeneratedImages((previous) => [...newImages, ...previous]);
-      setStatus("completed");
-    } catch {
-      setError("Image generation failed. Please try again.");
-      setStatus("error");
-    }
-  };
+  /*
+   * Image generation is NOT wired to a provider.
+   *
+   * This function used to fake it: it set status to "generating", slept
+   * 1,800ms, then pushed a hardcoded Unsplash stock photograph into the
+   * results grid as though the model had produced it, with a working
+   * Download button beside it. A user had no way to tell that image was
+   * not their own generation.
+   *
+   * No image provider is configured in this repository, so the honest
+   * behaviour is to render CapabilityUnavailable and keep the composer
+   * usable for describing intent. When a provider is added this is the
+   * single place that changes: post the prompt to the real endpoint and
+   * render what actually comes back.
+   */
 
   const clearReferenceImage = () => {
     setUploadedImage(null);
 
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
-    }
-  };
-
-  const downloadImage = async (image: GeneratedImage) => {
-    try {
-      const response = await fetch(image.url);
-      const blob = await response.blob();
-
-      const objectUrl = URL.createObjectURL(blob);
-
-      const link = document.createElement("a");
-      link.href = objectUrl;
-      link.download = `syraven-image-${image.id}.jpg`;
-
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-
-      URL.revokeObjectURL(objectUrl);
-    } catch {
-      setError("Unable to download this image.");
     }
   };
 
@@ -353,92 +284,28 @@ export default function StudioImagePage() {
                   <h2 className="text-lg font-semibold">Generated images</h2>
 
                   <p className="mt-1 text-sm text-muted-foreground">
-                    Your latest AI generations will appear here.
+                    Results appear here once a provider is connected.
                   </p>
                 </div>
-
-                {generatedImages.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setGeneratedImages([])}
-                    className="text-sm font-medium text-muted-foreground transition hover:text-foreground"
-                  >
-                    Clear history
-                  </button>
-                )}
               </div>
 
-              {status === "generating" && (
-                <div className="flex min-h-[320px] flex-col items-center justify-center rounded-2xl border border-dashed border-primary/40 bg-primary/[0.03] p-8 text-center">
-                  <div className="h-12 w-12 animate-spin rounded-full border-4 border-muted border-t-primary" />
-
-                  <h3 className="mt-5 font-semibold">Creating your image</h3>
-
-                  <p className="mt-2 max-w-sm text-sm leading-6 text-muted-foreground">
-                    Our AI is processing your prompt and building the visual
-                    composition.
-                  </p>
-                </div>
-              )}
-
-              {status !== "generating" && generatedImages.length === 0 && (
-                <div className="flex min-h-[320px] flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-muted/20 p-8 text-center">
-                  <div className="text-5xl">✦</div>
-
-                  <h3 className="mt-5 text-lg font-semibold">
-                    Your creative workspace is ready
-                  </h3>
-
-                  <p className="mt-2 max-w-md text-sm leading-6 text-muted-foreground">
-                    Enter a detailed prompt and generate your first AI image.
-                  </p>
-                </div>
-              )}
-
-              {status !== "generating" && generatedImages.length > 0 && (
-                <div className="grid gap-5 sm:grid-cols-2">
-                  {generatedImages.map((image) => (
-                    <article
-                      key={image.id}
-                      className="group overflow-hidden rounded-2xl border border-border bg-background"
-                    >
-                      <div className="relative aspect-square overflow-hidden bg-muted">
-                        <img
-                          src={image.url}
-                          alt={image.prompt}
-                          className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
-                        />
-                      </div>
-
-                      <div className="p-4">
-                        <p className="line-clamp-2 text-sm leading-6 text-muted-foreground">
-                          {image.prompt}
-                        </p>
-
-                        <div className="mt-4 flex items-center justify-between gap-3">
-                          <div className="flex gap-2">
-                            <span className="rounded-full bg-muted px-2.5 py-1 text-xs">
-                              {image.style}
-                            </span>
-
-                            <span className="rounded-full bg-muted px-2.5 py-1 text-xs">
-                              {image.aspectRatio}
-                            </span>
-                          </div>
-
-                          <button
-                            type="button"
-                            onClick={() => downloadImage(image)}
-                            className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium transition hover:bg-muted"
-                          >
-                            Download
-                          </button>
-                        </div>
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              )}
+              <CapabilityUnavailable
+                capability="Image generation"
+                alternatives={[
+                  {
+                    href: "/studio/presentation",
+                    label: "Build a presentation",
+                    description:
+                      "Generates real slide content from a topic using the configured text model.",
+                  },
+                  {
+                    href: "/chat",
+                    label: "Describe it in Chat",
+                    description:
+                      "Work the concept out in words, then generate once a provider is connected.",
+                  },
+                ]}
+              />
             </div>
           </section>
 
@@ -605,20 +472,29 @@ export default function StudioImagePage() {
             )}
 
             {/* Generate */}
+            {/*
+              Disabled rather than removed: the control shows what this
+              screen is for, while `aria-disabled` and the note below say
+              plainly that it cannot run yet. A live button that fakes a
+              result is what this replaced.
+            */}
             <button
               type="button"
-              onClick={generateImages}
-              disabled={status === "generating"}
-              className="flex w-full items-center justify-center rounded-xl bg-primary px-5 py-4 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+              disabled
+              aria-describedby="image-generation-availability"
+              className="flex w-full cursor-not-allowed items-center justify-center rounded-xl bg-primary px-5 py-4 text-sm font-semibold text-primary-foreground opacity-60"
             >
-              {status === "generating"
-                ? "Generating..."
-                : "Generate AI Image"}
+              Generate AI Image
             </button>
 
-            <p className="text-center text-xs leading-5 text-muted-foreground">
-              Generation settings: {selectedStyleData?.name} ·{" "}
-              {selectedRatioData?.name} · {selectedQuality}
+            <p
+              id="image-generation-availability"
+              className="text-center text-xs leading-5 text-muted-foreground"
+            >
+              No image provider is connected, so generation is turned off.
+              Your settings ({selectedStyleData?.name} ·{" "}
+              {selectedRatioData?.name} · {selectedQuality}) are kept for
+              when one is.
             </p>
           </aside>
         </div>

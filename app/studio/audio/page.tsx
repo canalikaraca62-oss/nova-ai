@@ -1,9 +1,8 @@
 "use client";
 
-import type {
-  ChangeEvent,
-  DragEvent} from "react";
 import {
+  type ChangeEvent,
+  type DragEvent,
   useEffect,
   useMemo,
   useRef,
@@ -14,7 +13,6 @@ import {
   Check,
   Download,
   FileAudio,
-  Loader2,
   Mic,
   Music2,
   Pause,
@@ -308,40 +306,19 @@ export default function AudioStudioPage() {
     }
   };
 
-  const enhanceAudio = async () => {
-    if (!selectedProject) {
-      setError("Upload and select an audio file first.");
-      return;
-    }
-
-    setError(null);
-
-    setProjects((currentProjects) =>
-      currentProjects.map((project) =>
-        project.id === selectedProject.id
-          ? {
-              ...project,
-              status: "processing",
-            }
-          : project,
-      ),
-    );
-
-    await new Promise((resolve) => {
-      window.setTimeout(resolve, 1800);
-    });
-
-    setProjects((currentProjects) =>
-      currentProjects.map((project) =>
-        project.id === selectedProject.id
-          ? {
-              ...project,
-              status: "completed",
-            }
-          : project,
-      ),
-    );
-  };
+  /*
+   * Audio ENHANCEMENT is not wired to a provider.
+   *
+   * Upload, playback and download on this page are real: the file is
+   * the user's own, held as an object URL. Enhancement was not. It
+   * flipped the project to "processing", slept 1,800ms, then flipped it
+   * to "completed" having changed not one sample. The user was then
+   * invited to download their "enhanced" audio, which was byte for byte
+   * the file they had uploaded.
+   *
+   * Only that claim is removed here. The parts that genuinely work are
+   * left alone.
+   */
 
   const downloadAudio = () => {
     if (!selectedProject) {
@@ -674,22 +651,13 @@ export default function AudioStudioPage() {
                   <div className="flex flex-col gap-3 border-t border-border pt-5 sm:flex-row">
                     <button
                       type="button"
-                      onClick={enhanceAudio}
-                      disabled={selectedProject.status === "processing"}
-                      className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                      disabled
+                      aria-describedby="audio-enhancement-availability"
+                      className="inline-flex flex-1 cursor-not-allowed items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground opacity-60"
                     >
-                      {selectedProject.status === "processing" ? (
-                        <>
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          Processing Audio...
-                        </>
-                      ) : (
-                        <>
-                          <WandSparkles className="h-4 w-4" />
-                          Enhance with{" "}
-                          {selectedModeData?.title ?? "AI"}
-                        </>
-                      )}
+                      <WandSparkles className="h-4 w-4" />
+                      Enhance with{" "}
+                      {selectedModeData?.title ?? "AI"}
                     </button>
 
                     <button
@@ -701,6 +669,15 @@ export default function AudioStudioPage() {
                       Download
                     </button>
                   </div>
+
+                  <p
+                    id="audio-enhancement-availability"
+                    className="text-xs leading-5 text-muted-foreground"
+                  >
+                    No audio processing provider is connected, so
+                    enhancement is turned off. Playback and download use
+                    the file you uploaded, unchanged.
+                  </p>
                 </div>
               </section>
             ) : (
