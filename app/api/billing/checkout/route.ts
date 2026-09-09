@@ -6,7 +6,17 @@ import { createClient } from "@supabase/supabase-js";
 
 export const runtime = "nodejs";
 
-type BillingPlan = "free" | "pro" | "premium" | "vip";
+/*
+  The canonical vocabulary from lib/plans.ts.
+
+  This route used to speak free | pro | premium | vip, a legacy set
+  that matched nothing else in the product: "premium" resolved to
+  `starter` and "vip" was a second alias for `pro`, so two different
+  price ids could grant the same plan while `business` could not be
+  sold at all. Enterprise stays out on purpose -- it is quoted, not
+  self-served.
+*/
+type BillingPlan = "free" | "starter" | "pro" | "business";
 
 interface CheckoutRequest {
   plan?: BillingPlan;
@@ -17,9 +27,9 @@ interface CheckoutRequest {
 
 const VALID_PLANS: BillingPlan[] = [
   "free",
+  "starter",
   "pro",
-  "premium",
-  "vip",
+  "business",
 ];
 
 const VALID_INTERVALS = ["monthly", "yearly"] as const;
@@ -59,6 +69,19 @@ function normalizePlan(plan: unknown): BillingPlan | null {
   return VALID_PLANS.includes(normalized) ? normalized : null;
 }
 
+/**
+ * Canonicalises the billing interval.
+ *
+ * app/billing/page.tsx sent "month"/"year" while this route accepted
+ * only "monthly"/"yearly", so every upgrade click returned 400
+ * INVALID_INTERVAL -- checkout was unreachable from the UI even with
+ * Stripe fully configured.
+ *
+ * The caller is fixed too, but both spellings are accepted here: the
+ * short forms are what Stripe itself uses for a recurring interval,
+ * so a future caller reaching for them is a reasonable mistake to
+ * absorb rather than reject. Anything else is still refused.
+ */
 function normalizeInterval(
   interval: unknown
 ): "monthly" | "yearly" | null {
@@ -66,13 +89,31 @@ function normalizeInterval(
     return null;
   }
 
-  return VALID_INTERVALS.includes(
-    interval as (typeof VALID_INTERVALS)[number]
-  )
-    ? (interval as "monthly" | "yearly")
-    : null;
+  switch (interval.toLowerCase()) {
+    case "monthly":
+    case "month":
+      return "monthly";
+
+    case "yearly":
+    case "year":
+    case "annual":
+      return "yearly";
+
+    default:
+      return null;
+  }
 }
 
+/**
+ * Resolves the Stripe price id for a plan and interval.
+ *
+ * SERVER-AUTHORITATIVE. The price id is looked up from the
+ * environment by (plan, interval); it is never read from the request,
+ * so a caller cannot name a cheaper price for a richer plan.
+ *
+ * Returns null when the pair has no configured price, which the
+ * handler turns into a 503 rather than a silent downgrade.
+ */
 function getPriceId(
   plan: BillingPlan,
   interval: "monthly" | "yearly"
@@ -81,19 +122,19 @@ function getPriceId(
     Exclude<BillingPlan, "free">,
     Record<"monthly" | "yearly", string | undefined>
   > = {
+    starter: {
+      monthly: process.env.STRIPE_PRICE_STARTER_MONTHLY,
+      yearly: process.env.STRIPE_PRICE_STARTER_YEARLY,
+    },
+
     pro: {
       monthly: process.env.STRIPE_PRICE_PRO_MONTHLY,
       yearly: process.env.STRIPE_PRICE_PRO_YEARLY,
     },
 
-    premium: {
-      monthly: process.env.STRIPE_PRICE_PREMIUM_MONTHLY,
-      yearly: process.env.STRIPE_PRICE_PREMIUM_YEARLY,
-    },
-
-    vip: {
-      monthly: process.env.STRIPE_PRICE_VIP_MONTHLY,
-      yearly: process.env.STRIPE_PRICE_VIP_YEARLY,
+    business: {
+      monthly: process.env.STRIPE_PRICE_BUSINESS_MONTHLY,
+      yearly: process.env.STRIPE_PRICE_BUSINESS_YEARLY,
     },
   };
 

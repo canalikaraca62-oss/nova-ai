@@ -14,16 +14,29 @@ import { useRouter } from "next/navigation";
  * TYPES
  * ========================================================= */
 
+/*
+  The canonical vocabulary from lib/plans.ts.
+
+  This page used "premium" for what the rest of the product calls
+  `starter`, so the €19 tier had two names depending on where you
+  looked -- and the price attached to the wrong Stripe variable would
+  have granted the €49 plan.
+*/
 type SyravenPlan =
   | "free"
-  | "premium"
+  | "starter"
   | "pro"
   | "business"
   | "enterprise";
 
 type BillingStatus = "loading" | "ready" | "error";
 
-type BillingInterval = "month" | "year";
+/*
+  "monthly" | "yearly" is what /api/billing/checkout accepts. This
+  page sent "month" | "year", so every upgrade click returned 400
+  INVALID_INTERVAL and checkout was unreachable from the UI.
+*/
+type BillingInterval = "monthly" | "yearly";
 
 type UsageData = {
   messages?: number | null;
@@ -81,8 +94,8 @@ const PLANS: readonly PlanConfig[] = [
   },
 
   {
-    id: "premium",
-    name: "Premium",
+    id: "starter",
+    name: "Starter",
     badge: "Advanced",
     description:
       "More intelligence, more creation and more room to work.",
@@ -124,8 +137,8 @@ const PLANS: readonly PlanConfig[] = [
     badge: "Teams",
     description:
       "A powerful AI operating environment for ambitious teams.",
-    monthlyPrice: "€99",
-    yearlyPrice: "€990",
+    monthlyPrice: "€199",
+    yearlyPrice: "€1990",
     featured: false,
     features: [
       "Everything in Pro",
@@ -181,9 +194,11 @@ function normalizePlan(
   value: string | null | undefined,
 ): SyravenPlan {
   switch (value?.trim().toLowerCase()) {
+    /* Legacy names still present in existing profile rows. */
     case "premium":
     case "plus":
-      return "premium";
+    case "starter":
+      return "starter";
 
     case "pro":
     case "vip":
@@ -561,7 +576,7 @@ export default function BillingPage() {
         setBillingError("");
 
         const interval: BillingInterval =
-          yearly ? "year" : "month";
+          yearly ? "yearly" : "monthly";
 
         const response = await fetch(
           "/api/billing/checkout",

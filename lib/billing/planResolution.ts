@@ -33,8 +33,8 @@
  *
  * Three vocabularies existed before Phase 6:
  *
- *   checkout route : free | pro | premium | vip
- *   webhook route  : free | premium | pro | business | enterprise
+ *   checkout route : free | starter | pro | business  (canonical)
+ *   webhook route  : free | starter | pro | business | enterprise
  *   lib/plans.ts   : free | starter | pro | business | enterprise
  *
  * Only `free` and `pro` were common to all three. A purchase of
@@ -62,7 +62,16 @@ import { DEFAULT_PLAN, type PlanId, isPlanId } from "@/lib/plans";
  * Read-only compatibility: these are accepted when interpreting existing
  * data or Stripe metadata, and are never written back.
  *
- * `premium` and `vip` were sold by the checkout route; `plus` and `team`
+ * `premium` and `vip` were sold by the checkout route before it was
+ * normalised; `plus` and `team` appeared in the webhook's own alias
+ * table.
+ *
+ * These entries MUST NOT be deleted along with the retired env vars.
+ * A subscription created under the old vocabulary still carries
+ * "premium" or "vip" in its Stripe metadata, and dropping the alias
+ * would make that subscription unresolvable -- silently demoting a
+ * paying customer. Nothing writes these values any more; they are
+ * read-only compatibility.
  * appeared in the webhook's own alias table.
  */
 const LEGACY_PLAN_ALIASES: Record<string, PlanId> = {
@@ -107,22 +116,28 @@ export function normalizePlanId(value: unknown): PlanId | null {
 /**
  * Environment variables mapping a Stripe price to a plan.
  *
- * Both the historic single-price names and the interval-specific names
- * used by the checkout route are read, because a deployment may have
- * either configured. Every variable that exists maps to exactly one
- * PlanId.
+ * CANONICAL VOCABULARY ONLY: starter | pro | business | enterprise,
+ * matching lib/plans.ts and the checkout route.
+ *
+ * The PREMIUM_* and VIP_* names are gone. They were a legacy set in
+ * which "premium" resolved to `starter` and "vip" was a SECOND alias
+ * for `pro` -- so two different Stripe prices granted the same plan,
+ * and a €19 price attached to the wrong variable would have granted
+ * the €49 tier. Retiring them removes that whole class of mistake.
+ *
+ * The historic single-price names are kept: a deployment may still
+ * have them configured, they are unambiguous, and dropping them would
+ * silently stop resolving a live subscription.
  */
 const PRICE_ENV_TO_PLAN: ReadonlyArray<{
   env: string;
   plan: PlanId;
 }> = [
   /* Interval-specific names used by app/api/billing/checkout. */
-  { env: "STRIPE_PRICE_PREMIUM_MONTHLY", plan: "starter" },
-  { env: "STRIPE_PRICE_PREMIUM_YEARLY", plan: "starter" },
+  { env: "STRIPE_PRICE_STARTER_MONTHLY", plan: "starter" },
+  { env: "STRIPE_PRICE_STARTER_YEARLY", plan: "starter" },
   { env: "STRIPE_PRICE_PRO_MONTHLY", plan: "pro" },
   { env: "STRIPE_PRICE_PRO_YEARLY", plan: "pro" },
-  { env: "STRIPE_PRICE_VIP_MONTHLY", plan: "pro" },
-  { env: "STRIPE_PRICE_VIP_YEARLY", plan: "pro" },
   { env: "STRIPE_PRICE_BUSINESS_MONTHLY", plan: "business" },
   { env: "STRIPE_PRICE_BUSINESS_YEARLY", plan: "business" },
   { env: "STRIPE_PRICE_ENTERPRISE_MONTHLY", plan: "enterprise" },
@@ -130,7 +145,6 @@ const PRICE_ENV_TO_PLAN: ReadonlyArray<{
 
   /* Historic single-price names read by the webhook. */
   { env: "STRIPE_PRICE_STARTER", plan: "starter" },
-  { env: "STRIPE_PRICE_PREMIUM", plan: "starter" },
   { env: "STRIPE_PRICE_PRO", plan: "pro" },
   { env: "STRIPE_PRICE_BUSINESS", plan: "business" },
   { env: "STRIPE_PRICE_ENTERPRISE", plan: "enterprise" },

@@ -18,7 +18,7 @@ import {
   claimEvent,
   settleEvent,
 } from "@/lib/billing/idempotency";
-import { resolvePlan } from "@/lib/billing/planResolution";
+import { planFromPriceId, resolvePlan } from "@/lib/billing/planResolution";
 import type { PlanId } from "@/lib/plans";
 
 export const runtime = "nodejs";
@@ -256,65 +256,29 @@ function normalizeBillingStatus(
    GET PLAN FROM STRIPE PRICE
 ================================================== */
 
+/**
+ * Resolves a Stripe price id to a plan.
+ *
+ * Delegates to lib/billing/planResolution, which reads EVERY
+ * configured price variable -- both the interval-specific names the
+ * checkout route uses and the historic single-price names.
+ *
+ * This function used to carry its own copy of the map, and that copy
+ * read only STRIPE_PRICE_PREMIUM / _PRO / _BUSINESS / _ENTERPRISE. Any
+ * interval-specific price -- which is what checkout actually creates a
+ * subscription with -- fell through to "free", so a paying customer
+ * would have been resolved to the free tier on their very first
+ * invoice. It also read PREMIUM, a variable that no longer exists.
+ *
+ * Returning "free" for an unrecognised price is retained: an unknown
+ * price must not grant entitlement.
+ */
 function getPlanFromPriceId(
   priceId: string | null | undefined
 ): SyravenPlan {
-  const normalizedPriceId =
-    getStringValue(priceId);
+  const resolved = planFromPriceId(priceId);
 
-  if (!normalizedPriceId) {
-    return "free";
-  }
-
-  const premiumPriceId =
-    getStringValue(
-      process.env.STRIPE_PRICE_PREMIUM
-    );
-
-  const proPriceId =
-    getStringValue(
-      process.env.STRIPE_PRICE_PRO
-    );
-
-  const businessPriceId =
-    getStringValue(
-      process.env.STRIPE_PRICE_BUSINESS
-    );
-
-  const enterprisePriceId =
-    getStringValue(
-      process.env.STRIPE_PRICE_ENTERPRISE
-    );
-
-  if (
-    premiumPriceId &&
-    normalizedPriceId === premiumPriceId
-  ) {
-    return "starter";
-  }
-
-  if (
-    proPriceId &&
-    normalizedPriceId === proPriceId
-  ) {
-    return "pro";
-  }
-
-  if (
-    businessPriceId &&
-    normalizedPriceId === businessPriceId
-  ) {
-    return "business";
-  }
-
-  if (
-    enterprisePriceId &&
-    normalizedPriceId === enterprisePriceId
-  ) {
-    return "enterprise";
-  }
-
-  return "free";
+  return resolved ?? "free";
 }
 
 /* ==================================================
