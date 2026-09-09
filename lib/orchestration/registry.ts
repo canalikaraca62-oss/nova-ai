@@ -202,7 +202,79 @@ export const TOOL_REGISTRY: Readonly<Record<string, ToolDefinition>> = {
     tenantScoped: true,
     minimumPlan: "free",
   },
+
+  /* ---------------------------------------------------------------- */
+  /* CONNECTORS — leave the building. Always high, always approved.    */
+  /*                                                                  */
+  /* These reach a third party the moment they run: a person receives  */
+  /* the mail, the attendees see the invitation. Every one is high     */
+  /* risk, so requiresHumanApproval() gates it, and every one also     */
+  /* needs a connected account — a second, independent gate in         */
+  /* lib/integrations/capabilities.ts.                                 */
+  /*                                                                  */
+  /* Nothing can be connected yet: the connections migration is not    */
+  /* applied. So each of these currently resolves to a refusal naming  */
+  /* the account to connect. That is the point. A registered tool that */
+  /* refuses honestly is what lets the planner reason about a goal it  */
+  /* cannot yet complete, instead of the model inventing a step and    */
+  /* the product implying the mail went out.                           */
+  /* ---------------------------------------------------------------- */
+
+  "gmail.send": {
+    id: "gmail.send",
+    description:
+      "Send an email from the caller's connected Gmail account.",
+    risk: "high",
+    schema: {
+      to: { type: "string", required: true, maxLength: 320 },
+      subject: { type: "string", required: true, maxLength: 500 },
+      body: { type: "string", required: true, maxLength: 20_000 },
+    },
+    /*
+      Not tenant scoped: a mailbox belongs to a person, not a workspace.
+      Membership of a workspace must never confer use of a colleague's
+      account — see the migration's note on why workspace_id appears in
+      no policy.
+    */
+    tenantScoped: false,
+    minimumPlan: "free",
+  },
+
+  "calendar.create": {
+    id: "calendar.create",
+    description:
+      "Create an event on the caller's connected calendar.",
+    risk: "high",
+    schema: {
+      title: { type: "string", required: true, maxLength: 500 },
+      startsAt: { type: "string", required: true, maxLength: 40 },
+      endsAt: { type: "string", required: true, maxLength: 40 },
+      attendees: { type: "string", required: false, maxLength: 2_000 },
+    },
+    tenantScoped: false,
+    minimumPlan: "free",
+  },
 };
+
+/**
+ * Maps a connector tool onto the capability it needs.
+ *
+ * Kept as an explicit table rather than derived from the tool id: the
+ * two vocabularies are allowed to differ, and a silent mismatch would
+ * mean a tool checking the wrong permission — the kind of bug that
+ * looks like nothing until it grants something.
+ */
+export const TOOL_CAPABILITY: Readonly<Record<string, string>> = {
+  "gmail.send": "gmail.send.message",
+  "calendar.create": "calendar.create.event",
+};
+
+/**
+ * The capability a tool requires, or null when it needs none.
+ */
+export function capabilityForTool(toolId: string): string | null {
+  return TOOL_CAPABILITY[toolId] ?? null;
+}
 
 export function getTool(id: unknown): ToolDefinition | null {
   if (typeof id !== "string") return null;
@@ -304,6 +376,45 @@ export const AGENT_REGISTRY: Readonly<
      */
     maxRisk: "high",
     maxToolCalls: 6,
+    maxDepth: 2,
+  },
+
+  communicator: {
+    id: "communicator",
+    name: "Communication Agent",
+    purpose:
+      "Sends messages and schedules meetings through connected accounts.",
+    allowedTools: [
+      /*
+       * Read tools first: this agent is expected to look before it acts,
+       * and a plan that drafts an email without consulting what the
+       * workspace knows is usually the wrong plan.
+       */
+      "knowledge.search",
+      "task.list",
+      "gmail.send",
+      "calendar.create",
+    ],
+    minimumPlan: "free",
+    /*
+     * High risk, and every high-risk step still needs a human approval
+     * record held server-side — the model proposing one is not consent.
+     *
+     * Two independent gates stand between a plan and somebody's inbox:
+     * the approval record here, and a live connection with the right
+     * scope in lib/integrations/capabilities.ts. Neither substitutes for
+     * the other. Nothing is connected yet, so today this agent plans a
+     * real send and then refuses it with "Connect Gmail to do this" —
+     * which is the honest state, and materially better than the model
+     * inventing a step and the interface implying the mail went out.
+     */
+    maxRisk: "high",
+    /*
+     * Deliberately tight. An agent that can reach outside the product
+     * should not be able to do so repeatedly within one run: four calls
+     * is enough to search, check, send and schedule.
+     */
+    maxToolCalls: 4,
     maxDepth: 2,
   },
 };

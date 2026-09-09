@@ -45,6 +45,16 @@ import {
 
 const NOW = new Date("2026-09-09T12:00:00.000Z");
 
+/**
+ * Strips comments so a note DESCRIBING a rule is never mistaken for the
+ * code that implements it.
+ */
+function stripComments(source: string): string {
+  return source
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/^\s*\/\/.*$/gm, "");
+}
+
 /** An otherwise-valid Gmail connection, adjusted per test. */
 function gmailConnection(
   overrides: Partial<ConnectionSnapshot> = {},
@@ -488,5 +498,170 @@ void describe("The connection table keeps secrets out", () => {
       !/drop table|truncate|alter column|drop column/i.test(code),
       "The migration is not additive.",
     );
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/*                            THE ORCHESTRATION GATE                          */
+/* -------------------------------------------------------------------------- */
+
+void describe("Connector tools are gated in the orchestrator", () => {
+  const REGISTRY = readFileSync(
+    join(process.cwd(), "lib", "orchestration", "registry.ts"),
+    "utf8",
+  );
+
+  const TOOLS = readFileSync(
+    join(process.cwd(), "lib", "orchestration", "tools.ts"),
+    "utf8",
+  );
+
+  const registryCode = stripComments(REGISTRY);
+  const toolsCode = stripComments(TOOLS);
+
+  void test("every connector tool is high risk", () => {
+    /*
+     * Risk is what drives requiresHumanApproval() in the orchestrator.
+     * A connector tool registered below high would execute without a
+     * human ever seeing it — the single worst regression available here.
+     */
+    for (const tool of ["gmail.send", "calendar.create"]) {
+      const start = registryCode.indexOf(`"${tool}": {`);
+
+      assert.ok(start > 0, `${tool} is not registered.`);
+
+      /*
+        Bounded to the tool's OWN definition.
+
+        A fixed-width window was the first attempt and it was wrong: 600
+        characters from "gmail.send" ran past its closing brace into
+        "calendar.create", so the regex matched the NEXT tool's risk. The
+        test passed with gmail.send downgraded to medium — it was
+        asserting against its neighbour. Verified by making exactly that
+        change and watching it stay green.
+
+        The definition ends at its own closing "\n  }," which is the
+        first one at this nesting depth.
+      */
+      const rest = registryCode.slice(start);
+
+      const end = rest.indexOf("\n  },");
+
+      assert.ok(end > 0, `${tool}'s definition is not delimited.`);
+
+      const definition = rest.slice(0, end);
+
+      assert.match(
+        definition,
+        /risk:\s*"high"/,
+        `${tool} reaches a third party, so it cannot be below high risk.`,
+      );
+    }
+  });
+
+  void test("a connector tool is not tenant scoped", () => {
+    /*
+     * A mailbox belongs to a person, not a workspace. Marking these
+     * tenantScoped would invite the reading that membership of a
+     * workspace confers use of a colleague's account.
+     */
+    const rest = registryCode.slice(
+      registryCode.indexOf('"gmail.send": {'),
+    );
+
+    /* Bounded to its own definition — see the note on risk above. */
+    const definition = rest.slice(0, rest.indexOf("\n  },"));
+
+    assert.match(definition, /tenantScoped:\s*false/);
+  });
+
+  void test("the capability gate runs before the executor", () => {
+    /*
+     * Ordering is the whole guarantee. If the executor were reached
+     * first, an implemented connector would send the mail and only then
+     * discover that no account was connected.
+     */
+    const gate = toolsCode.indexOf("capabilityForTool(tool.id)");
+    const dispatch = toolsCode.indexOf("EXECUTORS[tool.id]");
+
+    assert.ok(gate > 0, "executeTool does not consult the capability map.");
+    assert.ok(dispatch > 0, "executeTool no longer dispatches.");
+
+    assert.ok(
+      gate < dispatch,
+      "The connection check must precede dispatch, or the side effect " +
+        "happens before anyone asks whether it may.",
+    );
+  });
+
+  void test("an unconnected account refuses distinctly", () => {
+    assert.match(
+      toolsCode,
+      /INTEGRATION_NOT_CONNECTED/,
+      "A missing connection must be reported as its own outcome, not " +
+        "folded into a generic failure.",
+    );
+  });
+
+  void test("a tool mapped to no capability is refused", () => {
+    /*
+     * A mapping onto a capability that does not exist is a wiring
+     * mistake. Running the tool anyway would perform an outward-facing
+     * action whose permission was never checked.
+     */
+    const gate = toolsCode.slice(
+      toolsCode.indexOf("capabilityForTool(tool.id)"),
+      toolsCode.indexOf("EXECUTORS[tool.id]"),
+    );
+
+    assert.match(
+      gate,
+      /if\s*\(!definition\)/,
+      "An unknown capability mapping must fail closed.",
+    );
+  });
+
+  void test("every mapped capability exists", () => {
+    /*
+     * The live check behind the source assertion above: each tool's
+     * capability id must resolve, or the gate refuses every call to it.
+     */
+    for (const capabilityId of [
+      "gmail.send.message",
+      "calendar.create.event",
+    ]) {
+      const capability = getCapability(capabilityId);
+
+      assert.ok(
+        capability,
+        `${capabilityId} is mapped from a tool but not defined.`,
+      );
+
+      assert.equal(
+        capability.risk,
+        "high",
+        `${capabilityId} is reachable from a tool, so it must be high.`,
+      );
+    }
+  });
+
+  void test("nothing is connected today, so connectors refuse", () => {
+    /*
+     * The migration is written but NOT applied, so no connection row can
+     * exist. This pins the honest present state: a plan may propose a
+     * send, and it resolves to "Connect Gmail to do this" rather than to
+     * a claim that mail went out.
+     */
+    const result = resolveAvailability("gmail.send.message", null);
+
+    assert.equal(result.available, false);
+
+    if (result.available === false) {
+      assert.match(
+        result.message,
+        /Connect Gmail/,
+        "The refusal must name the account to connect.",
+      );
+    }
   });
 });

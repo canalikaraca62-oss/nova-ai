@@ -36,7 +36,12 @@ import "server-only";
 import type { AuthenticatedSession } from "@/lib/auth/session";
 import { assembleContext } from "@/lib/memory/retrieval";
 import { CONTEXT_BUDGET } from "@/lib/memory/contextBudget";
-import type { ToolDefinition } from "./registry";
+import {
+  getCapability,
+  resolveAvailability,
+  type ConnectionSnapshot,
+} from "@/lib/integrations/capabilities";
+import { capabilityForTool, type ToolDefinition } from "./registry";
 
 /* -------------------------------------------------------------------------- */
 /*                                   TYPES                                    */
@@ -60,7 +65,14 @@ export type ToolOutcome =
       reason:
         | "TOOL_NOT_IMPLEMENTED"
         | "TOOL_FAILED"
-        | "RESOURCE_NOT_FOUND";
+        | "RESOURCE_NOT_FOUND"
+        /*
+         * Distinct from TOOL_NOT_IMPLEMENTED on purpose. "This is not
+         * built" and "this is built, but you have not connected the
+         * account" are different facts, and only the second is one the
+         * user can do anything about.
+         */
+        | "INTEGRATION_NOT_CONNECTED";
       message: string;
     };
 
@@ -252,11 +264,150 @@ export function isExecutable(toolId: string): boolean {
  * verified an approval record before calling this. This function does
  * not re-authorize — it is the last step, not the gate.
  */
+/**
+ * Loads the caller's connection for a provider.
+ *
+ * Reads through the caller's RLS client, so a connection belonging to
+ * anybody else is invisible here rather than merely filtered out.
+ *
+ * Returns null when the table does not exist yet: the connections
+ * migration is written but NOT applied, and a missing table must read
+ * as "nothing is connected" rather than crashing an agent run.
+ */
+async function loadConnection(
+  session: AuthenticatedSession,
+  provider: string,
+): Promise<ConnectionSnapshot | null> {
+  /*
+    THE TABLE IS NOT IN THE GENERATED TYPES YET.
+
+    public.integration_connections is absent from types/database.ts
+    because its migration has NOT been applied. The typed client rejects
+    the table name outright, and that rejection is accurate: this code is
+    deliberately ahead of the schema.
+
+    So the RESULT is widened, not the client. `session.supabase` is
+    still the receiver of the query -- the caller's RLS-enforced client,
+    exactly as every other executor in this file uses it -- and the cast
+    lands on the awaited value instead. Aliasing the client to a local
+    would have hidden which client ran the query, which is precisely the
+    property agent-execution.test.ts checks for.
+
+    When the migration is applied and the types are regenerated, the
+    surrounding cast comes out and the query itself is unchanged.
+  */
+  const { data, error } = (await (
+    session.supabase.from(
+      "integration_connections" as never,
+    ) as unknown as {
+      select: (columns: string) => {
+        eq: (
+          column: string,
+          value: string,
+        ) => {
+          eq: (
+            column: string,
+            value: string,
+          ) => {
+            eq: (
+              column: string,
+              value: string,
+            ) => {
+              maybeSingle: () => Promise<{
+                data: unknown;
+                error: unknown;
+              }>;
+            };
+          };
+        };
+      };
+    }
+  )
+    .select("id, provider, status, expires_at, granted_scopes")
+    .eq("user_id", session.userId)
+    .eq("provider", provider)
+    .eq("status", "active")
+    .maybeSingle()) as { data: unknown; error: unknown };
+
+  if (error || !data) {
+    /*
+      A missing table lands here too. Before the migration is applied
+      every read fails, and "nothing is connected" is the truthful
+      reading of that -- not a crash mid agent run.
+    */
+    return null;
+  }
+
+  const row = data as {
+    id: string;
+    provider: string;
+    status: string;
+    expires_at: string | null;
+    granted_scopes: string[] | null;
+  };
+
+  return {
+    id: row.id,
+    provider: row.provider as ConnectionSnapshot["provider"],
+    status: row.status,
+    expiresAt: row.expires_at,
+    grantedScopes: row.granted_scopes ?? [],
+  };
+}
+
 export async function executeTool(
   tool: ToolDefinition,
   args: ToolArgs,
   context: ToolContext,
 ): Promise<ToolOutcome> {
+  /* ------------------------------------------------------------- */
+  /* Connector gate — before anything else                          */
+  /* ------------------------------------------------------------- */
+
+  const capabilityId = capabilityForTool(tool.id);
+
+  if (capabilityId !== null) {
+    const definition = getCapability(capabilityId);
+
+    if (!definition) {
+      /*
+        A tool mapped to a capability that does not exist is a wiring
+        mistake, not a user problem. Refusing is the only safe reading:
+        the alternative is running an outward-facing action whose
+        permission was never checked.
+      */
+      console.error("SYRAVEN TOOL: unknown capability mapping.", {
+        tool: tool.id,
+        capabilityId,
+      });
+
+      return {
+        ok: false,
+        reason: "TOOL_NOT_IMPLEMENTED",
+        message: "This action is not available yet.",
+      };
+    }
+
+    const connection = await loadConnection(
+      context.session,
+      definition.provider,
+    );
+
+    const availability = resolveAvailability(capabilityId, connection);
+
+    if (!availability.available) {
+      /*
+        The message comes from the capability layer verbatim: it already
+        names the account to connect and is written for a person.
+      */
+      return {
+        ok: false,
+        reason: "INTEGRATION_NOT_CONNECTED",
+        message: availability.message,
+      };
+    }
+  }
+
   const executor = EXECUTORS[tool.id];
 
   if (!executor) {
