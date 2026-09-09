@@ -45,6 +45,8 @@ function stripComments(source: string): string {
 
 const TASKS = stripComments(read("app", "tasks", "page.tsx"));
 const NOTIFICATIONS = stripComments(read("app", "notifications", "page.tsx"));
+const MEMORY = stripComments(read("app", "memory", "page.tsx"));
+const WORKSPACE = stripComments(read("app", "workspace", "page.tsx"));
 
 /** Pages whose mutations must reach a named endpoint. */
 const WIRED: ReadonlyArray<{
@@ -64,6 +66,28 @@ const WIRED: ReadonlyArray<{
     source: NOTIFICATIONS,
     endpoint: "/api/notifications",
     methods: ["PATCH", "DELETE"],
+  },
+  {
+    /*
+     * /memory opened on four invented memories and "saved" a new one by
+     * sleeping 400ms and minting an id from Date.now(). It is backed by
+     * public.knowledge — the products real memory store — so no new
+     * table was invented for this screen.
+     */
+    name: "/memory",
+    source: MEMORY,
+    endpoint: "/api/knowledge",
+    methods: ["POST", "PATCH", "DELETE"],
+  },
+  {
+    /*
+     * /workspace invented four projects and linked every card to
+     * /projects/<an id that existed nowhere>.
+     */
+    name: "/workspace",
+    source: WORKSPACE,
+    endpoint: "/api/projects",
+    methods: ["POST"],
   },
 ];
 
@@ -97,7 +121,7 @@ void describe("Mutating pages call their API", () => {
        * created, indistinguishable from real rows.
        */
       assert.ok(
-        !/const\s+(initialTasks|INITIAL_NOTIFICATIONS)\s*[:=]/.test(page.source),
+        !/const\s+(initialTasks|INITIAL_NOTIFICATIONS|INITIAL_MEMORIES|initialProjects|initialMembers)\s*[:=]/.test(page.source),
         `${page.name} still renders hardcoded rows as if they were the ` +
           `user's own data.`,
       );
@@ -143,13 +167,26 @@ void describe("Optimistic updates roll back", () => {
         .length;
 
       const restores = (
-        page.source.match(/set(?:Tasks|Notifications)\(previous\)/g) ?? []
+        page.source.match(/set[A-Z][A-Za-z]*\(previous\)/g) ?? []
       ).length;
 
-      assert.ok(
-        captures > 0,
-        `${page.name} must capture state before an optimistic update.`,
-      );
+      /*
+        A page that only ever creates has nothing to roll back: the row
+        is appended from the server response, not guessed at first. The
+        rule is therefore conditional on the page actually performing an
+        optimistic mutation, so it stays a real constraint on the pages
+        that do rather than a formality every page must satisfy.
+      */
+      if (captures === 0) {
+        assert.ok(
+          !/set[A-Z][A-Za-z]*\(\(current/.test(page.source) ||
+            !/method:\s*["'`](?:PATCH|DELETE)["'`]/.test(page.source),
+          `${page.name} mutates optimistically without capturing the ` +
+            `previous state, so a rejected write would stick.`,
+        );
+
+        return;
+      }
 
       assert.equal(
         restores,
@@ -163,6 +200,49 @@ void describe("Optimistic updates roll back", () => {
 });
 
 void describe("Ids come from the server", () => {
+  /*
+   * Every create handler on a wired page must adopt the id the server
+   * returned. A client-minted id belongs to no row, so the record it
+   * names cannot be updated or deleted afterwards — and on /workspace
+   * it also produced a card linking to /projects/<nothing>.
+   */
+  const CREATORS: ReadonlyArray<{
+    name: string;
+    source: string;
+    handler: string;
+  }> = [
+    { name: "/memory", source: MEMORY, handler: "handleCreateMemory" },
+    {
+      name: "/workspace",
+      source: WORKSPACE,
+      handler: "handleCreateProject",
+    },
+  ];
+
+  for (const creator of CREATORS) {
+    void test(`${creator.name} does not mint its own id`, () => {
+      const start = creator.source.indexOf(creator.handler);
+
+      assert.ok(
+        start >= 0,
+        `${creator.name} no longer has a ${creator.handler} to check.`,
+      );
+
+      const body = creator.source.slice(start, start + 2_500);
+
+      assert.ok(
+        !/crypto.randomUUID|Date.now()/.test(body),
+        `CRITICAL: ${creator.name} mints an id that belongs to no row.`,
+      );
+
+      assert.match(
+        body,
+        /created/,
+        `${creator.name} must adopt what the server returned.`,
+      );
+    });
+  }
+
   void test("/tasks does not mint its own task id", () => {
     /*
      * createTask used crypto.randomUUID() and pushed the result into

@@ -1,6 +1,8 @@
 "use client";
 
 import {
+  useCallback,
+  useEffect,
   useMemo,
   useState,
   type FormEvent,
@@ -40,68 +42,101 @@ interface MemoryItem {
   pinned: boolean;
 }
 
-const INITIAL_MEMORIES: MemoryItem[] = [
-  {
-    id: "memory-1",
-    title: "Product vision",
-    content:
-      "SYRAVEN is being built as a large-scale intelligent platform that combines AI agents, knowledge, automation and powerful workspaces.",
-    category: "Project",
-    importance: "High",
-    createdAt: "Updated today",
-    pinned: true,
-  },
-  {
-    id: "memory-2",
-    title: "Development preferences",
-    content:
-      "Prefer clean TypeScript architecture, reusable components and scalable application structure.",
-    category: "Preference",
-    importance: "High",
-    createdAt: "Updated today",
-    pinned: true,
-  },
-  {
-    id: "memory-3",
-    title: "Workspace context",
-    content:
-      "The workspace should support research, building, automation, analysis and creative AI workflows.",
-    category: "Project",
-    importance: "High",
-    createdAt: "Updated yesterday",
-    pinned: false,
-  },
-  {
-    id: "memory-4",
-    title: "Interface preference",
-    content:
-      "Keep the interface modern, premium, minimal and focused on intelligent workflows.",
-    category: "Preference",
-    importance: "Medium",
-    createdAt: "Updated yesterday",
-    pinned: false,
-  },
-  {
-    id: "memory-5",
-    title: "Knowledge organization",
-    content:
-      "Important documents and research should be transformed into structured, searchable intelligence.",
-    category: "Knowledge",
-    importance: "Medium",
-    createdAt: "Updated 2 days ago",
-    pinned: false,
-  },
-  {
-    id: "memory-6",
-    title: "User workflow",
-    content:
-      "Users should be able to move seamlessly between conversations, projects, knowledge and autonomous agents.",
-    category: "Personal",
-    importance: "Low",
-    createdAt: "Updated 3 days ago",
-    pinned: false,
-  },
-];
+/*
+ * MEMORY IS REAL STORAGE, NOT A MOCK.
+ *
+ * This page used to open on four invented memories — a "Product
+ * vision", "Development preferences", a "Workspace context" — that no
+ * user had ever written, seeded straight into useState. Creating one
+ * more slept 400ms to imitate a save, minted an id from Date.now(), and
+ * pushed it into that same array. Everything vanished on reload, and
+ * nothing was ever the user's own.
+ *
+ * The records now come from public.knowledge through /api/knowledge,
+ * which is the product's real memory store: it already carries the
+ * hierarchy (user / project / workspace / org), visibility and status
+ * that lib/memory/hierarchy.ts describes, and its route enforces the
+ * tenant guards. No new table was invented for this screen.
+ *
+ * The mapping:
+ *
+ *   category   -> knowledge.type      (note | document | dataset | text)
+ *   importance -> metadata.importance
+ *   pinned     -> metadata.pinned
+ *
+ * Importance and pinning live in metadata because they are this
+ * screen's presentation of a record, not properties of the record
+ * itself, and metadata is already persisted and returned by the API.
+ */
+
+/** How a memory category maps onto the knowledge type vocabulary. */
+const CATEGORY_TO_TYPE: Record<
+  Exclude<MemoryCategory, "All">,
+  string
+> = {
+  Personal: "note",
+  Project: "document",
+  Preference: "text",
+  Knowledge: "dataset",
+};
+
+const TYPE_TO_CATEGORY: Record<
+  string,
+  Exclude<MemoryCategory, "All">
+> = {
+  note: "Personal",
+  document: "Project",
+  text: "Preference",
+  dataset: "Knowledge",
+};
+
+/** A knowledge row as this page consumes it. */
+interface KnowledgeRow {
+  id: string;
+  title: string;
+  content: string | null;
+  type: string;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+}
+
+function readImportance(
+  metadata: Record<string, unknown> | null
+): Importance {
+  const value = metadata?.importance;
+
+  return value === "High" ||
+    value === "Medium" ||
+    value === "Low"
+    ? value
+    : "Medium";
+}
+
+/*
+ * Renders a timestamp identically on the server and in the browser.
+ *
+ * toLocaleDateString() would format against the runtime's locale and
+ * timezone, which differ between the two, producing a hydration
+ * mismatch. Slicing the ISO date keeps one stable value.
+ */
+function formatCreatedAt(value: string): string {
+  return value.slice(0, 10);
+}
+
+function toMemoryItem(
+  row: KnowledgeRow
+): MemoryItem {
+  return {
+    id: row.id,
+    title: row.title,
+    content: row.content ?? "",
+    category:
+      TYPE_TO_CATEGORY[row.type] ?? "Knowledge",
+    importance: readImportance(row.metadata),
+    createdAt: row.created_at,
+    pinned: row.metadata?.pinned === true,
+  };
+}
 
 const CATEGORIES: MemoryCategory[] = [
   "All",
@@ -122,9 +157,63 @@ const IMPORTANCE_ORDER: Record<
 
 export default function MemoryPage() {
   const [memories, setMemories] =
-    useState<MemoryItem[]>(
-      INITIAL_MEMORIES
-    );
+    useState<MemoryItem[]>([]);
+
+  const [isLoading, setIsLoading] =
+    useState(true);
+
+  const [memoryError, setMemoryError] =
+    useState<string | null>(null);
+
+  const loadMemories = useCallback(async () => {
+    setIsLoading(true);
+    setMemoryError(null);
+
+    try {
+      const response = await fetch(
+        "/api/knowledge?limit=100",
+        { cache: "no-store" }
+      );
+
+      if (response.status === 401) {
+        setMemories([]);
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error("failed");
+      }
+
+      const payload =
+        (await response.json()) as {
+          data?: KnowledgeRow[];
+        };
+
+      setMemories(
+        (payload.data ?? []).map(toMemoryItem)
+      );
+    } catch {
+      setMemoryError(
+        "Your memory could not be loaded."
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void Promise.resolve().then(() => {
+      if (cancelled) return undefined;
+
+      return loadMemories();
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [loadMemories]);
 
   const [searchQuery, setSearchQuery] =
     useState("");
@@ -215,25 +304,84 @@ export default function MemoryPage() {
     };
   }, [memories]);
 
-  const togglePinned = (id: string) => {
+  const togglePinned = async (id: string) => {
+    const target = memories.find(
+      (memory) => memory.id === id
+    );
+
+    if (!target) {
+      return;
+    }
+
+    const previous = memories;
+    const pinned = !target.pinned;
+
     setMemories((current) =>
       current.map((memory) =>
         memory.id === id
-          ? {
-              ...memory,
-              pinned: !memory.pinned,
-            }
+          ? { ...memory, pinned }
           : memory
       )
     );
+
+    try {
+      const response = await fetch(
+        "/api/knowledge",
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            id,
+            /*
+              The whole metadata object is sent because PATCH replaces
+              it rather than merging. Sending only { pinned } would
+              silently drop the importance stored alongside it.
+            */
+            metadata: {
+              importance: target.importance,
+              pinned,
+            },
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("failed");
+      }
+    } catch {
+      setMemories(previous);
+      setMemoryError(
+        "That memory could not be updated."
+      );
+    }
   };
 
-  const deleteMemory = (id: string) => {
+  const deleteMemory = async (id: string) => {
+    const previous = memories;
+
     setMemories((current) =>
       current.filter(
         (memory) => memory.id !== id
       )
     );
+
+    try {
+      const response = await fetch(
+        `/api/knowledge?id=${encodeURIComponent(id)}`,
+        { method: "DELETE" }
+      );
+
+      if (!response.ok) {
+        throw new Error("failed");
+      }
+    } catch {
+      setMemories(previous);
+      setMemoryError(
+        "That memory could not be removed."
+      );
+    }
   };
 
   const resetCreateForm = () => {
@@ -248,37 +396,65 @@ export default function MemoryPage() {
   ) => {
     event.preventDefault();
 
-    if (
-      !newTitle.trim() ||
-      !newContent.trim()
-    ) {
+    const title = newTitle.trim();
+    const content = newContent.trim();
+
+    if (!title || !content || isCreating) {
       return;
     }
 
     setIsCreating(true);
+    setMemoryError(null);
 
     try {
-      await new Promise((resolve) => {
-        window.setTimeout(resolve, 400);
-      });
+      /*
+        The id comes from the SERVER. This used to sleep 400ms and mint
+        one from Date.now(), so the memory existed only in the browser
+        and its id matched no row anywhere.
+      */
+      const response = await fetch(
+        "/api/knowledge",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            title,
+            content,
+            type: CATEGORY_TO_TYPE[newCategory],
+            metadata: {
+              importance: newImportance,
+              pinned: false,
+            },
+          }),
+        }
+      );
 
-      const memory: MemoryItem = {
-        id: `memory-${Date.now()}`,
-        title: newTitle.trim(),
-        content: newContent.trim(),
-        category: newCategory,
-        importance: newImportance,
-        createdAt: "Just now",
-        pinned: false,
-      };
+      const payload =
+        (await response
+          .json()
+          .catch(() => null)) as {
+          data?: KnowledgeRow;
+        } | null;
+
+      const created = payload?.data;
+
+      if (!response.ok || !created) {
+        throw new Error("failed");
+      }
 
       setMemories((current) => [
-        memory,
+        toMemoryItem(created),
         ...current,
       ]);
 
       resetCreateForm();
       setShowCreateModal(false);
+    } catch {
+      setMemoryError(
+        "That memory could not be saved."
+      );
     } finally {
       setIsCreating(false);
     }
@@ -450,6 +626,15 @@ export default function MemoryPage() {
             ))}
           </div>
 
+          {memoryError ? (
+            <div
+              role="alert"
+              className="mt-8 rounded-2xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive"
+            >
+              {memoryError}
+            </div>
+          ) : null}
+
           <div className="mt-8 grid gap-4">
             {filteredMemories.map((memory) => (
               <article
@@ -536,7 +721,9 @@ export default function MemoryPage() {
 
                     <div className="mt-5 flex items-center gap-2 border-t border-border pt-4 text-xs text-muted-foreground">
                       <Calendar className="h-3.5 w-3.5" />
-                      {memory.createdAt}
+                      <time dateTime={memory.createdAt}>
+                        {formatCreatedAt(memory.createdAt)}
+                      </time>
                     </div>
                   </div>
                 </div>
@@ -544,30 +731,65 @@ export default function MemoryPage() {
             ))}
           </div>
 
-          {filteredMemories.length === 0 && (
+          {isLoading ? (
+            <div
+              role="status"
+              aria-live="polite"
+              className="mt-8 flex min-h-[320px] flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-card px-6 text-center"
+            >
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+
+              <p className="mt-4 text-sm text-muted-foreground">
+                Loading your memory...
+              </p>
+            </div>
+          ) : filteredMemories.length === 0 ? (
             <div className="mt-8 flex min-h-[320px] flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-card px-6 text-center">
               <Search className="h-8 w-8 text-muted-foreground" />
 
-              <h2 className="mt-4 text-lg font-semibold text-foreground">
-                No memories found
-              </h2>
+              {memories.length === 0 ? (
+                <>
+                  <h2 className="mt-4 text-lg font-semibold text-foreground">
+                    Nothing remembered yet
+                  </h2>
 
-              <p className="mt-2 max-w-sm text-sm leading-6 text-muted-foreground">
-                Try changing your search or category filter.
-              </p>
+                  <p className="mt-2 max-w-sm text-sm leading-6 text-muted-foreground">
+                    Anything you save here stays available to SYRAVEN
+                    when it works on your behalf.
+                  </p>
 
-              <button
-                type="button"
-                onClick={() => {
-                  setSearchQuery("");
-                  setSelectedCategory("All");
-                }}
-                className="mt-5 text-sm font-medium text-primary hover:underline"
-              >
-                Reset filters
-              </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowCreateModal(true)}
+                    className="mt-5 text-sm font-medium text-primary hover:underline"
+                  >
+                    Add your first memory
+                  </button>
+                </>
+              ) : (
+                <>
+                  <h2 className="mt-4 text-lg font-semibold text-foreground">
+                    No memories found
+                  </h2>
+
+                  <p className="mt-2 max-w-sm text-sm leading-6 text-muted-foreground">
+                    Try changing your search or category filter.
+                  </p>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchQuery("");
+                      setSelectedCategory("All");
+                    }}
+                    className="mt-5 text-sm font-medium text-primary hover:underline"
+                  >
+                    Reset filters
+                  </button>
+                </>
+              )}
             </div>
-          )}
+          ) : null}
         </section>
       </div>
 

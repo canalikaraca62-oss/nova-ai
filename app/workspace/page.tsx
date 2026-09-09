@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 type WorkspaceStatus = "active" | "archived";
 
@@ -10,124 +10,154 @@ type WorkspaceProject = {
   name: string;
   description: string;
   status: WorkspaceStatus;
-  members: number;
   updatedAt: string;
   color: string;
 };
 
-type WorkspaceMember = {
+/*
+ * PROJECTS ON THIS PAGE ARE REAL ROWS.
+ *
+ * This screen used to open on four invented projects — "SYRAVEN Core"
+ * with 24 members, an "Agent Network" with 18 — held in useState and
+ * seeded at module scope. Creating one more built an id out of the name
+ * and Date.now() and unshifted it into that array, so it survived until
+ * the next reload and no further.
+ *
+ * The worst of it was the link. Each card linked to
+ * /projects/{project.id}, and those ids ("syraven-core") matched no row
+ * in any table, so every card on the page led to a project that did not
+ * exist.
+ *
+ * Projects now load from /api/projects, which is session-scoped and
+ * RLS-enforced, and creation returns a server id. The links resolve
+ * because the projects are real.
+ */
+
+/** A project row as this page consumes it. */
+interface ProjectRow {
   id: string;
   name: string;
-  role: string;
-  initials: string;
-  color: string;
-};
+  description: string | null;
+  status: string;
+  updated_at: string;
+}
 
-const initialProjects: WorkspaceProject[] = [
-  {
-    id: "syraven-core",
-    name: "SYRAVEN Core",
-    description:
-      "Core intelligence, orchestration and platform infrastructure.",
-    status: "active",
-    members: 24,
-    updatedAt: "Updated just now",
-    color: "from-violet-500 to-indigo-600",
-  },
-  {
-    id: "agent-network",
-    name: "Agent Network",
-    description:
-      "Autonomous agents, workflows and enterprise automation systems.",
-    status: "active",
-    members: 18,
-    updatedAt: "Updated 12 minutes ago",
-    color: "from-cyan-500 to-blue-600",
-  },
-  {
-    id: "knowledge-engine",
-    name: "Knowledge Engine",
-    description:
-      "Enterprise memory, retrieval and intelligent knowledge systems.",
-    status: "active",
-    members: 16,
-    updatedAt: "Updated 1 hour ago",
-    color: "from-emerald-500 to-teal-600",
-  },
-  {
-    id: "global-marketplace",
-    name: "Global Marketplace",
-    description:
-      "Marketplace infrastructure for AI products and services.",
-    status: "active",
-    members: 12,
-    updatedAt: "Updated 3 hours ago",
-    color: "from-orange-500 to-rose-600",
-  },
-  {
-    id: "research-lab",
-    name: "Research Lab",
-    description:
-      "Experimental research, advanced models and future capabilities.",
-    status: "active",
-    members: 9,
-    updatedAt: "Updated yesterday",
-    color: "from-pink-500 to-fuchsia-600",
-  },
-  {
-    id: "legacy-platform",
-    name: "Legacy Platform",
-    description:
-      "Previous generation systems retained for historical operations.",
-    status: "archived",
-    members: 4,
-    updatedAt: "Archived",
-    color: "from-slate-500 to-slate-700",
-  },
-];
+/*
+ * A stable colour per project, derived from its id.
+ *
+ * The seed data carried a hand-picked gradient per project. Real rows
+ * have no colour column, and inventing one per render would make cards
+ * flicker between loads, so it is derived deterministically instead.
+ */
+const PROJECT_COLORS = [
+  "from-violet-500 to-indigo-600",
+  "from-cyan-500 to-blue-600",
+  "from-emerald-500 to-teal-600",
+  "from-amber-500 to-orange-600",
+  "from-rose-500 to-pink-600",
+] as const;
 
-const initialMembers: WorkspaceMember[] = [
-  {
-    id: "1",
-    name: "Alexander Morgan",
-    role: "Workspace Owner",
-    initials: "AM",
-    color: "bg-violet-500",
-  },
-  {
-    id: "2",
-    name: "Sophia Chen",
-    role: "Engineering",
-    initials: "SC",
-    color: "bg-cyan-500",
-  },
-  {
-    id: "3",
-    name: "Daniel Wright",
-    role: "Product",
-    initials: "DW",
-    color: "bg-emerald-500",
-  },
-  {
-    id: "4",
-    name: "Emma Wilson",
-    role: "Research",
-    initials: "EW",
-    color: "bg-orange-500",
-  },
-];
+function colorForProject(id: string): string {
+  let hash = 0;
+
+  for (let index = 0; index < id.length; index += 1) {
+    hash = (hash * 31 + id.charCodeAt(index)) >>> 0;
+  }
+
+  return PROJECT_COLORS[hash % PROJECT_COLORS.length]!;
+}
+
+function formatUpdatedAt(value: string): string {
+  /*
+   * A fixed slice of the ISO string, not toLocaleDateString(): the
+   * server and the browser would format that differently and the
+   * mismatch would surface as a hydration error.
+   */
+  return `Updated ${value.slice(0, 10)}`;
+}
+
+function toWorkspaceProject(
+  row: ProjectRow,
+): WorkspaceProject {
+  return {
+    id: row.id,
+    name: row.name,
+    description:
+      row.description ?? "No description provided.",
+    status:
+      row.status === "archived" ? "archived" : "active",
+    updatedAt: formatUpdatedAt(row.updated_at),
+    color: colorForProject(row.id),
+  };
+}
 
 export default function WorkspacePage() {
   const [projects, setProjects] =
-    useState<WorkspaceProject[]>(initialProjects);
+    useState<WorkspaceProject[]>([]);
+
+  const [isLoading, setIsLoading] = useState(true);
+
+  const [projectError, setProjectError] =
+    useState<string | null>(null);
+
+  const [isCreating, setIsCreating] = useState(false);
+
+  const loadProjects = useCallback(async () => {
+    setIsLoading(true);
+    setProjectError(null);
+
+    try {
+      const response = await fetch("/api/projects", {
+        cache: "no-store",
+      });
+
+      if (response.status === 401) {
+        setProjects([]);
+        return;
+      }
+
+      if (!response.ok) throw new Error("failed");
+
+      const payload = (await response.json()) as {
+        data?: ProjectRow[];
+      };
+
+      setProjects(
+        (payload.data ?? []).map(toWorkspaceProject),
+      );
+    } catch {
+      setProjectError("Projects could not be loaded.");
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void Promise.resolve().then(() => {
+      if (cancelled) return undefined;
+
+      return loadProjects();
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [loadProjects]);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [showArchived, setShowArchived] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [workspaceName, setWorkspaceName] = useState("SYRAVEN");
-  const [workspaceDescription, setWorkspaceDescription] = useState(
-    "The intelligent operating system for the future.",
-  );
+  /*
+   * Fixed for now: nothing on this page edits them, and a setter that
+   * is never called reads as an editor that was lost rather than one
+   * that was never built.
+   */
+  const workspaceName = "SYRAVEN";
+
+  const workspaceDescription =
+    "The intelligent operating system for the future.";
 
   const [newProjectName, setNewProjectName] = useState("");
   const [newProjectDescription, setNewProjectDescription] =
@@ -157,34 +187,62 @@ export default function WorkspacePage() {
     (project) => project.status === "archived",
   ).length;
 
-  const totalMembers = initialMembers.length;
 
-  const handleCreateProject = () => {
+  const handleCreateProject = async () => {
     const name = newProjectName.trim();
 
-    if (!name) {
+    if (!name || isCreating) {
       return;
     }
 
-    const project: WorkspaceProject = {
-      id: `${name
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-+|-+$/g, "")}-${Date.now()}`,
-      name,
-      description:
-        newProjectDescription.trim() ||
-        "A new workspace project.",
-      status: "active",
-      members: 1,
-      updatedAt: "Created just now",
-      color: "from-violet-500 to-indigo-600",
-    };
+    setIsCreating(true);
+    setProjectError(null);
 
-    setProjects((current) => [project, ...current]);
-    setNewProjectName("");
-    setNewProjectDescription("");
-    setShowCreateModal(false);
+    try {
+      /*
+        The id comes from the SERVER. It used to be built from the
+        project name plus Date.now(), which meant the card linked to
+        /projects/<an id that existed nowhere>.
+      */
+      const response = await fetch("/api/projects", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name,
+          description:
+            newProjectDescription.trim() || undefined,
+        }),
+      });
+
+      const payload = (await response
+        .json()
+        .catch(() => null)) as {
+        data?: ProjectRow;
+      } | null;
+
+      const created = payload?.data;
+
+      if (!response.ok || !created) {
+        throw new Error("failed");
+      }
+
+      setProjects((current) => [
+        toWorkspaceProject(created),
+        ...current,
+      ]);
+
+      setNewProjectName("");
+      setNewProjectDescription("");
+      setShowCreateModal(false);
+    } catch {
+      setProjectError(
+        "That project could not be created.",
+      );
+    } finally {
+      setIsCreating(false);
+    }
   };
 
   return (
@@ -263,16 +321,9 @@ export default function WorkspacePage() {
           />
 
           <StatCard
-            label="Team members"
-            value={totalMembers}
-            description="Across your workspace"
-          />
-
-          <StatCard
-            label="Workspace status"
-            value="Healthy"
-            description="All systems operational"
-            success
+            label="Total projects"
+            value={projects.length}
+            description="Active and archived"
           />
         </section>
 
@@ -325,6 +376,15 @@ export default function WorkspacePage() {
             </div>
 
             {/* Projects */}
+            {projectError ? (
+              <div
+                role="alert"
+                className="mt-5 rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-200"
+              >
+                {projectError}
+              </div>
+            ) : null}
+
             <div className="mt-5 grid gap-4 md:grid-cols-2">
               {filteredProjects.map((project) => (
                 <Link
@@ -369,11 +429,8 @@ export default function WorkspacePage() {
                   </p>
 
                   <div className="mt-5 flex items-center justify-between border-t border-white/10 pt-4 text-xs text-white/35">
-                    <span>
-                      {project.members}{" "}
-                      {project.members === 1
-                        ? "member"
-                        : "members"}
+                    <span className="capitalize">
+                      {project.status}
                     </span>
 
                     <span>{project.updatedAt}</span>
@@ -382,14 +439,28 @@ export default function WorkspacePage() {
               ))}
             </div>
 
-            {filteredProjects.length === 0 && (
+            {isLoading ? (
+              <div
+                role="status"
+                aria-live="polite"
+                className="mt-5 rounded-2xl border border-dashed border-white/15 bg-white/[0.02] px-6 py-16 text-center"
+              >
+                <p className="text-sm text-white/40">
+                  Loading your projects...
+                </p>
+              </div>
+            ) : filteredProjects.length === 0 ? (
               <div className="mt-5 rounded-2xl border border-dashed border-white/15 bg-white/[0.02] px-6 py-16 text-center">
                 <p className="font-medium">
-                  No projects found
+                  {projects.length === 0
+                    ? "No projects yet"
+                    : "No projects found"}
                 </p>
 
                 <p className="mt-2 text-sm text-white/40">
-                  Try a different search or create a new project.
+                  {projects.length === 0
+                    ? "Create your first project to start organising work."
+                    : "Try a different search or create a new project."}
                 </p>
 
                 <button
@@ -400,67 +471,37 @@ export default function WorkspacePage() {
                   Create project
                 </button>
               </div>
-            )}
+            ) : null}
           </section>
 
           {/* Sidebar */}
           <aside className="space-y-6">
-            {/* Members */}
+            {/*
+              The invented roster lived here: four people — "Emma Wilson,
+              Research" and three others — hardcoded at module scope and
+              presented as the workspace's collaborators, above a
+              headcount derived from that same array.
+
+              There is no members endpoint for a workspace yet, so this
+              panel now points at the real place membership is managed
+              rather than fabricating a list.
+            */}
             <div className="rounded-2xl border border-white/10 bg-white/[0.025] p-5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="font-semibold">
-                    Team members
-                  </h2>
+              <h2 className="font-semibold">Team members</h2>
 
-                  <p className="mt-1 text-xs text-white/35">
-                    {totalMembers} active collaborators
-                  </p>
-                </div>
-
-                <Link
-                  href="/teams"
-                  className="text-sm text-white/45 transition hover:text-white"
-                >
-                  View all
-                </Link>
-              </div>
-
-              <div className="mt-5 space-y-4">
-                {initialMembers.map((member) => (
-                  <div
-                    key={member.id}
-                    className="flex items-center gap-3"
-                  >
-                    <div
-                      className={[
-                        "flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-xs font-semibold",
-                        member.color,
-                      ].join(" ")}
-                    >
-                      {member.initials}
-                    </div>
-
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium">
-                        {member.name}
-                      </p>
-
-                      <p className="mt-0.5 text-xs text-white/35">
-                        {member.role}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <p className="mt-2 text-xs leading-5 text-white/35">
+                Membership is managed for the whole organisation rather
+                than per workspace.
+              </p>
 
               <Link
                 href="/teams"
-                className="mt-6 flex w-full items-center justify-center rounded-xl border border-white/10 bg-white/[0.02] px-4 py-2.5 text-sm text-white/60 transition hover:bg-white/[0.06] hover:text-white"
+                className="mt-5 flex w-full items-center justify-center rounded-xl border border-white/10 bg-white/[0.02] px-4 py-2.5 text-sm text-white/60 transition hover:bg-white/[0.06] hover:text-white"
               >
                 Manage members
               </Link>
             </div>
+
 
             {/* Quick actions */}
             <div className="rounded-2xl border border-white/10 bg-white/[0.025] p-5">
@@ -591,11 +632,13 @@ export default function WorkspacePage() {
 
               <button
                 type="button"
-                onClick={handleCreateProject}
-                disabled={!newProjectName.trim()}
+                onClick={() => {
+                  void handleCreateProject();
+                }}
+                disabled={isCreating || !newProjectName.trim()}
                 className="rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-black transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-40"
               >
-                Create project
+                {isCreating ? "Creating..." : "Create project"}
               </button>
             </div>
           </div>
