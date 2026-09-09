@@ -1,18 +1,15 @@
 "use client";
 
-import type { FormEvent} from "react";
-import { useMemo, useState } from "react";
+import Link from "next/link";
 
-type TeamRole = "Owner" | "Admin" | "Member" | "Viewer";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type FormEvent,
+} from "react";
 
-type TeamMember = {
-  id: string;
-  name: string;
-  email: string;
-  role: TeamRole;
-  avatar: string;
-  status: "active" | "invited";
-};
 
 type Team = {
   id: string;
@@ -20,116 +17,86 @@ type Team = {
   description: string;
   initials: string;
   color: string;
-  members: TeamMember[];
-  projects: number;
   createdAt: string;
 };
 
-const initialTeams: Team[] = [
-  {
-    id: "syraven-core",
-    name: "SYRAVEN Core",
-    description:
-      "Core platform architecture, artificial intelligence infrastructure and global product strategy.",
-    initials: "NC",
-    color: "from-violet-500 to-indigo-600",
-    projects: 18,
-    createdAt: "2025-01-12",
-    members: [
-      {
-        id: "member-1",
-        name: "Alex Morgan",
-        email: "alex@syraven.ai",
-        role: "Owner",
-        avatar: "AM",
-        status: "active",
-      },
-      {
-        id: "member-2",
-        name: "Sarah Chen",
-        email: "sarah@syraven.ai",
-        role: "Admin",
-        avatar: "SC",
-        status: "active",
-      },
-      {
-        id: "member-3",
-        name: "Marcus Reed",
-        email: "marcus@syraven.ai",
-        role: "Member",
-        avatar: "MR",
-        status: "active",
-      },
-    ],
-  },
-  {
-    id: "ai-research",
-    name: "AI Research",
-    description:
-      "Advanced agents, reasoning systems, multimodal intelligence and autonomous workflows.",
-    initials: "AR",
-    color: "from-cyan-500 to-blue-600",
-    projects: 12,
-    createdAt: "2025-02-08",
-    members: [
-      {
-        id: "member-4",
-        name: "Elena Rossi",
-        email: "elena@syraven.ai",
-        role: "Admin",
-        avatar: "ER",
-        status: "active",
-      },
-      {
-        id: "member-5",
-        name: "David Kim",
-        email: "david@syraven.ai",
-        role: "Member",
-        avatar: "DK",
-        status: "active",
-      },
-    ],
-  },
-  {
-    id: "global-growth",
-    name: "Global Growth",
-    description:
-      "Marketplace expansion, partnerships, enterprise adoption and international growth.",
-    initials: "GG",
-    color: "from-emerald-500 to-teal-600",
-    projects: 9,
-    createdAt: "2025-03-21",
-    members: [
-      {
-        id: "member-6",
-        name: "Olivia Bennett",
-        email: "olivia@syraven.ai",
-        role: "Admin",
-        avatar: "OB",
-        status: "active",
-      },
-      {
-        id: "member-7",
-        name: "James Wilson",
-        email: "james@syraven.ai",
-        role: "Viewer",
-        avatar: "JW",
-        status: "invited",
-      },
-    ],
-  },
-];
+/** A team row as this page consumes it. */
+interface TeamRow {
+  id: string;
+  name: string;
+  description: string | null;
+  created_at: string;
+}
 
-const roleStyles: Record<TeamRole, string> = {
-  Owner:
-    "border-violet-500/20 bg-violet-500/10 text-violet-300",
-  Admin:
-    "border-blue-500/20 bg-blue-500/10 text-blue-300",
-  Member:
-    "border-emerald-500/20 bg-emerald-500/10 text-emerald-300",
-  Viewer:
-    "border-slate-500/20 bg-slate-500/10 text-slate-300",
-};
+/*
+ * TEAMS ARE REAL ROWS.
+ *
+ * This page used to run entirely on a module-scope array: four invented
+ * teams — "SYRAVEN Core", eighteen invented projects — staffed by
+ * invented colleagues at @syraven.ai addresses. Creating a team built
+ * an id from the name plus Date.now() and unshifted it; inviting and
+ * removing people mutated the same array. Every change was gone on
+ * reload and none of it was ever anybody's data.
+ *
+ * public.teams has existed since the enterprise-core migration with
+ * owner-scoped RLS on all four verbs, but no route reached it. There is
+ * one now, and this page uses it.
+ *
+ * MEMBERSHIP IS NOT STORED. There is no team_members table, and an
+ * invitation is not a row — it is an email to somebody who may not hold
+ * an account, with a token, an expiry and an acceptance step.
+ * organization_invites already models that at the organisation level.
+ * Rather than invent a weaker parallel, the roster is gone and the page
+ * says where membership is actually managed.
+ */
+
+const TEAM_COLORS = [
+  "from-violet-500 to-indigo-600",
+  "from-cyan-500 to-blue-600",
+  "from-emerald-500 to-teal-600",
+  "from-amber-500 to-orange-600",
+  "from-rose-500 to-pink-600",
+] as const;
+
+/**
+ * A stable colour per team, derived from its id.
+ *
+ * Teams have no colour column, and choosing at random per render would
+ * make a card change colour between loads.
+ */
+function colorForTeam(id: string): string {
+  let hash = 0;
+
+  for (let index = 0; index < id.length; index += 1) {
+    hash = (hash * 31 + id.charCodeAt(index)) >>> 0;
+  }
+
+  return TEAM_COLORS[hash % TEAM_COLORS.length]!;
+}
+
+function initialsFor(name: string): string {
+  const initials = name
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((word) => word[0]?.toUpperCase() ?? "")
+    .join("");
+
+  return initials || "T";
+}
+
+function toTeam(row: TeamRow): Team {
+  return {
+    id: row.id,
+    name: row.name,
+    description:
+      row.description ?? "No description provided.",
+    initials: initialsFor(row.name),
+    color: colorForTeam(row.id),
+    createdAt: row.created_at,
+  };
+}
+
 
 function formatDate(date: string) {
   return new Intl.DateTimeFormat("en-US", {
@@ -140,20 +107,65 @@ function formatDate(date: string) {
 }
 
 export default function TeamsPage() {
-  const [teams, setTeams] = useState<Team[]>(initialTeams);
-  const [selectedTeamId, setSelectedTeamId] = useState(
-    initialTeams[0]?.id ?? ""
-  );
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [selectedTeamId, setSelectedTeamId] = useState("");
+
+  const [isLoading, setIsLoading] = useState(true);
+  const [isCreating, setIsCreating] = useState(false);
+  const [teamError, setTeamError] = useState<string | null>(null);
+
+  const loadTeams = useCallback(async () => {
+    setIsLoading(true);
+    setTeamError(null);
+
+    try {
+      const response = await fetch("/api/teams", {
+        cache: "no-store",
+      });
+
+      if (response.status === 401) {
+        setTeams([]);
+        return;
+      }
+
+      if (!response.ok) throw new Error("failed");
+
+      const payload = (await response.json()) as {
+        data?: TeamRow[];
+      };
+
+      const loaded = (payload.data ?? []).map(toTeam);
+
+      setTeams(loaded);
+      setSelectedTeamId((current) =>
+        current || (loaded[0]?.id ?? ""),
+      );
+    } catch {
+      setTeamError("Teams could not be loaded.");
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void Promise.resolve().then(() => {
+      if (cancelled) return undefined;
+
+      return loadTeams();
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [loadTeams]);
   const [searchQuery, setSearchQuery] = useState("");
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [showInviteModal, setShowInviteModal] = useState(false);
 
   const [newTeamName, setNewTeamName] = useState("");
   const [newTeamDescription, setNewTeamDescription] = useState("");
 
-  const [inviteName, setInviteName] = useState("");
-  const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState<TeamRole>("Member");
 
   const filteredTeams = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -174,123 +186,85 @@ export default function TeamsPage() {
     return teams.find((team) => team.id === selectedTeamId) ?? null;
   }, [selectedTeamId, teams]);
 
-  const totalMembers = useMemo(() => {
-    return teams.reduce((total, team) => total + team.members.length, 0);
-  }, [teams]);
+  /*
+   * The headline counters used to sum invented member and project
+   * totals off the seed array. Neither number is available: teams store
+   * no membership and carry no project link.
+   */
 
-  const totalProjects = useMemo(() => {
-    return teams.reduce((total, team) => total + team.projects, 0);
-  }, [teams]);
-
-  function createTeam(event: FormEvent<HTMLFormElement>) {
+  async function createTeam(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     const name = newTeamName.trim();
 
-    if (!name) {
+    if (!name || isCreating) {
       return;
     }
 
-    const initials = name
-      .split(" ")
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((word) => word[0]?.toUpperCase())
-      .join("");
+    setIsCreating(true);
+    setTeamError(null);
 
-    const newTeam: Team = {
-      id: `${name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${Date.now()}`,
-      name,
-      description:
-        newTeamDescription.trim() ||
-        "A new collaborative workspace for your team.",
-      initials: initials || "NT",
-      color: "from-fuchsia-500 to-purple-600",
-      projects: 0,
-      createdAt: new Date().toISOString(),
-      members: [
-        {
-          id: `owner-${Date.now()}`,
-          name: "You",
-          email: "you@syraven.ai",
-          role: "Owner",
-          avatar: "YO",
-          status: "active",
-        },
-      ],
-    };
+    try {
+      /*
+        The id comes from the SERVER. It used to be built from the team
+        name plus Date.now(), so the team existed only in this tab and
+        matched no row anywhere.
+      */
+      const response = await fetch("/api/teams", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          description: newTeamDescription.trim() || undefined,
+        }),
+      });
 
-    setTeams((currentTeams) => [newTeam, ...currentTeams]);
-    setSelectedTeamId(newTeam.id);
-    setNewTeamName("");
-    setNewTeamDescription("");
-    setShowCreateModal(false);
+      const payload = (await response
+        .json()
+        .catch(() => null)) as { data?: TeamRow } | null;
+
+      const created = payload?.data;
+
+      if (!response.ok || !created) {
+        throw new Error("failed");
+      }
+
+      const team = toTeam(created);
+
+      setTeams((currentTeams) => [team, ...currentTeams]);
+      setSelectedTeamId(team.id);
+      setNewTeamName("");
+      setNewTeamDescription("");
+      setShowCreateModal(false);
+    } catch {
+      setTeamError("That team could not be created.");
+    } finally {
+      setIsCreating(false);
+    }
   }
 
-  function inviteMember(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    if (!selectedTeam) {
-      return;
-    }
-
-    const name = inviteName.trim();
-    const email = inviteEmail.trim();
-
-    if (!name || !email) {
-      return;
-    }
-
-    const avatar = name
-      .split(" ")
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((word) => word[0]?.toUpperCase())
-      .join("");
-
-    const member: TeamMember = {
-      id: `member-${Date.now()}`,
-      name,
-      email,
-      role: inviteRole,
-      avatar: avatar || "NM",
-      status: "invited",
-    };
+  async function deleteTeam(teamId: string) {
+    const previous = teams;
 
     setTeams((currentTeams) =>
-      currentTeams.map((team) =>
-        team.id === selectedTeam.id
-          ? {
-              ...team,
-              members: [...team.members, member],
-            }
-          : team
-      )
+      currentTeams.filter((team) => team.id !== teamId),
     );
 
-    setInviteName("");
-    setInviteEmail("");
-    setInviteRole("Member");
-    setShowInviteModal(false);
-  }
-
-  function removeMember(memberId: string) {
-    if (!selectedTeam) {
-      return;
+    if (selectedTeamId === teamId) {
+      setSelectedTeamId("");
     }
 
-    setTeams((currentTeams) =>
-      currentTeams.map((team) => {
-        if (team.id !== selectedTeam.id) {
-          return team;
-        }
+    try {
+      const response = await fetch(
+        `/api/teams?id=${encodeURIComponent(teamId)}`,
+        { method: "DELETE" },
+      );
 
-        return {
-          ...team,
-          members: team.members.filter((member) => member.id !== memberId),
-        };
-      })
-    );
+      if (!response.ok) throw new Error("failed");
+    } catch {
+      setTeams(previous);
+      setTeamError("That team could not be removed.");
+    }
   }
 
   return (
@@ -326,20 +300,19 @@ export default function TeamsPage() {
         </section>
 
         {/* Statistics */}
+        {teamError ? (
+          <div
+            role="alert"
+            className="mb-6 rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-200"
+          >
+            {teamError}
+          </div>
+        ) : null}
+
         <section className="mb-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
             <p className="text-sm text-white/45">Total teams</p>
             <p className="mt-3 text-3xl font-semibold">{teams.length}</p>
-          </div>
-
-          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
-            <p className="text-sm text-white/45">Team members</p>
-            <p className="mt-3 text-3xl font-semibold">{totalMembers}</p>
-          </div>
-
-          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
-            <p className="text-sm text-white/45">Active projects</p>
-            <p className="mt-3 text-3xl font-semibold">{totalProjects}</p>
           </div>
 
           <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
@@ -375,10 +348,22 @@ export default function TeamsPage() {
             </div>
 
             <div className="max-h-[650px] overflow-y-auto p-3">
-              {filteredTeams.length === 0 ? (
+              {isLoading ? (
+                <div
+                  role="status"
+                  aria-live="polite"
+                  className="p-8 text-center"
+                >
+                  <p className="text-sm text-white/45">
+                    Loading your teams...
+                  </p>
+                </div>
+              ) : filteredTeams.length === 0 ? (
                 <div className="p-8 text-center">
                   <p className="text-sm text-white/45">
-                    No teams found.
+                    {teams.length === 0
+                      ? "You have not created a team yet."
+                      : "No teams found."}
                   </p>
                 </div>
               ) : (
@@ -420,10 +405,10 @@ export default function TeamsPage() {
                               {team.description}
                             </p>
 
-                            <div className="mt-3 flex items-center gap-3 text-xs text-white/40">
-                              <span>{team.members.length} members</span>
-                              <span>•</span>
-                              <span>{team.projects} projects</span>
+                            <div className="mt-3 text-xs text-white/40">
+                              <span>
+                                Created {team.createdAt.slice(0, 10)}
+                              </span>
                             </div>
                           </div>
                         </div>
@@ -478,32 +463,16 @@ export default function TeamsPage() {
 
                       <button
                         type="button"
-                        onClick={() => setShowInviteModal(true)}
-                        className="rounded-xl border border-white/15 bg-white/[0.05] px-4 py-2.5 text-sm font-medium transition hover:bg-white/[0.1]"
+                        onClick={() => {
+                          void deleteTeam(selectedTeam.id);
+                        }}
+                        className="rounded-xl border border-red-500/25 bg-red-500/10 px-4 py-2.5 text-sm font-medium text-red-200 transition hover:bg-red-500/20"
                       >
-                        Invite member
+                        Delete team
                       </button>
                     </div>
 
                     <div className="mt-8 grid gap-4 border-t border-white/10 pt-6 sm:grid-cols-3">
-                      <div>
-                        <p className="text-xs uppercase tracking-wider text-white/35">
-                          Members
-                        </p>
-                        <p className="mt-2 text-2xl font-semibold">
-                          {selectedTeam.members.length}
-                        </p>
-                      </div>
-
-                      <div>
-                        <p className="text-xs uppercase tracking-wider text-white/35">
-                          Projects
-                        </p>
-                        <p className="mt-2 text-2xl font-semibold">
-                          {selectedTeam.projects}
-                        </p>
-                      </div>
-
                       <div>
                         <p className="text-xs uppercase tracking-wider text-white/35">
                           Created
@@ -517,117 +486,44 @@ export default function TeamsPage() {
                 </div>
 
                 {/* Members */}
-                <div className="rounded-2xl border border-white/10 bg-white/[0.025]">
-                  <div className="flex flex-col gap-4 border-b border-white/10 p-5 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <h2 className="font-semibold">Team members</h2>
-                      <p className="mt-1 text-sm text-white/40">
-                        Manage access and responsibilities for this team.
-                      </p>
-                    </div>
+                {/*
+                  The roster lived here: invented colleagues with
+                  @syraven.ai addresses, a role badge each, and an
+                  "Add member" button that appended one more to local
+                  state under an "invited" badge — an invitation nobody
+                  was ever sent.
 
-                    <button
-                      type="button"
-                      onClick={() => setShowInviteModal(true)}
-                      className="rounded-lg bg-white px-3 py-2 text-sm font-medium text-black transition hover:bg-white/90"
-                    >
-                      Add member
-                    </button>
-                  </div>
-
-                  <div className="divide-y divide-white/8">
-                    {selectedTeam.members.map((member) => (
-                      <div
-                        key={member.id}
-                        className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between"
-                      >
-                        <div className="flex min-w-0 items-center gap-4">
-                          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.07] text-sm font-semibold">
-                            {member.avatar}
-                          </div>
-
-                          <div className="min-w-0">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <p className="font-medium">{member.name}</p>
-
-                              {member.status === "invited" && (
-                                <span className="rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-300">
-                                  Invited
-                                </span>
-                              )}
-                            </div>
-
-                            <p className="mt-1 truncate text-sm text-white/40">
-                              {member.email}
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-3">
-                          <span
-                            className={`rounded-full border px-2.5 py-1 text-xs font-medium ${roleStyles[member.role]}`}
-                          >
-                            {member.role}
-                          </span>
-
-                          {member.role !== "Owner" && (
-                            <button
-                              type="button"
-                              onClick={() => removeMember(member.id)}
-                              className="rounded-lg px-2.5 py-1.5 text-xs text-white/40 transition hover:bg-red-500/10 hover:text-red-300"
-                            >
-                              Remove
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Team activity */}
+                  There is no team_members table to hold a roster, and
+                  an invitation is an email with a token, an expiry and
+                  an acceptance step, not an array entry. Membership is
+                  modelled at the organisation level, so this points
+                  there instead of fabricating a team roster.
+                */}
                 <div className="rounded-2xl border border-white/10 bg-white/[0.025] p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h2 className="font-semibold">Team overview</h2>
-                      <p className="mt-1 text-sm text-white/40">
-                        Current collaboration snapshot.
-                      </p>
-                    </div>
+                  <h2 className="font-semibold">Team members</h2>
 
-                    <span className="rounded-full bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-300">
-                      Healthy
-                    </span>
-                  </div>
+                  <p className="mt-2 max-w-prose text-sm leading-6 text-white/40">
+                    Membership and invitations are handled for the whole
+                    organisation rather than per team, so everyone you
+                    invite there can reach this team.
+                  </p>
 
-                  <div className="mt-6 grid gap-4 md:grid-cols-3">
-                    <div className="rounded-xl border border-white/8 bg-black/20 p-4">
-                      <p className="text-sm text-white/40">Participation</p>
-                      <p className="mt-3 text-2xl font-semibold">94%</p>
-                      <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-white/10">
-                        <div className="h-full w-[94%] rounded-full bg-white" />
-                      </div>
-                    </div>
-
-                    <div className="rounded-xl border border-white/8 bg-black/20 p-4">
-                      <p className="text-sm text-white/40">Project velocity</p>
-                      <p className="mt-3 text-2xl font-semibold">
-                        {selectedTeam.projects}
-                      </p>
-                      <p className="mt-2 text-xs text-emerald-300">
-                        Active initiatives
-                      </p>
-                    </div>
-
-                    <div className="rounded-xl border border-white/8 bg-black/20 p-4">
-                      <p className="text-sm text-white/40">Team health</p>
-                      <p className="mt-3 text-2xl font-semibold">Excellent</p>
-                      <p className="mt-2 text-xs text-white/35">
-                        Collaboration metrics stable
-                      </p>
-                    </div>
-                  </div>
+                  <Link
+                    href="/settings"
+                    className="mt-5 inline-flex items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm text-white/70 transition hover:bg-white/[0.07] hover:text-white"
+                  >
+                    Manage organisation members
+                  </Link>
                 </div>
+
+
+                {/*
+                  A metrics panel stood here reporting 94% participation,
+                  a project count and a team health of "Excellent". None
+                  of the three was measured: the percentage and the
+                  health were string literals, and the count came from
+                  the seed array.
+                */}
               </div>
             )}
           </section>
@@ -708,96 +604,6 @@ export default function TeamsPage() {
       )}
 
       {/* Invite Member Modal */}
-      {showInviteModal && selectedTeam && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-[#111113] shadow-2xl">
-            <div className="flex items-center justify-between border-b border-white/10 px-6 py-5">
-              <div>
-                <h2 className="text-lg font-semibold">
-                  Invite team member
-                </h2>
-
-                <p className="mt-1 text-sm text-white/40">
-                  Add someone to {selectedTeam.name}.
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setShowInviteModal(false)}
-                className="rounded-lg p-2 text-white/40 transition hover:bg-white/5 hover:text-white"
-              >
-                ✕
-              </button>
-            </div>
-
-            <form onSubmit={inviteMember} className="space-y-5 p-6">
-              <div>
-                <label className="mb-2 block text-sm font-medium">
-                  Full name
-                </label>
-
-                <input
-                  autoFocus
-                  value={inviteName}
-                  onChange={(event) => setInviteName(event.target.value)}
-                  placeholder="Member name"
-                  className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm outline-none placeholder:text-white/25 focus:border-white/25"
-                />
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-medium">
-                  Email address
-                </label>
-
-                <input
-                  type="email"
-                  value={inviteEmail}
-                  onChange={(event) => setInviteEmail(event.target.value)}
-                  placeholder="name@company.com"
-                  className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm outline-none placeholder:text-white/25 focus:border-white/25"
-                />
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-medium">
-                  Role
-                </label>
-
-                <select
-                  value={inviteRole}
-                  onChange={(event) =>
-                    setInviteRole(event.target.value as TeamRole)
-                  }
-                  className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm outline-none focus:border-white/25"
-                >
-                  <option value="Admin">Admin</option>
-                  <option value="Member">Member</option>
-                  <option value="Viewer">Viewer</option>
-                </select>
-              </div>
-
-              <div className="flex justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowInviteModal(false)}
-                  className="rounded-xl px-4 py-2.5 text-sm text-white/50 transition hover:bg-white/5 hover:text-white"
-                >
-                  Cancel
-                </button>
-
-                <button
-                  type="submit"
-                  className="rounded-xl bg-white px-5 py-2.5 text-sm font-semibold text-black transition hover:bg-white/90"
-                >
-                  Send invitation
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </main>
   );
 }

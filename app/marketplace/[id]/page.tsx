@@ -14,7 +14,6 @@ import {
   ExternalLink,
   Globe2,
   Heart,
-  Loader2,
   Play,
   SearchX,
   ShieldCheck,
@@ -323,12 +322,6 @@ function MarketplaceIcon({
 export default function MarketplaceDetailPage() {
   const params = useParams<{ id: string }>();
 
-  const [isInstalling, setIsInstalling] =
-    useState(false);
-
-  const [isInstalled, setIsInstalled] =
-    useState(false);
-
   const [isFavorite, setIsFavorite] =
     useState(false);
 
@@ -339,20 +332,19 @@ export default function MarketplaceDetailPage() {
     );
   }, [params.id]);
 
-  const handleInstall = async () => {
-    if (isInstalling || isInstalled) {
-      return;
-    }
-
-    setIsInstalling(true);
-
-    await new Promise((resolve) => {
-      window.setTimeout(resolve, 700);
-    });
-
-    setIsInstalling(false);
-    setIsInstalled(true);
-  };
+  /*
+   * There is no install.
+   *
+   * This handler used to set "Installing...", sleep 700ms and settle on
+   * a green "Installed" tick. Nothing was installed, nothing was
+   * recorded, and the capability was no more available afterwards than
+   * before — reloading the page reset the button.
+   *
+   * The catalogue below is a real, curated description of what SYRAVEN
+   * can do, which is worth showing. Installation is not implemented, so
+   * the panel now says that rather than performing a 700ms animation of
+   * it.
+   */
 
   if (!item) {
     return (
@@ -527,39 +519,27 @@ export default function MarketplaceDetailPage() {
               </h2>
 
               <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                Install this capability and make it available
-                across your SYRAVEN workspace.
+                Installing capabilities into a workspace is not
+                available yet. This page describes what the capability
+                does; nothing here changes your workspace.
               </p>
 
               <button
                 type="button"
-                onClick={handleInstall}
-                disabled={
-                  isInstalling || isInstalled
-                }
-                className={`mt-6 flex h-12 w-full items-center justify-center gap-2 rounded-xl px-4 text-sm font-medium transition-all ${
-                  isInstalled
-                    ? "bg-primary/10 text-primary"
-                    : "bg-primary text-primary-foreground hover:opacity-90"
-                } disabled:cursor-not-allowed`}
+                disabled
+                aria-describedby="marketplace-install-availability"
+                className="mt-6 flex h-12 w-full cursor-not-allowed items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-medium text-primary-foreground opacity-60"
               >
-                {isInstalling ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Installing...
-                  </>
-                ) : isInstalled ? (
-                  <>
-                    <CheckCircle2 className="h-4 w-4" />
-                    Installed
-                  </>
-                ) : (
-                  <>
-                    <Download className="h-4 w-4" />
-                    Install capability
-                  </>
-                )}
+                <Download className="h-4 w-4" />
+                Install capability
               </button>
+
+              <p
+                id="marketplace-install-availability"
+                className="mt-3 text-xs leading-5 text-muted-foreground"
+              >
+                Not available yet.
+              </p>
 
               <button
                 type="button"

@@ -79,6 +79,18 @@ const SURFACES: ReadonlyArray<{
     name: "/studio/audio",
     source: stripComments(read("app", "studio", "audio", "page.tsx")),
   },
+  {
+    /*
+     * The catalogue here is a real curated description of what SYRAVEN
+     * does, which is worth showing. "Install" was not: it animated for
+     * 700ms and settled on a green Installed tick having installed
+     * nothing, and a reload reset the button.
+     */
+    name: "/marketplace/[id]",
+    source: stripComments(
+      read("app", "marketplace", "[id]", "page.tsx"),
+    ),
+  },
 ];
 
 /* -------------------------------------------------------------------------- */
