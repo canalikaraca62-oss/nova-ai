@@ -23,6 +23,21 @@
 
     "noEmit": true,
 
+    /*
+      Lets a test import an application module by its real path.
+
+      The security suites were written as static source analysis because
+      lib/ modules import "server-only", which does not resolve outside
+      Next. The cost of that was tests reimplementing the logic they
+      claimed to check -- a copy of the rule passing while the real one
+      was broken. lib/integrations/capabilities.ts is pure and carries no
+      server-only marker, so its tests exercise the shipped function.
+
+      Safe with noEmit: nothing is emitted, so no .ts specifier can leak
+      into build output. Next compiles the application separately.
+    */
+    "allowImportingTsExtensions": true,
+
     "esModuleInterop": true,
 
     "module": "esnext",
