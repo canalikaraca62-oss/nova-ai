@@ -12,7 +12,6 @@ import {
   ChevronDown,
   ChevronRight,
   Command,
-  FileText,
   FolderKanban,
   Grid2X2,
   Home,
@@ -139,13 +138,20 @@ const DEFAULT_SECTIONS: SidebarSection[] = [
           <Brain className="h-4 w-4" />
         ),
       },
-      {
-        label: "Files",
-        href: "/files",
-        icon: (
-          <FileText className="h-4 w-4" />
-        ),
-      },
+      /*
+        A "Files" destination pointed at /files, which has no page.
+
+        It is not built rather than removed-and-forgotten: the upload
+        route writes to Supabase Storage only and never inserts into
+        public.files, returning a client-minted crypto.randomUUID() as
+        the file id. The table is therefore empty by construction, so a
+        listing page over it would render permanently empty while
+        uploads appeared to succeed elsewhere. That is the same
+        fabrication in a new costume.
+
+        The storage/table mismatch is a real defect and is recorded as
+        such; this entry returns when there is something true to list.
+      */
       {
         label: "Search",
         href: "/search",

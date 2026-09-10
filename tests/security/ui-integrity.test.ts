@@ -115,12 +115,32 @@ function collectLinks(): FoundLink[] {
   for (const file of TSX_FILES) {
     const source = readFileSync(file, "utf8");
 
-    /* Static internal hrefs only. Template literals are dynamic. */
-    for (const match of source.matchAll(/href="(\/[^"]*)"/g)) {
-      const href = match[1];
-      if (href === undefined) continue;
+    /*
+      Two forms, both static and both user-reachable.
 
-      found.push({ file: file.slice(ROOT.length + 1), href });
+      JSX attribute:   href="/search"
+      Object property: href: "/search"
+
+      Only the first was collected before, which made this audit blind to
+      the exact construct /apps uses: it declares a catalogue of apps as
+      objects carrying `href:` and renders each through
+      <Link href={app.href}>. A dead entry there is a real 404 a user can
+      click — "Research Engine → Open application" was one — but the
+      collector could not see it, so the suite reported zero dead links
+      while one was on screen.
+
+      Template literals stay excluded: they are dynamic and cannot be
+      resolved statically.
+    */
+    const patterns = [/href="(\/[^"]*)"/g, /href:\s*"(\/[^"]*)"/g];
+
+    for (const pattern of patterns) {
+      for (const match of source.matchAll(pattern)) {
+        const href = match[1];
+        if (href === undefined) continue;
+
+        found.push({ file: file.slice(ROOT.length + 1), href });
+      }
     }
   }
 
@@ -138,6 +158,62 @@ void describe("Every internal link resolves to a real route", () => {
     assert.ok(
       links.length > 10,
       `Only ${links.length} links found — the collector is probably broken.`,
+    );
+  });
+
+  void test("both static href forms are collected", () => {
+    /*
+      The specific blind spot this suite had.
+
+      `length > 10` above is not enough: deleting the object-property
+      pattern would still leave hundreds of JSX-attribute links and the
+      guard would pass, while every `href:` entry — the entire /apps
+      catalogue — went unchecked. That is how a 404 a user could click
+      sat behind a green "no dead links" result.
+
+      So each form is asserted to have found something. If a construct
+      stops being collected, this fails rather than quietly narrowing
+      what the audit can see.
+     */
+    /*
+      Asserted against the COLLECTOR'S OUTPUT, not against file text.
+
+      The first version of this guard filtered `links` and re-read each
+      file to see which syntax it contained. That could never fail:
+      DesktopSidebar carries both forms, so its attribute-collected
+      links still matched an `href:` regex on re-read even with the
+      property pattern deleted. It tested the file, not the collector.
+      Verified by deleting the pattern and watching it pass anyway.
+
+      These four hrefs exist ONLY as object properties anywhere in the
+      app. If the property pattern is lost, none of them can appear in
+      `links`, and this fails — which is the whole point.
+    */
+    const PROPERTY_ONLY = [
+      "/activity",
+      "/search",
+      "/studio/audio",
+      "/studio/presentation",
+    ];
+
+    const collected = new Set(links.map((link) => link.href));
+
+    const foundProperty = PROPERTY_ONLY.filter((href) =>
+      collected.has(href),
+    );
+
+    assert.ok(
+      collected.size > 0,
+      "The collector returned nothing at all.",
+    );
+
+    assert.ok(
+      foundProperty.length > 0,
+      `None of ${PROPERTY_ONLY.join(", ")} were collected. Each exists ` +
+        "only as an `href:` object property, so losing that pattern " +
+        "makes the entire /apps catalogue invisible to this audit — " +
+        "which is exactly how a user-clickable 404 sat behind a green " +
+        "result.",
     );
   });
 
