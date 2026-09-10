@@ -580,7 +580,11 @@ export default function TaskDetailPage() {
 
   if (isDeleted) {
     return (
-      <main className="min-h-screen bg-background text-foreground">
+    /*
+      A plain container, not a second <main>: AppChrome already emits
+      the page main landmark, and two of them is invalid HTML.
+    */
+      <div className="bg-background text-foreground">
         <div className="mx-auto flex min-h-screen w-full max-w-2xl flex-col items-center justify-center px-4 text-center">
           <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-destructive/10">
             <Trash2 className="h-9 w-9 text-destructive" />
@@ -603,7 +607,7 @@ export default function TaskDetailPage() {
             Back to Tasks
           </Link>
         </div>
-      </main>
+      </div>
     );
   }
 
@@ -612,7 +616,11 @@ export default function TaskDetailPage() {
   ================================================== */
 
   return (
-    <main className="min-h-screen bg-background text-foreground">
+    /*
+      A plain container, not a second <main>: AppChrome already emits
+      the page main landmark, and two of them is invalid HTML.
+    */
+    <div className="bg-background text-foreground">
       <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
 
         {/* ============================================
@@ -1241,6 +1249,6 @@ export default function TaskDetailPage() {
         ) : null}
 
       </div>
-    </main>
+    </div>
   );
 }

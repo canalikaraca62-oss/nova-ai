@@ -211,7 +211,11 @@ export default function ProjectSearchPage() {
   }
 
   return (
-    <main className="min-h-screen bg-background">
+    /*
+      A plain container, not a second <main>: AppChrome already emits
+      the page main landmark, and two of them is invalid HTML.
+    */
+    <div className="bg-background">
       <div className="mx-auto w-full max-w-6xl px-6 py-8 lg:px-8 lg:py-12">
         {/* Header */}
         <section className="text-center">
@@ -419,7 +423,7 @@ export default function ProjectSearchPage() {
           </div>
         </section>
       </div>
-    </main>
+    </div>
   );
 }
 

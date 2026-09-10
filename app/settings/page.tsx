@@ -231,7 +231,11 @@ export default function SettingsPage() {
 
   if (isLoading) {
     return (
-      <main className="min-h-screen bg-background">
+    /*
+      A plain container, not a second <main>: AppChrome already emits
+      the page main landmark, and two of them is invalid HTML.
+    */
+      <div className="bg-background">
         <div className="mx-auto flex min-h-screen max-w-7xl items-center justify-center px-6">
           <div className="flex flex-col items-center gap-4">
             <Loader2 className="h-7 w-7 animate-spin text-primary" />
@@ -241,12 +245,16 @@ export default function SettingsPage() {
             </p>
           </div>
         </div>
-      </main>
+      </div>
     );
   }
 
   return (
-    <main className="min-h-screen bg-background">
+    /*
+      A plain container, not a second <main>: AppChrome already emits
+      the page main landmark, and two of them is invalid HTML.
+    */
+    <div className="bg-background">
       <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8 lg:py-10">
         {/* Header */}
         <header className="flex flex-col gap-5 border-b border-border pb-8 lg:flex-row lg:items-end lg:justify-between">
@@ -416,7 +424,7 @@ export default function SettingsPage() {
           </section>
         </div>
       </div>
-    </main>
+    </div>
   );
 }
 

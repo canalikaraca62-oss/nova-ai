@@ -99,7 +99,11 @@ export default function ProfilePage() {
   const profileStorageAvailable = false;
 
   return (
-    <main className="min-h-screen bg-background">
+    /*
+      A plain container, not a second <main>: AppChrome already emits
+      the page main landmark, and two of them is invalid HTML.
+    */
+    <div className="bg-background">
       <div className="mx-auto w-full max-w-6xl px-6 py-10 lg:px-8">
         {/* Header */}
         <section className="border-b border-border pb-8">
@@ -515,7 +519,7 @@ export default function ProfilePage() {
           </section>
         </div>
       </div>
-    </main>
+    </div>
   );
 }
 

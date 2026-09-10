@@ -180,7 +180,11 @@ export default function ProjectsPage() {
   );
 
   return (
-    <main className="min-h-screen bg-background">
+    /*
+      A plain container, not a second <main>: AppChrome already emits
+      the page main landmark, and two of them is invalid HTML.
+    */
+    <div className="bg-background">
       <div className="mx-auto w-full max-w-7xl px-6 py-8 lg:px-8 lg:py-10">
         {/* Header */}
         <section className="flex flex-col gap-6 border-b border-border pb-8 lg:flex-row lg:items-end lg:justify-between">
@@ -386,7 +390,7 @@ export default function ProjectsPage() {
           </div>
         </section>
       </div>
-    </main>
+    </div>
   );
 }
 

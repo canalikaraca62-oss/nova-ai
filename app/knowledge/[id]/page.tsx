@@ -152,7 +152,11 @@ export default function KnowledgeDetailPage() {
 
   if (!knowledge) {
     return (
-      <main className="min-h-screen bg-background">
+    /*
+      A plain container, not a second <main>: AppChrome already emits
+      the page main landmark, and two of them is invalid HTML.
+    */
+      <div className="bg-background">
         <div className="mx-auto flex min-h-screen w-full max-w-3xl flex-col items-center justify-center px-6 py-12 text-center">
           <div className="rounded-2xl bg-muted p-4">
             <SearchX className="h-8 w-8 text-muted-foreground" />
@@ -175,7 +179,7 @@ export default function KnowledgeDetailPage() {
             Back to knowledge
           </Link>
         </div>
-      </main>
+      </div>
     );
   }
 
@@ -184,7 +188,11 @@ export default function KnowledgeDetailPage() {
   );
 
   return (
-    <main className="min-h-screen bg-background">
+    /*
+      A plain container, not a second <main>: AppChrome already emits
+      the page main landmark, and two of them is invalid HTML.
+    */
+    <div className="bg-background">
       <div className="mx-auto w-full max-w-5xl px-6 py-8 lg:px-8 lg:py-10">
         <Link
           href="/knowledge"
@@ -355,6 +363,6 @@ export default function KnowledgeDetailPage() {
           </div>
         </section>
       </div>
-    </main>
+    </div>
   );
 }

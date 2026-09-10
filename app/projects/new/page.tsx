@@ -111,7 +111,11 @@ export default function NewProjectPage() {
   }
 
   return (
-    <main className="min-h-screen bg-background">
+    /*
+      A plain container, not a second <main>: AppChrome already emits
+      the page main landmark, and two of them is invalid HTML.
+    */
+    <div className="bg-background">
       <div className="mx-auto w-full max-w-5xl px-6 py-8 lg:px-8 lg:py-10">
         {/* Navigation */}
         <div className="border-b border-border pb-6">
@@ -499,7 +503,7 @@ export default function NewProjectPage() {
           </form>
         </div>
       </div>
-    </main>
+    </div>
   );
 }
 

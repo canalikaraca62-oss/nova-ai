@@ -343,7 +343,11 @@ export default function AudioStudioPage() {
       : 0;
 
   return (
-    <main className="min-h-screen bg-background">
+    /*
+      A plain container, not a second <main>: AppChrome already emits
+      the page main landmark, and two of them is invalid HTML.
+    */
+    <div className="bg-background">
       <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
         {/* Header */}
         <section className="mb-8 flex flex-col gap-4 border-b border-border pb-6 lg:flex-row lg:items-end lg:justify-between">
@@ -817,6 +821,6 @@ export default function AudioStudioPage() {
           </aside>
         </div>
       </div>
-    </main>
+    </div>
   );
 }

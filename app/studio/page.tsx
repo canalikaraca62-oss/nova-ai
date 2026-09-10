@@ -217,7 +217,11 @@ export default function StudioPage() {
   };
 
   return (
-    <main className="min-h-screen bg-background text-foreground">
+    /*
+      A plain container, not a second <main>: AppChrome already emits
+      the page main landmark, and two of them is invalid HTML.
+    */
+    <div className="bg-background text-foreground">
       <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
         {/* HEADER */}
 
@@ -639,6 +643,6 @@ export default function StudioPage() {
           </div>
         </section>
       </div>
-    </main>
+    </div>
   );
 }
