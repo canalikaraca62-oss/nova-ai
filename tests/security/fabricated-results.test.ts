@@ -91,7 +91,36 @@ const SURFACES: ReadonlyArray<{
       read("app", "marketplace", "[id]", "page.tsx"),
     ),
   },
+  {
+    /*
+     * /activity opened on eight invented events presented as the user's
+     * own history — "Research Agent completed a market analysis" with
+     * "24 sources" and "8 insights", each stamped "2 minutes ago" and
+     * flagged unread. Refresh then slept 650ms behind a spinner and
+     * fetched nothing, because there is no /api/activity.
+     *
+     * The detail is what made it believable, and a feed of fabricated
+     * events is worse than an empty one: it reports work done on the
+     * user's behalf that never happened.
+     */
+    name: "/activity",
+    source: stripComments(read("app", "activity", "page.tsx")),
+  },
 ];
+
+/**
+ * Surfaces that offer a capability standing behind a provider.
+ *
+ * These must say so when it is missing, and disable the control that
+ * would have used it. /activity is deliberately absent: it has no
+ * provider to be missing, only an empty feed.
+ */
+const CAPABILITY_SURFACES = new Set([
+  "/studio/image",
+  "/studio/video",
+  "/studio/audio",
+  "/marketplace/[id]",
+]);
 
 /* -------------------------------------------------------------------------- */
 /*                              NO FAKE LATENCY                               */
@@ -120,6 +149,19 @@ void describe("Unprovisioned capabilities do not fake work", () => {
     });
 
     void test(`${surface.name} states that the capability is unavailable`, () => {
+      /*
+        Scoped to surfaces that offer a CAPABILITY behind a provider.
+
+        /activity is a different shape: nothing there is "unavailable"
+        pending a provider — it is a feed with no events yet, and
+        EmptyActivityState already says so. Asserting the Studio wording
+        against it would force a misleading message onto the page just
+        to satisfy a test.
+      */
+      if (!CAPABILITY_SURFACES.has(surface.name)) {
+        return;
+      }
+
       assert.match(
         surface.source,
         /CapabilityUnavailable|is not available yet|not available|no .*provider is connected/i,
@@ -170,6 +212,43 @@ void describe("No stock media is presented as the user's own", () => {
   });
 });
 
+void describe("Activity is recorded, never invented", () => {
+  const ACTIVITY = stripComments(read("app", "activity", "page.tsx"));
+
+  void test("the feed is not seeded with invented events", () => {
+    /*
+      Eight fabricated events opened this page as the user own history,
+      with detail ("24 sources", "8 insights") that is precisely what
+      made them believable.
+    */
+    assert.ok(
+      !/const\s+initialActivities\s*[:=]/.test(ACTIVITY),
+      "/activity renders invented events as though they had happened.",
+    );
+  });
+
+  void test("it starts empty rather than populated", () => {
+    /*
+      Whitespace-tolerant on purpose: the declaration is wrapped across
+      lines in the source, and an assertion that only matches one
+      formatting fails on correct code — which is what it did here.
+    */
+    assert.match(
+      ACTIVITY,
+      /useState<\s*ActivityItem\s*\[\s*\]\s*>\s*\(\s*\[\s*\]\s*\)/,
+      "The feed must open empty until real events exist.",
+    );
+  });
+
+  void test("nothing offers a refresh that fetches nothing", () => {
+    assert.ok(
+      !/refreshActivity/.test(ACTIVITY),
+      "A refresh control that calls no endpoint reports work it did " +
+        "not do.",
+    );
+  });
+});
+
 /* -------------------------------------------------------------------------- */
 /*                        DISABLED, NOT SILENTLY INERT                        */
 /* -------------------------------------------------------------------------- */
@@ -193,6 +272,16 @@ void describe("An action that cannot run says so", () => {
 
   void test("a disabled control explains itself", () => {
     for (const surface of SURFACES) {
+      /*
+        Only pages that KEPT a control need to explain it. /activity
+        deleted its "Refresh activity" button rather than disabling it —
+        a control that can never work is better gone than greyed out —
+        so there is nothing here to describe.
+      */
+      if (!CAPABILITY_SURFACES.has(surface.name)) {
+        continue;
+      }
+
       assert.match(
         surface.source,
         /aria-describedby=/,

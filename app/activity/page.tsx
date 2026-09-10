@@ -130,106 +130,25 @@ const statusConfig: Record<
   },
 };
 
-const initialActivities: ActivityItem[] = [
-  {
-    id: "activity-1",
-    title: "Research Agent completed a market analysis",
-    description:
-      "The research workflow finished and generated a structured summary with sources, opportunities, risks and next steps.",
-    category: "agent",
-    status: "success",
-    createdAt: "2 minutes ago",
-    actor: "SYRAVEN Research Agent",
-    workspace: "Strategy",
-    metadata: ["24 sources", "8 insights", "Report ready"],
-    unread: true,
-  },
-  {
-    id: "activity-2",
-    title: "Knowledge analysis is running",
-    description:
-      "SYRAVEN is processing newly added documents and updating the semantic knowledge index.",
-    category: "knowledge",
-    status: "running",
-    createdAt: "8 minutes ago",
-    actor: "SYRAVEN Knowledge",
-    workspace: "Knowledge Hub",
-    metadata: ["12 documents", "Indexing"],
-    unread: true,
-  },
-  {
-    id: "activity-3",
-    title: "Automation executed successfully",
-    description:
-      "Your scheduled workflow completed and produced an updated activity summary.",
-    category: "automation",
-    status: "success",
-    createdAt: "24 minutes ago",
-    actor: "SYRAVEN Automation",
-    workspace: "Automations",
-    metadata: ["Scheduled run", "Completed"],
-  },
-  {
-    id: "activity-4",
-    title: "Project workspace was updated",
-    description:
-      "New changes were added to the active project workspace and are ready for review.",
-    category: "project",
-    status: "info",
-    createdAt: "1 hour ago",
-    actor: "You",
-    workspace: "Current Project",
-    metadata: ["Workspace updated"],
-  },
-  {
-    id: "activity-5",
-    title: "AI conversation generated new memory candidates",
-    description:
-      "SYRAVEN detected information that may be useful across future conversations.",
-    category: "ai",
-    status: "pending",
-    createdAt: "2 hours ago",
-    actor: "SYRAVEN Memory",
-    workspace: "Memory",
-    metadata: ["Review available"],
-  },
-  {
-    id: "activity-6",
-    title: "File analysis completed",
-    description:
-      "A document was processed successfully and extracted information is now available in Knowledge.",
-    category: "file",
-    status: "success",
-    createdAt: "3 hours ago",
-    actor: "SYRAVEN Files",
-    workspace: "Knowledge Hub",
-    metadata: ["Extraction complete"],
-  },
-  {
-    id: "activity-7",
-    title: "Task requires your attention",
-    description:
-      "One of your active tasks could not complete automatically and is waiting for review.",
-    category: "task",
-    status: "failed",
-    createdAt: "Yesterday",
-    actor: "SYRAVEN Tasks",
-    workspace: "Tasks",
-    metadata: ["Action required"],
-  },
-  {
-    id: "activity-8",
-    title: "Workspace security settings updated",
-    description:
-      "Access and privacy preferences were successfully updated.",
-    category: "security",
-    status: "info",
-    createdAt: "Yesterday",
-    actor: "You",
-    workspace: "Privacy Center",
-    metadata: ["Settings updated"],
-  },
-];
+/*
+ * ACTIVITY IS NOT SEEDED.
+ *
+ * Eight invented events opened this page as though they were the user's
+ * own history: "Research Agent completed a market analysis" with "24
+ * sources" and "8 insights", a knowledge index "Indexing 12 documents",
+ * each stamped "2 minutes ago" and flagged unread. None of it had
+ * happened. Refresh then slept 650ms behind a spinner and changed
+ * nothing, because there is no /api/activity to call.
+ *
+ * A feed of fabricated events is worse than an empty one: it tells a
+ * user that work was done on their behalf that never was, and the
+ * detail ("24 sources") is exactly what makes it believable.
+ *
+ * There is no activity endpoint, so the honest state is empty. The page
+ * keeps its filters, grouping and detail panel, and EmptyActivityState
+ * already says what will appear here once events are recorded.
+ */
+
 
 function getActivityGroup(createdAt: string) {
   const value = createdAt.toLowerCase();
@@ -251,7 +170,7 @@ function getActivityGroup(createdAt: string) {
 
 export default function ActivityPage() {
   const [activities, setActivities] =
-    useState<ActivityItem[]>(initialActivities);
+    useState<ActivityItem[]>([]);
 
   const [activeCategory, setActiveCategory] =
     useState<ActivityCategory>("all");
@@ -265,7 +184,6 @@ export default function ActivityPage() {
 
   const [timeFilter, setTimeFilter] = useState("all");
 
-  const [isLoading, setIsLoading] = useState(false);
 
   const unreadCount = activities.filter(
     (activity) => activity.unread
@@ -337,29 +255,14 @@ export default function ActivityPage() {
     );
   };
 
-  const refreshActivity = async () => {
-    setIsLoading(true);
+  /*
+    There is no refresh.
 
-    try {
-      /*
-       * Future SYRAVEN Activity API integration point.
-       *
-       * The UI is intentionally prepared for the central activity feed.
-       * When the backend endpoint is finalized, replace this temporary
-       * block with:
-       *
-       * const response = await fetch("/api/activity");
-       * const payload = await response.json();
-       * setActivities(payload.activities);
-       *
-       * The page remains fully functional until that API layer is connected.
-       */
-
-      await new Promise((resolve) => setTimeout(resolve, 650));
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    This handler set isLoading, slept 650ms and cleared it, having
+    fetched nothing — a spinner that reported work it never did. The
+    control is removed rather than left inert; when /api/activity exists,
+    a real one replaces it here.
+  */
 
   const categoryCount = (category: ActivityCategory) => {
     if (category === "all") {
@@ -436,24 +339,13 @@ export default function ActivityPage() {
                   </button>
                 )}
 
-                <button
-                  type="button"
-                  onClick={refreshActivity}
-                  disabled={isLoading}
-                  className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-3 text-sm font-semibold text-black transition hover:bg-white/90 disabled:cursor-wait disabled:opacity-70"
-                >
-                  <span
-                    className={
-                      isLoading
-                        ? "inline-block animate-spin"
-                        : "inline-block"
-                    }
-                  >
-                    ↻
-                  </span>
-
-                  {isLoading ? "Refreshing..." : "Refresh activity"}
-                </button>
+                {/*
+                  A "Refresh activity" button stood here. It set a
+                  spinner, slept 650ms and cleared it, having fetched
+                  nothing — there is no /api/activity. Removed rather
+                  than left inert; a real control belongs here once the
+                  endpoint exists.
+                */}
               </div>
             </div>
 
