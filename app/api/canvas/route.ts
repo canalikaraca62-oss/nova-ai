@@ -307,7 +307,7 @@ export const POST = withAuth(async (
       return NextResponse.json(
         {
           error:
-            "Canvas için içerik gerekli.",
+            "Canvas content is required.",
         },
         {
           status: 400,
@@ -473,7 +473,7 @@ ${sourceText}
         error:
           error instanceof Error
             ? error.message
-            : "Canvas oluşturulurken bir hata oluştu.",
+            : "The canvas could not be created.",
       },
       {
         status: 500,

@@ -365,7 +365,7 @@ function formatRelativeTime(
     );
 
   if (seconds < 60) {
-    return "Şimdi";
+    return "Just now";
   }
 
   const minutes =
@@ -411,15 +411,15 @@ function formatRelativeTime(
 export default function ActivityFeed({
   activities = [],
   title = "Activity",
-  subtitle = "SYRAVEN genelindeki son gelişmeler",
+  subtitle = "Recent activity across SYRAVEN",
   limit,
   compact = false,
   showHeader = true,
   showFilters = true,
   showSearch = true,
   showRefresh = true,
-  emptyTitle = "Henüz aktivite yok",
-  emptyDescription = "Yeni işlemler, görevler, agent çalışmaları ve sistem olayları burada görünecek.",
+  emptyTitle = "No activity yet",
+  emptyDescription = "New actions, tasks, agent runs and system events will appear here.",
   className = "",
   onActivityClick,
   onRefresh,
@@ -813,7 +813,7 @@ export default function ActivityFeed({
             <p className="mt-2 max-w-md text-xs leading-6 text-white/35">
               {searchQuery ||
               filter !== "all"
-                ? "Arama veya filtre kriterlerini değiştirerek tekrar deneyin."
+                ? "Try changing your search or filters."
                 : emptyDescription}
             </p>
 
@@ -952,7 +952,7 @@ export default function ActivityFeed({
 
                             <span className="text-[10px] text-cyan-300/70 opacity-0 transition group-hover:opacity-100 group-focus:opacity-100">
                               {activity.actionLabel ||
-                                "Detayları görüntüle"}
+                                "View details"}
                             </span>
                           </>
                         )}
@@ -1017,7 +1017,7 @@ export default function ActivityFeed({
                 )
               }
               className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-white/35 transition hover:bg-white/[0.06] hover:text-white"
-              aria-label="Detayları kapat"
+              aria-label="Hide details"
             >
               <svg
                 viewBox="0 0 24 24"

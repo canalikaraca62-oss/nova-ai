@@ -76,7 +76,7 @@ const PLAN_CONFIG: Record<
     monthlyPrice: 19,
     yearlyPrice: 190,
     description:
-      "Daha fazla AI gücü ve gelişmiş üretkenlik.",
+      "More AI capability and greater productivity.",
     features: [
       "Premium AI modelleri",
       "10 aktif agent",
@@ -92,7 +92,7 @@ const PLAN_CONFIG: Record<
     monthlyPrice: 49,
     yearlyPrice: 490,
     description:
-      "Profesyoneller için yüksek performans.",
+      "High performance for professionals.",
     features: [
       "Advanced AI reasoning",
       "50 aktif agent",
@@ -109,7 +109,7 @@ const PLAN_CONFIG: Record<
     monthlyPrice: 149,
     yearlyPrice: 1490,
     description:
-      "Ekipler ve büyüyen organizasyonlar için.",
+      "For teams and growing organisations.",
     features: [
       "Unlimited agents",
       "1 TB knowledge storage",
@@ -126,7 +126,7 @@ const PLAN_CONFIG: Record<
     monthlyPrice: null,
     yearlyPrice: null,
     description:
-      "Kurumsal ölçek için özel altyapı ve güvenlik.",
+      "Dedicated infrastructure and security at enterprise scale.",
     features: [
       "Custom infrastructure",
       "Enterprise security",

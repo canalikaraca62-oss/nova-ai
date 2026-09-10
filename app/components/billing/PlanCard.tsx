@@ -41,7 +41,7 @@ type DefaultPlanConfig = {
 const DEFAULT_PLANS: Record<BillingPlan, DefaultPlanConfig> = {
   free: {
     name: "Free",
-    description: "SYRAVEN ile üretmeye başlamak için temel araçlar.",
+    description: "The essentials for getting started with SYRAVEN.",
     price: 0,
     features: [
       { text: "Temel AI sohbeti" },
@@ -53,25 +53,25 @@ const DEFAULT_PLANS: Record<BillingPlan, DefaultPlanConfig> = {
 
   premium: {
     name: "Premium",
-    description: "Daha fazla AI gücü ve gelişmiş üretkenlik.",
+    description: "More AI capability and greater productivity.",
     price: 19,
     popular: true,
     features: [
-      { text: "Gelişmiş AI modelleri" },
+      { text: "Advanced AI models" },
       { text: "10 aktif agent" },
       { text: "10 GB knowledge storage" },
-      { text: "AI Canvas erişimi" },
-      { text: "Voice özellikleri" },
-      { text: "Öncelikli kullanım kapasitesi" },
+      { text: "Access to AI Canvas" },
+      { text: "Voice features" },
+      { text: "Priority capacity" },
     ],
   },
 
   pro: {
     name: "Pro",
-    description: "Profesyonel kullanıcılar için yüksek performans.",
+    description: "High performance for professional users.",
     price: 49,
     features: [
-      { text: "Yüksek AI kullanım limiti" },
+      { text: "A higher AI usage limit" },
       { text: "50 aktif agent" },
       { text: "100 GB knowledge storage" },
       { text: "Advanced reasoning" },
@@ -83,10 +83,10 @@ const DEFAULT_PLANS: Record<BillingPlan, DefaultPlanConfig> = {
 
   business: {
     name: "Business",
-    description: "Ekipler ve büyüyen organizasyonlar için.",
+    description: "For teams and growing organisations.",
     price: 149,
     features: [
-      { text: "Yüksek kapasiteli AI altyapısı" },
+      { text: "High-capacity AI infrastructure" },
       { text: "Unlimited agents" },
       { text: "1 TB knowledge storage" },
       { text: "Team collaboration" },
@@ -99,7 +99,7 @@ const DEFAULT_PLANS: Record<BillingPlan, DefaultPlanConfig> = {
 
   enterprise: {
     name: "Enterprise",
-    description: "Kurumsal ölçek, özel güvenlik ve sınırsız esneklik.",
+    description: "Enterprise scale, dedicated security and unlimited flexibility.",
     price: null,
     features: [
       { text: "Custom AI infrastructure" },

@@ -152,7 +152,7 @@ export const POST = withAuth(async (request, session) => {
     if (!supabase) {
       return NextResponse.json(
         {
-          error: "Sunucu yapılandırması eksik.",
+          error: "The server is not fully configured.",
           code: "SUPABASE_NOT_CONFIGURED",
         },
         {
@@ -179,7 +179,7 @@ export const POST = withAuth(async (request, session) => {
     } catch {
       return NextResponse.json(
         {
-          error: "Geçersiz istek verisi.",
+          error: "The request data is not valid.",
           code: "INVALID_BODY",
         },
         {
@@ -194,7 +194,7 @@ export const POST = withAuth(async (request, session) => {
     if (!plan) {
       return NextResponse.json(
         {
-          error: "Geçerli bir plan seçilmedi.",
+          error: "A valid plan must be selected.",
           code: "INVALID_PLAN",
         },
         {
@@ -206,7 +206,7 @@ export const POST = withAuth(async (request, session) => {
     if (plan === "free") {
       return NextResponse.json(
         {
-          error: "Free plan için ödeme işlemi gerekmez.",
+          error: "The free plan does not require checkout.",
           code: "FREE_PLAN",
         },
         {
@@ -218,7 +218,7 @@ export const POST = withAuth(async (request, session) => {
     if (!interval) {
       return NextResponse.json(
         {
-          error: "Geçerli bir ödeme dönemi seçilmedi.",
+          error: "A valid billing interval must be selected.",
           code: "INVALID_INTERVAL",
         },
         {
@@ -232,7 +232,7 @@ export const POST = withAuth(async (request, session) => {
     if (!priceId) {
       return NextResponse.json(
         {
-          error: "Bu plan için ödeme yapılandırması henüz tamamlanmadı.",
+          error: "Payment is not configured for this plan yet.",
           code: "PRICE_NOT_CONFIGURED",
         },
         {
@@ -246,7 +246,7 @@ export const POST = withAuth(async (request, session) => {
     if (!stripeSecretKey) {
       return NextResponse.json(
         {
-          error: "Ödeme sistemi henüz yapılandırılmadı.",
+          error: "Payments are not configured yet.",
           code: "BILLING_NOT_CONFIGURED",
         },
         {
@@ -315,7 +315,7 @@ export const POST = withAuth(async (request, session) => {
         {
           error:
             stripeData?.error?.message ||
-            "Ödeme oturumu oluşturulamadı.",
+            "The checkout session could not be created.",
 
           code: "STRIPE_CHECKOUT_ERROR",
         },
@@ -328,7 +328,7 @@ export const POST = withAuth(async (request, session) => {
     if (!stripeData?.url || !stripeData?.id) {
       return NextResponse.json(
         {
-          error: "Ödeme oturumu geçersiz oluşturuldu.",
+          error: "The checkout session was created in an invalid state.",
           code: "INVALID_CHECKOUT_SESSION",
         },
         {
@@ -362,7 +362,7 @@ export const POST = withAuth(async (request, session) => {
     return NextResponse.json(
       {
         error:
-          "Ödeme işlemi başlatılırken beklenmeyen bir hata oluştu.",
+          "Something went wrong while starting checkout.",
 
         code: "INTERNAL_SERVER_ERROR",
       },

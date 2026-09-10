@@ -531,8 +531,8 @@ export const PasswordInput = forwardRef<
           disabled={disabled}
           aria-label={
             visible
-              ? "Şifreyi gizle"
-              : "Şifreyi göster"
+              ? "Hide password"
+              : "Show password"
           }
           aria-pressed={visible}
           className={[

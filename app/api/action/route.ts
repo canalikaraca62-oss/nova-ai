@@ -192,7 +192,7 @@ export const POST = withAuth(async (
           success: false,
           status: "rejected",
           message:
-            "Geçersiz JSON request body gönderildi.",
+            "The request body is not valid JSON.",
         },
         400
       );
@@ -204,7 +204,7 @@ export const POST = withAuth(async (
           success: false,
           status: "rejected",
           message:
-            "Geçerli bir request body gönderilmedi.",
+            "A valid request body is required.",
         },
         400
       );
@@ -218,7 +218,7 @@ export const POST = withAuth(async (
           success: false,
           status: "rejected",
           message:
-            "Geçerli bir action gönderilmedi.",
+            "A valid action is required.",
         },
         400
       );
@@ -233,7 +233,7 @@ export const POST = withAuth(async (
         success: true,
         status: "completed",
         message:
-          "Gerçekleştirilecek bir işlem yok.",
+          "There is nothing to do.",
         data: {
           actionType: action.type,
         },
@@ -249,7 +249,7 @@ export const POST = withAuth(async (
         success: false,
         status: "pending_confirmation",
         message:
-          "Bu işlem kullanıcı onayı gerektiriyor.",
+          "That action needs your approval first.",
         data: {
           actionType: action.type,
         },
@@ -265,7 +265,7 @@ export const POST = withAuth(async (
         success: true,
         status: "completed",
         message:
-          "İşlem başarıyla tamamlandı.",
+          "Done.",
         data: {
           actionType: action.type,
         },
@@ -281,7 +281,7 @@ export const POST = withAuth(async (
         success: false,
         status: "unsupported",
         message:
-          "Bu işlem şu anda desteklenmiyor.",
+          "That action is not supported.",
         data: {
           actionType: action.type,
         },
@@ -299,7 +299,7 @@ export const POST = withAuth(async (
         success: false,
         status: "rejected",
         message:
-          "Action işlenirken beklenmeyen bir hata oluştu.",
+          "Something went wrong while handling that action.",
       },
       500
     );
@@ -316,7 +316,7 @@ export async function GET() {
       success: false,
       status: "rejected",
       message:
-        "Bu endpoint yalnızca POST isteklerini destekler.",
+        "This endpoint accepts POST requests only.",
     },
     405
   );

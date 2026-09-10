@@ -47,7 +47,7 @@ const plans: readonly PlanDefinition[] = [
   {
     id: "premium",
     name: "Premium",
-    description: "Daha fazla güç ve üretkenlik",
+    description: "More power and productivity",
     badge: "Popular",
     price: "€19",
     period: "/ ay",
@@ -56,21 +56,21 @@ const plans: readonly PlanDefinition[] = [
   {
     id: "pro",
     name: "Pro",
-    description: "Profesyonel AI çalışma alanı",
+    description: "A professional AI workspace",
     price: "€49",
     period: "/ ay",
   },
   {
     id: "business",
     name: "Business",
-    description: "Ekipler ve büyüyen organizasyonlar",
+    description: "Teams and growing organisations",
     price: "€149",
     period: "/ ay",
   },
   {
     id: "enterprise",
     name: "Enterprise",
-    description: "Kurumsal ölçek ve özel çözümler",
+    description: "Enterprise scale and bespoke solutions",
     price: "Custom",
     period: "",
   },
@@ -80,7 +80,7 @@ const features: readonly FeatureRow[] = [
   {
     category: "AI & Intelligence",
     feature: "AI sohbetleri",
-    description: "SYRAVEN AI ile günlük kullanım",
+    description: "Everyday use with SYRAVEN AI",
     values: {
       free: "Limited",
       premium: "Extended",
@@ -92,7 +92,7 @@ const features: readonly FeatureRow[] = [
   {
     category: "AI & Intelligence",
     feature: "Premium AI modelleri",
-    description: "Gelişmiş model erişimi",
+    description: "Access to advanced models",
     values: {
       free: false,
       premium: true,
@@ -104,7 +104,7 @@ const features: readonly FeatureRow[] = [
   {
     category: "AI & Intelligence",
     feature: "Agent execution",
-    description: "AI agent oluşturma ve çalıştırma",
+    description: "Creating and running AI agents",
     values: {
       free: "Limited",
       premium: "Extended",
@@ -127,7 +127,7 @@ const features: readonly FeatureRow[] = [
   {
     category: "AI & Intelligence",
     feature: "Advanced reasoning",
-    description: "Daha karmaşık görev çözümleme",
+    description: "Handling more complex work",
     values: {
       free: false,
       premium: true,
@@ -138,7 +138,7 @@ const features: readonly FeatureRow[] = [
   },
   {
     category: "Agents",
-    feature: "Aktif agent sayısı",
+    feature: "Active agents",
     values: {
       free: "3",
       premium: "10",

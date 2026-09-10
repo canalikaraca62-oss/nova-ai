@@ -36,7 +36,7 @@ export const POST = withAuth(async (request, session) => {
     if (!supabase) {
       return NextResponse.json(
         {
-          error: "Sunucu yapılandırması eksik.",
+          error: "The server is not fully configured.",
           code: "SUPABASE_NOT_CONFIGURED",
         },
         { status: 500 }
@@ -58,7 +58,7 @@ export const POST = withAuth(async (request, session) => {
     if (!stripeSecretKey) {
       return NextResponse.json(
         {
-          error: "Ödeme sistemi henüz yapılandırılmadı.",
+          error: "Payments are not configured yet.",
           code: "BILLING_NOT_CONFIGURED",
         },
         { status: 503 }
@@ -110,14 +110,14 @@ export const POST = withAuth(async (request, session) => {
 
     if (subscriptionError) {
       console.error(
-        "SYRAVEN PORTAL ABONELİK SORGULAMA HATASI:",
+        "SYRAVEN PORTAL SUBSCRIPTION LOOKUP ERROR:",
         subscriptionError
       );
 
       return NextResponse.json(
         {
           error:
-            "Abonelik bilgileri alınırken bir hata oluştu.",
+            "Your subscription details could not be loaded.",
           code: "SUBSCRIPTION_LOOKUP_FAILED",
         },
         { status: 500 }
@@ -131,7 +131,7 @@ export const POST = withAuth(async (request, session) => {
       return NextResponse.json(
         {
           error:
-            "Bu kullanıcı için aktif bir ödeme müşterisi bulunamadı.",
+            "No active billing customer was found for this account.",
           code: "CUSTOMER_NOT_FOUND",
         },
         { status: 404 }
@@ -168,7 +168,7 @@ export const POST = withAuth(async (request, session) => {
         {
           error:
             portalData?.error?.message ||
-            "Abonelik yönetim ekranı oluşturulamadı.",
+            "The subscription management page could not be opened.",
 
           code: "STRIPE_PORTAL_ERROR",
         },
@@ -182,7 +182,7 @@ export const POST = withAuth(async (request, session) => {
       return NextResponse.json(
         {
           error:
-            "Abonelik yönetim bağlantısı oluşturulamadı.",
+            "The subscription management link could not be created.",
 
           code: "INVALID_PORTAL_SESSION",
         },
@@ -209,7 +209,7 @@ export const POST = withAuth(async (request, session) => {
     return NextResponse.json(
       {
         error:
-          "Abonelik yönetim ekranı açılırken beklenmeyen bir hata oluştu.",
+          "Something went wrong while opening subscription management.",
 
         code: "INTERNAL_SERVER_ERROR",
       },
