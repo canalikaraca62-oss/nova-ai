@@ -77,7 +77,24 @@ Supporting systems may include:
 
 # Repository Structure
 
-Current project structure follows this general architecture:
+Current project structure follows this general architecture.
+
+**This section was wrong and has been corrected.** It described
+`components/`, `contexts/` and `hooks/` at the repository root; they
+live under `app/`. It also named four modules as core infrastructure
+that were reachable from nothing:
+
+- `lib/auth.ts` (1,295 lines) and `lib/permissions.ts` (749) formed a
+  dead chain — a complete RBAC model with no Supabase integration,
+  imported only by each other. The real boundary is `lib/auth/session.ts`
+  and `lib/auth/authorization.ts`.
+- `lib/utils.ts` never existed; the file was `lib/untils.ts`, and
+  nothing imported it.
+- `app/hooks/` held twelve hooks, none of them imported by any page.
+
+All four are gone. Documenting a module as load-bearing when it is
+orphaned is how the next person spends an afternoon reading the wrong
+file.
 
 ```text
 /
@@ -85,23 +102,32 @@ Current project structure follows this general architecture:
 │   ├── api/                # Server API routes
 │   └── ...
 │
-├── components/             # React UI components
+├── app/components/         # React UI components
+│                           #   (under app/, not the repository root)
 │
-├── contexts/               # React contexts
-│
-├── hooks/                  # React hooks
+├── app/context/            # React contexts — WorkspaceContext only
 │
 ├── lib/                    # Core infrastructure
+│   ├── agents/             # Agent definitions
+│   ├── ai/                 # Provider abstraction, model registry
+│   ├── api/                # Route boundary: withAuth, tenantGuard,
+│   │                       #   usageGuard, aiPolicy
+│   ├── auth/               # SECURITY BOUNDARY
+│   │   ├── session.ts      #   verified caller identity
+│   │   └── authorization.ts#   what that caller may reach
+│   ├── billing/            # Plan resolution, idempotency
+│   ├── integrations/       # Connector capability boundary
 │   ├── knowledge/          # Knowledge infrastructure
+│   ├── memory/             # Hierarchy, retrieval, context budget
+│   ├── orchestration/      # Plan -> validate -> approve -> execute
+│   ├── search/             # Semantic search and ingestion
 │   ├── security/           # Security utilities
 │   ├── tasks/              # Background task infrastructure
-│   ├── auth.ts
+│   ├── usage/              # Entitlements and metering
 │   ├── constants.ts
-│   ├── permissions.ts
 │   ├── plans.ts
 │   ├── supabase.ts
-│   ├── supabaseAdmin.ts
-│   └── utils.ts
+│   └── supabaseAdmin.ts
 │
 ├── services/               # Business/service layer
 │   ├── types/              # Domain types
