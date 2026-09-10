@@ -32,12 +32,30 @@ type Agent = {
   }[];
 };
 
+/**
+ * Maps a catalogue agent onto the orchestration agent that runs it.
+ *
+ * The two vocabularies were never the same: this page lists research,
+ * coding and writing, while lib/orchestration/registry.ts defines
+ * researcher, organizer, curator and communicator. Posting a catalogue
+ * id straight to /api/agents/run would have produced UNKNOWN_AGENT for
+ * every one of them.
+ *
+ * An agent absent from this map cannot be run, and the page says so
+ * rather than posting an id the server will refuse.
+ */
+const ORCHESTRATION_AGENT: Record<string, string> = {
+  research: "researcher",
+  coding: "organizer",
+  writing: "curator",
+};
+
 const AGENTS: Record<string, Agent> = {
   research: {
     id: "research",
     name: "Research Agent",
     description:
-      "Web, kaynaklar ve belgeler üzerinde derin araştırma yapar; bilgileri karşılaştırır, doğrular ve yapılandırılmış sonuçlara dönüştürür.",
+      "Researches deeply across the web, sources and documents, then compares, verifies and turns what it finds into structured results.",
     category: "Research",
     icon: "🔎",
     status: "ready",
@@ -45,38 +63,38 @@ const AGENTS: Record<string, Agent> = {
     featured: true,
     capabilities: [
       "Deep web research",
-      "Kaynak karşılaştırma",
-      "Çok adımlı araştırma",
-      "Kaynaklandırılmış rapor",
+      "Comparing sources",
+      "Multi-step research",
+      "Sourced reporting",
       "Rakip analizi",
       "Trend takibi",
     ],
     suggestedTasks: [
-      "Rakiplerimizi analiz et ve fırsatları çıkar",
-      "Bu konu hakkında kaynaklı araştırma hazırla",
-      "Pazardaki son gelişmeleri karşılaştır",
+      "Analyse our competitors and draw out the opportunities",
+      "Put together sourced research on this topic",
+      "Compare the latest developments in the market",
     ],
     integrations: ["Web", "Knowledge", "Files", "Tasks"],
     permissions: [
       {
-        label: "Web araştırması",
-        description: "Güncel bilgi ve kaynak araştırmasına izin verir.",
+        label: "Web research",
+        description: "Allows research against current information and sources.",
         enabled: true,
         required: true,
       },
       {
-        label: "Knowledge erişimi",
-        description: "Bağlı bilgi kaynaklarında arama yapabilir.",
+        label: "Knowledge access",
+        description: "Can search the knowledge sources it is connected to.",
         enabled: true,
       },
       {
         label: "Dosya analizi",
-        description: "Seçtiğiniz belgeleri ve dosyaları analiz edebilir.",
+        description: "Can analyse the documents and files you choose.",
         enabled: true,
       },
       {
-        label: "Task oluşturma",
-        description: "Araştırma sonucunda takip görevi önerebilir.",
+        label: "Creating tasks",
+        description: "Can suggest a follow-up task once the research is done.",
         enabled: false,
       },
     ],
@@ -86,7 +104,7 @@ const AGENTS: Record<string, Agent> = {
     id: "coding",
     name: "Coding Agent",
     description:
-      "Projeleri analiz eder, kod üretir, hataları bulur, refactor önerir ve geliştirme işlerini adım adım yürütür.",
+      "Analyses projects, writes code, finds bugs, suggests refactors and works through development tasks step by step.",
     category: "Development",
     icon: "💻",
     status: "ready",
@@ -96,38 +114,38 @@ const AGENTS: Record<string, Agent> = {
       "Kod analizi",
       "Bug detection",
       "Refactoring",
-      "Test üretimi",
-      "Dosya tabanlı çalışma",
+      "Writing tests",
+      "Working across files",
       "Proje mimarisi analizi",
     ],
     suggestedTasks: [
-      "Bu projedeki hataları analiz et",
-      "Uygulamayı mobil uyumlu hale getir",
-      "Kod yapısını refactor et",
+      "Analyse the bugs in this project",
+      "Make the application work properly on mobile",
+      "Refactor the structure of the code",
     ],
     integrations: ["Projects", "Files", "Knowledge", "GitHub"],
     permissions: [
       {
-        label: "Proje dosyaları",
-        description: "Bağlanan proje dosyalarını okuyabilir.",
+        label: "Project files",
+        description: "Can read the project files it is connected to.",
         enabled: true,
         required: true,
       },
       {
-        label: "Kod değişikliği",
+        label: "Code changes",
         description:
-          "Değişiklik önerileri ve uygulama planları hazırlayabilir.",
+          "Can prepare suggested changes and a plan to apply them.",
         enabled: true,
       },
       {
         label: "GitHub",
-        description: "Bağlı depoları analiz etmek için kullanılır.",
+        description: "Used to analyse the repositories it is connected to.",
         enabled: false,
       },
       {
         label: "Terminal",
         description:
-          "İzin verilen çalışma ortamlarında komut çalıştırma isteği oluşturabilir.",
+          "Can request that a command be run, in permitted environments only.",
         enabled: false,
       },
     ],
@@ -137,40 +155,40 @@ const AGENTS: Record<string, Agent> = {
     id: "writing",
     name: "Writing Agent",
     description:
-      "İçerik, strateji, metin, doküman ve profesyonel yazılar üretmek için tasarlanmış yaratıcı yazım agentı.",
+      "A writing agent for content, strategy, copy, documents and professional writing.",
     category: "Creative",
     icon: "✍️",
     status: "ready",
     verified: true,
     featured: false,
     capabilities: [
-      "Uzun form içerik",
-      "Profesyonel yazım",
-      "Metin iyileştirme",
+      "Long-form content",
+      "Professional writing",
+      "Sharpening copy",
       "Tone of voice",
-      "Özetleme",
-      "Çoklu format üretimi",
+      "Summarising",
+      "Writing in several formats",
     ],
     suggestedTasks: [
-      "Bu konu için kapsamlı bir içerik stratejisi oluştur",
-      "Profesyonel bir teklif hazırla",
-      "Bu metni daha güçlü hale getir",
+      "Build a thorough content strategy for this topic",
+      "Draft a professional proposal",
+      "Make this piece of writing stronger",
     ],
     integrations: ["Knowledge", "Files", "Projects"],
     permissions: [
       {
-        label: "Knowledge erişimi",
-        description: "Bağlı bilgi kaynaklarını referans alabilir.",
+        label: "Knowledge access",
+        description: "Can draw on the knowledge sources it is connected to.",
         enabled: true,
       },
       {
         label: "Dosyalar",
-        description: "Seçilen dokümanları okuyabilir ve analiz edebilir.",
+        description: "Can read and analyse the documents you select.",
         enabled: true,
       },
       {
         label: "Projects",
-        description: "Proje bağlamına erişebilir.",
+        description: "Can access the context of a project.",
         enabled: false,
       },
     ],
@@ -186,41 +204,41 @@ function getFallbackAgent(id: string): Agent {
         .map((item) => item.charAt(0).toUpperCase() + item.slice(1))
         .join(" ")  } Agent`,
     description:
-      "SYRAVEN ekosisteminde karmaşık görevleri planlamak, yürütmek ve sonuçlandırmak için yapılandırılmış yapay zeka agentı.",
+      "An agent set up to plan, carry out and finish complex work across SYRAVEN.",
     category: "SYRAVEN Agent",
     icon: "✦",
     status: "ready",
     verified: true,
     featured: false,
     capabilities: [
-      "Akıllı planlama",
-      "Çok adımlı yürütme",
-      "Bağlam farkındalığı",
+      "Considered planning",
+      "Multi-step execution",
+      "Context awareness",
       "Knowledge entegrasyonu",
       "Task entegrasyonu",
-      "Sonuç raporlama",
+      "Reporting results",
     ],
     suggestedTasks: [
-      "Bu agent ile yeni bir görev başlat",
+      "Start a new task with this agent",
       "Mevcut projemi analiz et",
-      "Bana uygulanabilir bir plan oluştur",
+      "Build me a plan I can actually act on",
     ],
     integrations: ["Chat", "Knowledge", "Tasks", "Projects"],
     permissions: [
       {
-        label: "Chat bağlamı",
-        description: "Mevcut çalışma bağlamını kullanabilir.",
+        label: "Chat context",
+        description: "Can use the context of the work already under way.",
         enabled: true,
         required: true,
       },
       {
         label: "Knowledge",
-        description: "Seçilen bilgi kaynaklarında arama yapabilir.",
+        description: "Can search the knowledge sources you select.",
         enabled: true,
       },
       {
         label: "Tasks",
-        description: "Görev ve otomasyon önerileri oluşturabilir.",
+        description: "Can suggest tasks and ways to automate them.",
         enabled: false,
       },
     ],
@@ -232,15 +250,15 @@ const STATUS_CONFIG: Record<
   { label: string; className: string }
 > = {
   ready: {
-    label: "Hazır",
+    label: "Ready",
     className: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
   },
   running: {
-    label: "Çalışıyor",
+    label: "Running",
     className: "bg-blue-500/10 text-blue-400 border-blue-500/20",
   },
   paused: {
-    label: "Duraklatıldı",
+    label: "Paused",
     className: "bg-amber-500/10 text-amber-400 border-amber-500/20",
   },
   error: {
@@ -262,7 +280,12 @@ export default function AgentDetailPage() {
     [agentId]
   );
 
-  const [agent, setAgent] = useState<Agent>(initialAgent);
+  /*
+    Held as a constant, not state: nothing on this page edits the agent
+    any more. The setter existed only for the permissions toggle, which
+    changed a local boolean and nothing on the server.
+  */
+  const agent = initialAgent;
   const [activeTab, setActiveTab] = useState<AgentTab>("overview");
   const [task, setTask] = useState("");
   const [isRunning, setIsRunning] = useState(false);
@@ -274,49 +297,124 @@ export default function AgentDetailPage() {
     const trimmedTask = task.trim();
 
     if (!trimmedTask) {
-      setRunMessage("Önce agent için bir görev yazmalısın.");
+      setRunMessage("Describe what you want the agent to do first.");
+      return;
+    }
+
+    const orchestrationAgent = ORCHESTRATION_AGENT[agentId] ?? null;
+
+    if (!orchestrationAgent) {
+      /*
+        This catalogue lists more agents than the orchestrator actually
+        runs. Saying so is the honest outcome; the alternative is posting
+        an id the server does not know and reporting its refusal as a
+        failure the user cannot act on.
+      */
+      setRunMessage(
+        "This agent cannot be run yet. Research, coding and writing " +
+          "agents are the ones wired to execution today.",
+      );
       return;
     }
 
     setIsRunning(true);
     setRunMessage(null);
 
-    /*
-      Gerçek execution bağlantısı ileride:
-      POST /api/agents/execute
+    try {
+      /*
+        This used to sleep 700ms and report that the task had been
+        "prepared" and would be run "through the agent execution
+        system". Nothing was prepared and nothing ran.
 
-      Bu sayfa UI ve state sözleşmesini şimdiden hazır tutar.
-      AgentExecution, services/agents.ts ve API route bu yapıyla uyumlu bağlanacaktır.
-    */
+        /api/agents/run implements the whole path — the model proposes a
+        plan, the server validates every step against the registry,
+        high-risk steps stop for a server-held approval record, and a
+        budget is checked before each call. It was reachable the entire
+        time.
+      */
+      const response = await fetch("/api/agents/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          agentId: orchestrationAgent,
+          goal: trimmedTask,
+        }),
+      });
 
-    await new Promise((resolve) => setTimeout(resolve, 700));
+      const payload = (await response.json().catch(() => null)) as {
+        status?: string;
+        message?: string;
+        data?: {
+          steps?: { tool: string; status: string; summary: string }[];
+          pendingApprovals?: string[];
+        };
+      } | null;
 
-    setRunMessage(
-      `"${trimmedTask}" görevi hazırlandı. Agent execution sistemi üzerinden çalıştırılacak.`
-    );
+      if (payload?.status === "awaiting_approval") {
+        /*
+          Not a failure. The plan is sound and one of its steps needs a
+          person to agree to it — which is the safeguard working, and
+          the user should be able to tell the difference.
+        */
+        const waiting = payload.data?.pendingApprovals ?? [];
 
-    setIsRunning(false);
-  }, [task]);
+        setRunMessage(
+          `The plan is ready and needs your approval before it runs${
+            waiting.length > 0 ? `: ${waiting.join(", ")}` : ""
+          }.`,
+        );
 
-  const togglePermission = (index: number) => {
-    setAgent((current) => ({
-      ...current,
-      permissions: current.permissions.map((permission, permissionIndex) =>
-        permissionIndex === index && !permission.required
-          ? {
-              ...permission,
-              enabled: !permission.enabled,
-            }
-          : permission
-      ),
-    }));
-  };
+        return;
+      }
+
+      if (!response.ok || !payload) {
+        setRunMessage(
+          payload?.message ??
+            "That task could not be run. Please try again.",
+        );
+
+        return;
+      }
+
+      const steps = payload.data?.steps ?? [];
+
+      setRunMessage(
+        steps.length > 0
+          ? steps
+              .map((step) => `${step.tool}: ${step.summary}`)
+              .join("\n")
+          : "The agent completed without needing to take any action.",
+      );
+    } catch {
+      setRunMessage("That task could not be run. Please try again.");
+    } finally {
+      setIsRunning(false);
+    }
+  }, [agentId, task]);
+
+  /*
+    PERMISSIONS ARE NOT EDITABLE HERE.
+
+    This toggle flipped a boolean in local state and nothing else. It
+    looked exactly like a security control — "Code change", "Project
+    files", "Command execution" — and a user could switch one off,
+    believe the agent no longer held it, and reload to find it back on.
+
+    Worse, it was never load-bearing in the first place: what an agent
+    may actually do is decided server-side by allowedTools and maxRisk
+    in lib/orchestration/registry.ts, which this page cannot influence.
+    A control that appears to restrict an agent and does not is more
+    dangerous than no control at all.
+
+    The switches are now read-only, showing what the agent is permitted
+    server-side.
+  */
 
   const tabs: { id: AgentTab; label: string }[] = [
-    { id: "overview", label: "Genel Bakış" },
+    { id: "overview", label: "Overview" },
     { id: "activity", label: "Aktivite" },
     { id: "knowledge", label: "Knowledge" },
-    { id: "permissions", label: "İzinler" },
+    { id: "permissions", label: "Permissions" },
     { id: "settings", label: "Ayarlar" },
   ];
 
@@ -470,7 +568,7 @@ export default function AgentDetailPage() {
                   disabled={isRunning}
                   className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-white px-5 py-3 text-sm font-semibold text-black transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {isRunning ? "Agent hazırlanıyor..." : "Agent'ı Çalıştır →"}
+                  {isRunning ? "Preparing the agent..." : "Run this agent →"}
                 </button>
               </div>
 
@@ -653,7 +751,7 @@ export default function AgentDetailPage() {
             </div>
 
             <div className="space-y-3">
-              {agent.permissions.map((permission, index) => (
+              {agent.permissions.map((permission) => (
                 <div
                   key={permission.label}
                   className="flex items-center justify-between gap-5 rounded-2xl border border-white/[0.07] bg-black/10 p-4"
@@ -666,7 +764,7 @@ export default function AgentDetailPage() {
 
                       {permission.required && (
                         <span className="rounded-md bg-white/[0.06] px-2 py-0.5 text-[10px] text-zinc-500">
-                          Gerekli
+                          Required
                         </span>
                       )}
                     </div>
@@ -676,29 +774,23 @@ export default function AgentDetailPage() {
                     </p>
                   </div>
 
-                  <button
-                    type="button"
-                    disabled={permission.required}
-                    onClick={() => togglePermission(index)}
-                    className={`relative h-7 w-12 shrink-0 rounded-full transition ${
-                      permission.enabled
-                        ? "bg-white"
-                        : "bg-zinc-800"
-                    } ${
-                      permission.required
-                        ? "cursor-not-allowed opacity-70"
-                        : ""
+                  <span
+                    role="img"
+                    aria-label={`${permission.label}: ${
+                      permission.enabled ? "allowed" : "not allowed"
                     }`}
-                    aria-label={`${permission.label} iznini değiştir`}
+                    className={`relative h-7 w-12 shrink-0 rounded-full ${
+                      permission.enabled ? "bg-white" : "bg-zinc-800"
+                    }`}
                   >
                     <span
-                      className={`absolute top-1 h-5 w-5 rounded-full transition ${
+                      className={`absolute top-1 h-5 w-5 rounded-full ${
                         permission.enabled
                           ? "left-6 bg-black"
                           : "left-1 bg-zinc-500"
                       }`}
                     />
-                  </button>
+                  </span>
                 </div>
               ))}
             </div>

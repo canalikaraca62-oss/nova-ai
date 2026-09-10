@@ -82,49 +82,49 @@ const categories: Category[] = [
   {
     id: "general",
     title: "General",
-    description: "Her türlü görev için esnek AI agent.",
+    description: "A flexible agent for any kind of work.",
     icon: <Bot size={18} />,
   },
   {
     id: "research",
     title: "Research",
-    description: "Araştırma, analiz ve kaynak odaklı çalışma.",
+    description: "Research, analysis and source-led work.",
     icon: <FileSearch size={18} />,
   },
   {
     id: "coding",
     title: "Coding",
-    description: "Kodlama, debugging ve teknik üretim.",
+    description: "Writing code, debugging and technical work.",
     icon: <Code2 size={18} />,
   },
   {
     id: "business",
     title: "Business",
-    description: "Strateji, operasyon ve iş süreçleri.",
+    description: "Strategy, operations and business process.",
     icon: <BriefcaseBusiness size={18} />,
   },
   {
     id: "creative",
     title: "Creative",
-    description: "Tasarım, içerik ve yaratıcı üretim.",
+    description: "Design, content and creative work.",
     icon: <Image size={18} />,
   },
   {
     id: "data",
     title: "Data",
-    description: "Veri analizi ve içgörü üretimi.",
+    description: "Data analysis and drawing out insight.",
     icon: <Brain size={18} />,
   },
   {
     id: "productivity",
     title: "Productivity",
-    description: "Planlama, görev ve kişisel verimlilik.",
+    description: "Planning, tasks and personal productivity.",
     icon: <Zap size={18} />,
   },
   {
     id: "custom",
     title: "Custom",
-    description: "Tamamen sana özel bir agent.",
+    description: "An agent built entirely around you.",
     icon: <WandSparkles size={18} />,
   },
 ];
@@ -133,45 +133,45 @@ const capabilities: AgentCapability[] = [
   {
     id: "chat",
     title: "Advanced Chat",
-    description: "Uzun bağlamlı ve akıllı konuşmalar.",
+    description: "Long-running, context-aware conversation.",
     icon: <MessageSquare size={19} />,
   },
   {
     id: "web",
     title: "Web Research",
-    description: "Web üzerinde araştırma ve kaynak toplama.",
+    description: "Researching and gathering sources on the web.",
     icon: <Globe2 size={19} />,
   },
   {
     id: "reasoning",
     title: "Deep Reasoning",
-    description: "Karmaşık problemleri çok adımlı analiz etme.",
+    description: "Working through complex problems in several steps.",
     icon: <Brain size={19} />,
   },
   {
     id: "files",
     title: "File Analysis",
-    description: "Belge, PDF, tablo ve diğer dosyaları analiz etme.",
+    description: "Reading documents, PDFs, spreadsheets and other files.",
     icon: <FileSearch size={19} />,
   },
   {
     id: "code",
     title: "Code Intelligence",
-    description: "Kod üretme, inceleme ve hata tespiti.",
+    description: "Writing, reviewing and debugging code.",
     icon: <Code2 size={19} />,
   },
   {
     id: "creative",
     title: "Creative Tools",
-    description: "Yaratıcı içerik ve fikir üretimi.",
+    description: "Creative content and generating ideas.",
     icon: <Sparkles size={19} />,
   },
 ];
 
 const suggestedPrompts = [
-  "Bugün benim için en önemli işleri belirle.",
-  "Bu konuyu detaylı şekilde araştır.",
-  "Bir strateji ve uygulama planı oluştur.",
+  "Work out what matters most for me today.",
+  "Research this topic thoroughly.",
+  "Draw up a strategy and a plan to deliver it.",
 ];
 
 /* ==================================================
@@ -252,6 +252,12 @@ export default function CreateAgentPage() {
     setIsCreating,
   ] =
     useState(false);
+
+  const [
+    createError,
+    setCreateError,
+  ] =
+    useState<string | null>(null);
 
   const [
     showAdvanced,
@@ -395,32 +401,53 @@ export default function CreateAgentPage() {
       true
     );
 
+    setCreateError(null);
+
     try {
       /*
-       * Agent API / database bağlantısı
-       * ileride burada merkezi agent service
-       * üzerinden yapılacak.
-       */
+        This used to sleep 700ms and then redirect to /agents as though
+        the agent had been saved. Nothing was written. The agent the user
+        had just configured — name, instructions, model, capabilities —
+        did not exist on the other side of that redirect, and /agents
+        simply did not list it.
 
-      await new Promise(
-        (
-          resolve
-        ) =>
-          setTimeout(
-            resolve,
-            700
-          )
-      );
+        /api/agents has offered a full authenticated POST the whole time.
+      */
+      const response = await fetch("/api/agents", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: cleanName,
+          description: description.trim() || undefined,
+          systemPrompt: instructions.trim() || undefined,
+          category,
+          visibility,
+          model,
+          /*
+            Capabilities are sent as tags: the agents table has no
+            capability column, and inventing one client-side would mean
+            the selection silently vanished on reload.
+          */
+          tags: selectedCapabilities,
+        }),
+      });
 
-      router.push(
-        "/agents"
-      );
-    } catch (
-      error
-    ) {
-      console.error(
-        "AGENT OLUŞTURMA HATASI:",
-        error
+      const payload = (await response
+        .json()
+        .catch(() => null)) as {
+        agent?: { id?: string };
+      } | null;
+
+      if (!response.ok || !payload?.agent) {
+        throw new Error("failed");
+      }
+
+      router.push("/agents");
+    } catch {
+      setCreateError(
+        "That agent could not be created. Please try again.",
       );
     } finally {
       setIsCreating(
@@ -497,7 +524,7 @@ export default function CreateAgentPage() {
                 hover:bg-white/[0.06]
                 hover:text-white
               "
-              aria-label="Geri dön"
+              aria-label="Go back"
             >
               <ArrowLeft
                 size={19}
@@ -2301,6 +2328,24 @@ Never invent sources or pretend to have completed an action you did not perform.
               Every agent is designed to work as part of the wider SYRAVEN ecosystem: Chat, Workspace, Knowledge, Tasks, Apps and future connected services.
             </p>
           </div>
+
+          {createError ? (
+            <div
+              role="alert"
+              className="
+                mb-4
+                rounded-xl
+                border
+                border-red-500/30
+                bg-red-500/10
+                p-4
+                text-sm
+                text-red-200
+              "
+            >
+              {createError}
+            </div>
+          ) : null}
 
           {/* CREATE */}
 

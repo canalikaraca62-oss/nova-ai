@@ -115,7 +115,7 @@ export const POST = withAuth(async (request, session) => {
       {
         success: false,
         status: "rejected",
-        message: "Geçersiz JSON request body gönderildi.",
+        message: "The request body is not valid JSON.",
       },
       400,
     );
@@ -126,7 +126,7 @@ export const POST = withAuth(async (request, session) => {
       {
         success: false,
         status: "rejected",
-        message: "Geçerli bir request body gönderilmedi.",
+        message: "A valid request body is required.",
       },
       400,
     );
@@ -196,7 +196,7 @@ export const POST = withAuth(async (request, session) => {
         {
           success: false,
           status: "rejected",
-          message: "Geçerli bir ajan seçilmedi.",
+          message: "A valid agent must be selected.",
         },
         400,
       );
@@ -221,7 +221,7 @@ export const POST = withAuth(async (request, session) => {
       return json({
         success: false,
         status: "awaiting_approval",
-        message: "Bu plan kullanıcı onayı gerektiriyor.",
+        message: "This plan needs your approval before it can run.",
         data: {
           executionKey: result.executionKey,
           agentId: result.agentId,
@@ -236,7 +236,7 @@ export const POST = withAuth(async (request, session) => {
         {
           success: false,
           status: "failed",
-          message: "Plan yürütülemedi.",
+          message: "The plan could not be carried out.",
           data: {
             executionKey: result.executionKey,
             agentId: result.agentId,
@@ -252,7 +252,7 @@ export const POST = withAuth(async (request, session) => {
     return json({
       success: true,
       status: result.state,
-      message: "İşlem tamamlandı.",
+      message: "Finished.",
       data: {
         executionKey: result.executionKey,
         agentId: result.agentId,
@@ -269,7 +269,7 @@ export const POST = withAuth(async (request, session) => {
       {
         success: false,
         status: "rejected",
-        message: "İşlem sırasında beklenmeyen bir hata oluştu.",
+        message: "Something went wrong while running this.",
       },
       500,
     );
@@ -285,7 +285,7 @@ export async function GET() {
     {
       success: false,
       status: "rejected",
-      message: "Bu endpoint yalnızca POST isteklerini destekler.",
+      message: "This endpoint accepts POST requests only.",
     },
     405,
   );
