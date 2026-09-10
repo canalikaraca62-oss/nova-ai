@@ -246,7 +246,7 @@ export default function WorkspacePage() {
   };
 
   return (
-    <main className="min-h-screen bg-[#09090b] text-white">
+    <main className="min-h-screen bg-background text-white">
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
         {/* Header */}
         <div className="flex flex-col gap-6 border-b border-white/10 pb-8 lg:flex-row lg:items-end lg:justify-between">
@@ -565,7 +565,7 @@ export default function WorkspacePage() {
       {/* Create project modal */}
       {showCreateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-3xl border border-white/10 bg-[#111114] p-6 shadow-2xl">
+          <div className="w-full max-w-lg rounded-3xl border border-white/10 bg-card p-6 shadow-2xl">
             <div className="flex items-start justify-between gap-6">
               <div>
                 <h2 className="text-xl font-semibold">

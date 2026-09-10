@@ -598,7 +598,7 @@ export default function ChatConversationPage() {
 
   if (!conversationId) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[#07090d] px-6 text-white">
+      <main className="flex min-h-screen items-center justify-center bg-background px-6 text-white">
         <div className="max-w-md text-center">
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-red-400/20 bg-red-400/[0.08]">
             <svg
@@ -641,9 +641,9 @@ export default function ChatConversationPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#07090d] text-white">
+    <main className="min-h-screen bg-background text-white">
       <div className="mx-auto flex min-h-screen w-full max-w-[1600px] flex-col">
-        <header className="sticky top-0 z-30 border-b border-white/[0.07] bg-[#07090d]/95 backdrop-blur-xl">
+        <header className="sticky top-0 z-30 border-b border-white/[0.07] bg-background/95 backdrop-blur-xl">
           <div className="flex h-16 items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
             <div className="flex min-w-0 items-center gap-3">
               <button
@@ -904,7 +904,7 @@ export default function ChatConversationPage() {
 
             <form
               onSubmit={handleSubmit}
-              className="sticky bottom-0 mt-4 bg-[#07090d] pb-2 pt-3"
+              className="sticky bottom-0 mt-4 bg-background pb-2 pt-3"
             >
               <div className="rounded-2xl border border-white/[0.09] bg-white/[0.035] p-2 shadow-2xl shadow-black/20 transition focus-within:border-cyan-400/25 focus-within:bg-white/[0.045]">
                 <textarea

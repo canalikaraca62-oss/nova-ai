@@ -268,7 +268,7 @@ export default function TeamsPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#09090b] text-white">
+    <main className="min-h-screen bg-background text-white">
       <div className="mx-auto w-full max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8">
         {/* Header */}
         <section className="mb-8 flex flex-col gap-5 border-b border-white/10 pb-8 lg:flex-row lg:items-end lg:justify-between">
@@ -533,7 +533,7 @@ export default function TeamsPage() {
       {/* Create Team Modal */}
       {showCreateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-[#111113] shadow-2xl">
+          <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-card shadow-2xl">
             <div className="flex items-center justify-between border-b border-white/10 px-6 py-5">
               <div>
                 <h2 className="text-lg font-semibold">Create a new team</h2>

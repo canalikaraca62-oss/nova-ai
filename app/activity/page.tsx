@@ -385,7 +385,7 @@ export default function ActivityPage() {
   };
 
   return (
-    <main className="min-h-screen bg-[#09090b] text-white">
+    <main className="min-h-screen bg-background text-white">
       <div className="mx-auto w-full max-w-[1700px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
         {/* HEADER */}
 
@@ -491,7 +491,7 @@ export default function ActivityPage() {
 
         {/* CONTROLS */}
 
-        <section className="mt-6 rounded-[28px] border border-white/[0.07] bg-[#101015]/80 p-4 backdrop-blur-xl sm:p-5">
+        <section className="mt-6 rounded-[28px] border border-white/[0.07] bg-background/80 p-4 backdrop-blur-xl sm:p-5">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
             <div className="relative w-full xl:max-w-md">
               <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-white/30">
@@ -569,7 +569,7 @@ export default function ActivityPage() {
         {/* CONTENT */}
 
         <section className="mt-6 grid gap-6 2xl:grid-cols-[minmax(0,1fr)_380px]">
-          <div className="rounded-[30px] border border-white/[0.07] bg-[#101015]/70 p-4 sm:p-6">
+          <div className="rounded-[30px] border border-white/[0.07] bg-background/70 p-4 sm:p-6">
             <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h2 className="text-lg font-semibold text-white">
@@ -984,7 +984,7 @@ function ActivityDetailModal({
       onMouseDown={onClose}
     >
       <div
-        className="w-full max-w-2xl rounded-t-[32px] border border-white/[0.1] bg-[#111116] p-6 shadow-2xl sm:rounded-[32px] sm:p-8"
+        className="w-full max-w-2xl rounded-t-[32px] border border-white/[0.1] bg-card p-6 shadow-2xl sm:rounded-[32px] sm:p-8"
         onMouseDown={(event) => event.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-6">

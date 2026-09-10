@@ -285,7 +285,7 @@ export default function CanvasPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#050505] text-white">
+    <main className="min-h-screen bg-background text-white">
       <div className="mx-auto w-full max-w-[1600px] px-4 py-5 sm:px-6 lg:px-10 lg:py-8">
         {/* HEADER */}
 
@@ -421,7 +421,7 @@ export default function CanvasPage() {
                         .value as CanvasType
                     )
                   }
-                  className="h-12 w-full rounded-xl border border-white/10 bg-[#101010] px-4 text-sm text-white outline-none"
+                  className="h-12 w-full rounded-xl border border-white/10 bg-background px-4 text-sm text-white outline-none"
                 >
                   {(
                     Object.keys(
@@ -477,7 +477,7 @@ export default function CanvasPage() {
                       .value as CanvasType | "all"
                   )
                 }
-                className="h-12 rounded-xl border border-white/10 bg-[#101010] px-4 text-sm text-white/70 outline-none"
+                className="h-12 rounded-xl border border-white/10 bg-background px-4 text-sm text-white/70 outline-none"
               >
                 <option value="all">
                   All types
@@ -507,7 +507,7 @@ export default function CanvasPage() {
                         | "all"
                   )
                 }
-                className="h-12 rounded-xl border border-white/10 bg-[#101010] px-4 text-sm text-white/70 outline-none"
+                className="h-12 rounded-xl border border-white/10 bg-background px-4 text-sm text-white/70 outline-none"
               >
                 <option value="all">
                   All status

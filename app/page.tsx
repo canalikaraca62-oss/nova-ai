@@ -52,7 +52,7 @@ const capabilities = [
 
 export default function HomePage() {
   return (
-    <main className="min-h-screen overflow-hidden bg-[#09090b] text-white">
+    <main className="min-h-screen overflow-hidden bg-background text-white">
       {/* Background */}
       <div
         aria-hidden="true"

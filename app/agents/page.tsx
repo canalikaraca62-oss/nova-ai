@@ -282,7 +282,7 @@ export default function AgentsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#09090b] text-white">
+    <div className="min-h-screen bg-background text-white">
       <main className="mx-auto w-full max-w-[1600px] px-4 pb-16 pt-6 sm:px-6 lg:px-8 lg:pt-10">
 
         {/* =================================================

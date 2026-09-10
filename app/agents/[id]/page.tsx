@@ -419,7 +419,7 @@ export default function AgentDetailPage() {
   ];
 
   return (
-    <main className="min-h-screen bg-[#08090d] text-white">
+    <main className="min-h-screen bg-background text-white">
       <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
         {/* Top navigation */}
         <div className="mb-6 flex flex-col gap-4">

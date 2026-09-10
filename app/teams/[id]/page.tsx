@@ -230,7 +230,7 @@ export default function TeamDetailPage() {
 
   if (!team) {
     return (
-      <main className="min-h-screen bg-[#09090b] px-4 py-10 text-white sm:px-6 lg:px-8">
+      <main className="min-h-screen bg-background px-4 py-10 text-white sm:px-6 lg:px-8">
         <div className="mx-auto flex min-h-[70vh] max-w-3xl flex-col items-center justify-center text-center">
           <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-2xl">
             ?
@@ -300,7 +300,7 @@ export default function TeamDetailPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#09090b] text-white">
+    <main className="min-h-screen bg-background text-white">
       <div className="mx-auto w-full max-w-[1500px] px-4 py-6 sm:px-6 lg:px-8">
         {/* Breadcrumb */}
         <div className="mb-6 flex flex-wrap items-center gap-2 text-sm text-white/40">
@@ -754,7 +754,7 @@ export default function TeamDetailPage() {
       {/* Invite modal */}
       {inviteOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-[#111113] shadow-2xl">
+          <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-card shadow-2xl">
             <div className="flex items-center justify-between border-b border-white/10 px-6 py-5">
               <div>
                 <h2 className="text-lg font-semibold">

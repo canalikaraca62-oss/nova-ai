@@ -38,7 +38,7 @@ export default function TermsPage() {
   };
 
   return (
-    <main className="min-h-screen bg-[#09090b] text-white">
+    <main className="min-h-screen bg-background text-white">
       {/* Header */}
       <section className="border-b border-white/10">
         <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-24">

@@ -274,7 +274,7 @@ export default function AppsPage() {
   };
 
   return (
-    <main className="min-h-screen bg-[#07090f] text-white">
+    <main className="min-h-screen bg-background text-white">
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
         <div className="absolute left-[10%] top-[-15%] h-[500px] w-[500px] rounded-full bg-violet-600/10 blur-[140px]" />
         <div className="absolute right-[5%] top-[20%] h-[450px] w-[450px] rounded-full bg-cyan-500/10 blur-[140px]" />

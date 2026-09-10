@@ -45,7 +45,7 @@ const ENTERPRISE_POINTS: readonly string[] = [
 
 export default function ContactPage() {
   return (
-    <main className="min-h-screen bg-[#09090b] text-white">
+    <main className="min-h-screen bg-background text-white">
       <div className="mx-auto max-w-3xl px-6 py-20 sm:py-28">
         <nav aria-label="Breadcrumb" className="mb-10">
           <Link

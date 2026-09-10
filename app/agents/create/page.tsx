@@ -464,7 +464,7 @@ export default function CreateAgentPage() {
     <main
       className="
         min-h-screen
-        bg-[#09090b]
+        bg-background
         text-white
       "
     >
@@ -479,7 +479,7 @@ export default function CreateAgentPage() {
           z-30
           border-b
           border-white/[0.07]
-          bg-[#09090b]/85
+          bg-background/85
           backdrop-blur-2xl
         "
       >
@@ -1686,7 +1686,7 @@ Never invent sources or pretend to have completed an action you did not perform.
                       rounded-xl
                       border
                       border-white/[0.09]
-                      bg-[#111114]
+                      bg-card
                       px-4
                       text-sm
                       text-zinc-200
