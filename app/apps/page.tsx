@@ -198,10 +198,23 @@ const apps: AppItem[] = [
     new: true,
   },
   {
+    /*
+      Marked "Coming soon" while linking straight to /tasks.
+
+      A card can say a capability is not built yet, or it can be a live
+      link to somewhere else, but not both: the status says one thing
+      and the destination does another, and a user who clicks lands on
+      the task list wondering where the automation went. There is no
+      automation engine — no durable goals, triggers or runs exist — so
+      the honest form is the label without the link.
+
+      The description is rewritten to describe what /tasks actually is,
+      since that is where the card now points once it becomes live.
+    */
     id: "automations",
     name: "Automation Center",
     description:
-      "Design repeatable workflows and let intelligent systems execute them automatically.",
+      "Recurring workflows that run on their own. Not available yet.",
     category: "Business",
     status: "Coming soon",
     href: "/tasks",
@@ -571,13 +584,33 @@ export default function AppsPage() {
                       )}
                     </div>
 
-                    <Link
-                      href={app.href}
-                      className="mt-5 flex h-11 items-center justify-between rounded-xl border border-white/10 bg-white/[0.035] px-4 text-sm font-medium text-white/70 transition hover:border-white/20 hover:bg-white/[0.08] hover:text-white"
-                    >
-                      Open application
-                      <span>→</span>
-                    </Link>
+                    {/*
+                      A card cannot both say "Coming soon" and be a live
+                      link somewhere else. "Automation Center" did: the
+                      badge said not built, the button opened /tasks, and
+                      a user who clicked landed on the task list
+                      wondering where the automation went.
+
+                      There is no automation engine — no durable goals,
+                      triggers or runs exist — so the control states that
+                      instead of navigating.
+                    */}
+                    {app.status === "Coming soon" ? (
+                      <p
+                        className="mt-5 flex h-11 items-center rounded-xl border border-dashed border-white/10 bg-white/[0.02] px-4 text-sm font-medium text-white/40"
+                        role="note"
+                      >
+                        Not available yet
+                      </p>
+                    ) : (
+                      <Link
+                        href={app.href}
+                        className="mt-5 flex h-11 items-center justify-between rounded-xl border border-white/10 bg-white/[0.035] px-4 text-sm font-medium text-white/70 transition hover:border-white/20 hover:bg-white/[0.08] hover:text-white"
+                      >
+                        Open application
+                        <span>→</span>
+                      </Link>
+                    )}
                   </div>
                 </article>
               );

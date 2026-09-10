@@ -271,7 +271,12 @@ export default function SearchPage() {
   }, [hits]);
 
   return (
-    <main className="min-h-screen bg-background text-foreground">
+    /*
+      A plain container, not a second <main>: AppShell (mounted by
+      app/search/layout.tsx) already emits the page main landmark, and
+      two of them is invalid HTML.
+    */
+    <div className="w-full">
       <div className="mx-auto w-full max-w-5xl px-4 py-10 sm:px-6 lg:px-8">
         {/* Header */}
         <header>
@@ -479,6 +484,6 @@ export default function SearchPage() {
           )}
         </section>
       </div>
-    </main>
+    </div>
   );
 }
