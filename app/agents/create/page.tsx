@@ -1980,7 +1980,7 @@ Never invent sources or pretend to have completed an action you did not perform.
                   className="mt-5 text-xs leading-5 text-zinc-500"
                 >
                   Create the agent first — you can start a conversation
-                  with it from the agent's own page.
+                  with it from the agent&apos;s own page.
                 </p>
 
                 <button

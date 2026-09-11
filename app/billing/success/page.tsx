@@ -350,8 +350,24 @@ function BillingSuccessContent() {
    * INITIAL SYNC
    * ================================================== */
 
+  /*
+    Deferred off the render pass, the same way /graph and /teams/[id]
+    load. Calling the sync straight from the effect body sets state
+    synchronously within it, which cascades a render; resolving a
+    microtask first lets the first paint finish before any state moves.
+  */
   useEffect(() => {
-    void syncBilling();
+    let cancelled = false;
+
+    void Promise.resolve().then(() => {
+      if (cancelled) return undefined;
+
+      return syncBilling();
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, [syncBilling]);
 
   /* ==================================================

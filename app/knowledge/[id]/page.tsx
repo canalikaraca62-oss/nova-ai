@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useMemo } from "react";
+import { createElement, useMemo } from "react";
 
 import {
   ArrowLeft,
@@ -183,9 +183,18 @@ export default function KnowledgeDetailPage() {
     );
   }
 
-  const TypeIcon = getTypeIcon(
-    knowledge.type
-  );
+  /*
+    Rendered through a helper rather than bound to a capitalised
+    identifier. `const TypeIcon = getTypeIcon(...)` reads as a component
+    defined during render, so React treats it as a new component type on
+    every pass and remounts the subtree beneath it -- which is what
+    react-hooks/static-components objects to. The icon is the same
+    lucide component either way; only the binding changes.
+  */
+  const typeIcon = getTypeIcon(knowledge.type);
+
+  const renderTypeIcon = (className: string) =>
+    createElement(typeIcon, { className });
 
   return (
     /*
@@ -206,7 +215,7 @@ export default function KnowledgeDetailPage() {
           <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
             <div className="flex gap-4">
               <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-                <TypeIcon className="h-7 w-7" />
+                {renderTypeIcon("h-7 w-7")}
               </div>
 
               <div>

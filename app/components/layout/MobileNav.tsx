@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  useEffect,
   useState,
   type ReactNode,
 } from "react";
@@ -288,18 +287,27 @@ function MobileNavItemRow({
       item
     );
 
-  const [
-    expanded,
-    setExpanded,
-  ] = useState<boolean>(
-    isActive
-  );
+  /*
+    Expansion is derived, not synchronised.
 
-  useEffect((): void => {
-    if (isActive) {
-      setExpanded(true);
-    }
-  }, [isActive]);
+    An effect used to call setExpanded(true) whenever isActive turned
+    true, which cascades a render on every navigation. Deriving it
+    outright -- expanded || isActive -- would have been the obvious
+    replacement and would have been wrong: a user who collapses the
+    section they are currently inside would find it springing back open
+    and unable to stay shut.
+
+    So the state records the only thing the route cannot know, which is
+    whether the user has deliberately overridden the default for this
+    section. Null means they have not touched it, and the active route
+    decides.
+  */
+  const [
+    userChoice,
+    setUserChoice,
+  ] = useState<boolean | null>(null);
+
+  const expanded: boolean = userChoice ?? isActive;
 
   const rowClassName: string = [
     "flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-sm transition-colors",
@@ -357,10 +365,17 @@ function MobileNavItemRow({
   };
 
   const handleToggle = (): void => {
-    setExpanded(
+    /*
+      Flip away from what is currently on screen, not from the stored
+      value. Until the user touches this section the stored value is
+      null and the route decides, so the first tap on an open active
+      section must close it rather than set it to the value it already
+      shows.
+    */
+    setUserChoice(
       (
-        current: boolean
-      ): boolean => !current
+        current: boolean | null
+      ): boolean => !(current ?? isActive)
     );
 
     onNavigate?.(item);

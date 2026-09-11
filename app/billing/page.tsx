@@ -543,8 +543,24 @@ export default function BillingPage() {
     [],
   );
 
+  /*
+    Deferred off the render pass, the same way /graph and /teams/[id]
+    load. Calling the loader straight from the effect body sets state
+    synchronously within it, which cascades a render; resolving a
+    microtask first lets the first paint finish before any state moves.
+  */
   useEffect(() => {
-    void loadBilling();
+    let cancelled = false;
+
+    void Promise.resolve().then(() => {
+      if (cancelled) return undefined;
+
+      return loadBilling();
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, [loadBilling]);
 
   /* =======================================================

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 
 type CancelReason =
   | "cancelled"
@@ -168,12 +168,17 @@ function SparkIcon() {
 export default function BillingCancelPage() {
   const router = useRouter();
 
-  const [reason, setReason] = useState<CancelReason>("unknown");
-  const [isReturning, setIsReturning] = useState(false);
+  /*
+    Read once, during the first client render, rather than set from an
+    effect. The reason comes from the URL, which is knowable
+    synchronously and never changes for the life of this page, so
+    setting it afterwards was a second render for no reason -- which is
+    what react-hooks/set-state-in-effect objects to.
 
-  useEffect(() => {
-    setReason(getCancelReason());
-  }, []);
+    The initialiser is lazy, so it runs on the client only.
+  */
+  const [reason] = useState<CancelReason>(() => getCancelReason());
+  const [isReturning, setIsReturning] = useState(false);
 
   const copy = getCopy(reason);
 
