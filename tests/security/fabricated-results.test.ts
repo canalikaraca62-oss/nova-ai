@@ -212,6 +212,68 @@ void describe("No stock media is presented as the user's own", () => {
   });
 });
 
+void describe("Canvases are stored, never invented", () => {
+  const CANVAS = stripComments(read("app", "canvas", "page.tsx"));
+
+  void test("the list is not seeded with invented canvases", () => {
+    /*
+      Six fabricated canvases opened this page — "SYRAVEN Product
+      Strategy" at 82% progress with 6 collaborators — reading as a
+      populated workspace that no user had built.
+    */
+    assert.ok(
+      !/const\s+INITIAL_CANVASES\s*[:=]/.test(CANVAS),
+      "/canvas renders invented canvases as though they were real.",
+    );
+  });
+
+  void test("it opens empty and loads from the API", () => {
+    assert.match(
+      CANVAS,
+      /useState<CanvasItem\[\]>\(\[\]\)/,
+      "The list must open empty until the server answers.",
+    );
+
+    assert.match(
+      CANVAS,
+      /fetch\("\/api\/canvases"/,
+      "/canvas must load from /api/canvases, which has always existed.",
+    );
+  });
+
+  void test("the id comes from the server", () => {
+    /*
+      It used to be built from the title plus Date.now(), so the canvas
+      existed only in that tab and its Open link pointed at nothing.
+    */
+    assert.ok(
+      !/Date\.now\(\)/.test(CANVAS),
+      "A client-minted id belongs to no row.",
+    );
+
+    assert.match(CANVAS, /created/, "Creation must adopt the server row.");
+  });
+
+  void test("no column is invented", () => {
+    /*
+      public.canvases has no type, status, collaborators, progress or
+      tags column. Each of those drove a filter, a stat card or a
+      progress bar, and every value was made up.
+    */
+    for (const field of [
+      "collaborators",
+      "progress",
+      "canvas.tags",
+      "canvas.status",
+    ]) {
+      assert.ok(
+        !CANVAS.includes(field),
+        `/canvas still renders "${field}", which no column supplies.`,
+      );
+    }
+  });
+});
+
 void describe("Activity is recorded, never invented", () => {
   const ACTIVITY = stripComments(read("app", "activity", "page.tsx"));
 

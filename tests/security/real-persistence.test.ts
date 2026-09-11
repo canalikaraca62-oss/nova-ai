@@ -47,6 +47,7 @@ const TASKS = stripComments(read("app", "tasks", "page.tsx"));
 const NOTIFICATIONS = stripComments(read("app", "notifications", "page.tsx"));
 const MEMORY = stripComments(read("app", "memory", "page.tsx"));
 const WORKSPACE = stripComments(read("app", "workspace", "page.tsx"));
+const CANVAS = stripComments(read("app", "canvas", "page.tsx"));
 
 /** Pages whose mutations must reach a named endpoint. */
 const WIRED: ReadonlyArray<{
@@ -87,6 +88,17 @@ const WIRED: ReadonlyArray<{
     name: "/workspace",
     source: WORKSPACE,
     endpoint: "/api/projects",
+    methods: ["POST"],
+  },
+  {
+    /*
+     * /canvas opened on six invented canvases with fabricated progress
+     * and collaborator counts, while /api/canvases had offered full
+     * CRUD the whole time.
+     */
+    name: "/canvas",
+    source: CANVAS,
+    endpoint: "/api/canvases",
     methods: ["POST"],
   },
 ];

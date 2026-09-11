@@ -1,635 +1,362 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
-type CanvasType =
-  | "document"
-  | "research"
-  | "analysis"
-  | "presentation"
-  | "strategy"
-  | "automation";
+/*
+  SYRAVEN — Canvases
 
-type CanvasStatus = "active" | "draft" | "archived";
+  WHY THIS PAGE WAS REWRITTEN
 
-type CanvasItem = {
+  It opened on six invented canvases — "SYRAVEN Product Strategy" at 82%
+  progress with 6 collaborators, "Global Market Research" at 67% — held
+  in a module-scope array and seeded straight into useState. Creating one
+  built an id from the title plus Date.now(), invented a description,
+  two tags, one collaborator and 0% progress, and unshifted it. Archiving
+  flipped a local flag. Everything vanished on reload, and none of it had
+  ever been anyone's work.
+
+  /api/canvases has offered full CRUD the whole time: session-scoped
+  through withAuth, owner-filtered, with a tenant guard on a
+  body-supplied workspaceId.
+
+  WHAT THE TABLE ACTUALLY HAS
+
+    id, user_id, workspace_id, title, description, nodes, edges,
+    created_at, updated_at
+
+  There is no `type`, no `status`, no `collaborators`, no `progress` and
+  no `tags` column. Those five drove the type filter, the status filter,
+  the tag search, all four stat cards and both card layouts — and every
+  one of them was invented. They are gone rather than reconstructed from
+  metadata, because a number a user reads as a fact has to come from
+  somewhere real.
+
+  What replaces them is genuinely derived: a canvas's size is the count
+  of its nodes and edges, which the document actually carries, and its
+  recency is updated_at.
+*/
+
+/* -------------------------------------------------------------------------- */
+/*                                  CONTRACT                                  */
+/* -------------------------------------------------------------------------- */
+
+/** A canvas row as the API returns it. */
+interface CanvasRow {
+  id: string;
+  title: string;
+  description: string | null;
+  nodes: unknown;
+  edges: unknown;
+  updated_at: string;
+}
+
+interface CanvasItem {
   id: string;
   title: string;
   description: string;
-  type: CanvasType;
-  status: CanvasStatus;
+  /** Real: how much is on the canvas. */
+  nodeCount: number;
+  edgeCount: number;
   updatedAt: string;
-  collaborators: number;
-  progress: number;
-  tags: string[];
-};
-
-const INITIAL_CANVASES: CanvasItem[] = [
-  {
-    id: "syraven-product-strategy",
-    title: "SYRAVEN Product Strategy",
-    description:
-      "Core product direction, priorities, milestones and strategic decisions.",
-    type: "strategy",
-    status: "active",
-    updatedAt: "2 minutes ago",
-    collaborators: 6,
-    progress: 82,
-    tags: ["Strategy", "Product", "2026"],
-  },
-  {
-    id: "global-market-research",
-    title: "Global Market Research",
-    description:
-      "Research workspace for markets, competitors, opportunities and insights.",
-    type: "research",
-    status: "active",
-    updatedAt: "18 minutes ago",
-    collaborators: 4,
-    progress: 67,
-    tags: ["Research", "Market", "Insights"],
-  },
-  {
-    id: "ai-platform-architecture",
-    title: "AI Platform Architecture",
-    description:
-      "Technical architecture, AI orchestration and platform infrastructure.",
-    type: "analysis",
-    status: "active",
-    updatedAt: "1 hour ago",
-    collaborators: 8,
-    progress: 91,
-    tags: ["AI", "Architecture", "Engineering"],
-  },
-  {
-    id: "investor-presentation",
-    title: "Investor Presentation",
-    description:
-      "Executive presentation, financial narrative and company positioning.",
-    type: "presentation",
-    status: "draft",
-    updatedAt: "3 hours ago",
-    collaborators: 3,
-    progress: 54,
-    tags: ["Investor", "Finance", "Growth"],
-  },
-  {
-    id: "growth-automation",
-    title: "Growth Automation System",
-    description:
-      "Automated workflows for growth experiments and performance monitoring.",
-    type: "automation",
-    status: "draft",
-    updatedAt: "Yesterday",
-    collaborators: 5,
-    progress: 38,
-    tags: ["Automation", "Growth", "Agents"],
-  },
-  {
-    id: "knowledge-system",
-    title: "Enterprise Knowledge System",
-    description:
-      "Structured company knowledge, sources and intelligence workflows.",
-    type: "document",
-    status: "active",
-    updatedAt: "Yesterday",
-    collaborators: 9,
-    progress: 76,
-    tags: ["Knowledge", "Documents", "AI"],
-  },
-];
-
-const TYPE_META: Record<
-  CanvasType,
-  {
-    label: string;
-    icon: string;
-  }
-> = {
-  document: {
-    label: "Document",
-    icon: "▤",
-  },
-  research: {
-    label: "Research",
-    icon: "⌕",
-  },
-  analysis: {
-    label: "Analysis",
-    icon: "◈",
-  },
-  presentation: {
-    label: "Presentation",
-    icon: "▱",
-  },
-  strategy: {
-    label: "Strategy",
-    icon: "◉",
-  },
-  automation: {
-    label: "Automation",
-    icon: "⚡",
-  },
-};
-
-function formatStatus(status: CanvasStatus) {
-  if (status === "active") return "Active";
-  if (status === "draft") return "Draft";
-  return "Archived";
 }
 
+function countOf(value: unknown): number {
+  return Array.isArray(value) ? value.length : 0;
+}
+
+/**
+ * Renders a timestamp identically on the server and in the browser.
+ *
+ * toLocaleDateString() formats against the runtime's locale and
+ * timezone, which differ between the two and surface as a hydration
+ * mismatch. A fixed ISO slice is stable.
+ */
+function formatUpdatedAt(value: string): string {
+  return value.slice(0, 10);
+}
+
+function toCanvasItem(row: CanvasRow): CanvasItem {
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description ?? "No description yet.",
+    nodeCount: countOf(row.nodes),
+    edgeCount: countOf(row.edges),
+    updatedAt: row.updated_at,
+  };
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                    PAGE                                    */
+/* -------------------------------------------------------------------------- */
+
 export default function CanvasPage() {
-  const [canvases, setCanvases] =
-    useState<CanvasItem[]>(INITIAL_CANVASES);
+  const [canvases, setCanvases] = useState<CanvasItem[]>([]);
+
+  const [isLoading, setIsLoading] = useState(true);
+  const [isCreating, setIsCreating] = useState(false);
+  const [canvasError, setCanvasError] = useState<string | null>(null);
 
   const [query, setQuery] = useState("");
-  const [selectedType, setSelectedType] =
-    useState<CanvasType | "all">("all");
+  const [view, setView] = useState<"grid" | "list">("grid");
 
-  const [selectedStatus, setSelectedStatus] =
-    useState<CanvasStatus | "all">("all");
+  const [showCreatePanel, setShowCreatePanel] = useState(false);
+  const [newCanvasTitle, setNewCanvasTitle] = useState("");
 
-  const [view, setView] =
-    useState<"grid" | "list">("grid");
+  const loadCanvases = useCallback(async () => {
+    setIsLoading(true);
+    setCanvasError(null);
 
-  const [showCreatePanel, setShowCreatePanel] =
-    useState(false);
+    try {
+      const response = await fetch("/api/canvases", {
+        cache: "no-store",
+      });
 
-  const [newCanvasTitle, setNewCanvasTitle] =
-    useState("");
+      if (response.status === 401) {
+        setCanvases([]);
+        return;
+      }
 
-  const [newCanvasType, setNewCanvasType] =
-    useState<CanvasType>("document");
+      if (!response.ok) throw new Error("failed");
+
+      const payload = (await response.json()) as {
+        canvases?: CanvasRow[];
+      };
+
+      setCanvases((payload.canvases ?? []).map(toCanvasItem));
+    } catch {
+      setCanvasError("Your canvases could not be loaded.");
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void Promise.resolve().then(() => {
+      if (cancelled) return undefined;
+
+      return loadCanvases();
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [loadCanvases]);
 
   const filteredCanvases = useMemo(() => {
-    const normalizedQuery =
-      query.trim().toLowerCase();
+    const normalized = query.trim().toLowerCase();
 
-    return canvases.filter((canvas) => {
-      const matchesQuery =
-        !normalizedQuery ||
-        canvas.title
-          .toLowerCase()
-          .includes(normalizedQuery) ||
-        canvas.description
-          .toLowerCase()
-          .includes(normalizedQuery) ||
-        canvas.tags.some((tag) =>
-          tag
-            .toLowerCase()
-            .includes(normalizedQuery)
-        );
+    if (!normalized) return canvases;
 
-      const matchesType =
-        selectedType === "all" ||
-        canvas.type === selectedType;
+    return canvases.filter(
+      (canvas) =>
+        canvas.title.toLowerCase().includes(normalized) ||
+        canvas.description.toLowerCase().includes(normalized),
+    );
+  }, [canvases, query]);
 
-      const matchesStatus =
-        selectedStatus === "all" ||
-        canvas.status === selectedStatus;
-
-      return (
-        matchesQuery &&
-        matchesType &&
-        matchesStatus
-      );
-    });
-  }, [
-    canvases,
-    query,
-    selectedType,
-    selectedStatus,
-  ]);
-
+  /*
+    Every figure here is counted from rows the server returned. The
+    previous version summed an invented `collaborators` field across
+    invented canvases.
+  */
   const stats = useMemo(() => {
-    const active =
-      canvases.filter(
-        (canvas) => canvas.status === "active"
-      ).length;
-
-    const draft =
-      canvases.filter(
-        (canvas) => canvas.status === "draft"
-      ).length;
-
-    const collaborators =
-      canvases.reduce(
-        (total, canvas) =>
-          total + canvas.collaborators,
-        0
-      );
-
     return {
       total: canvases.length,
-      active,
-      draft,
-      collaborators,
+      nodes: canvases.reduce((sum, canvas) => sum + canvas.nodeCount, 0),
+      edges: canvases.reduce((sum, canvas) => sum + canvas.edgeCount, 0),
     };
   }, [canvases]);
 
-  function createCanvas() {
-    const title =
-      newCanvasTitle.trim();
+  async function createCanvas() {
+    const title = newCanvasTitle.trim();
 
-    if (!title) {
-      return;
+    if (!title || isCreating) return;
+
+    setIsCreating(true);
+    setCanvasError(null);
+
+    try {
+      /*
+        The id comes from the SERVER. It used to be built from the title
+        plus Date.now(), so the canvas existed only in this tab and the
+        "Open" link pointed at a canvas that did not exist.
+      */
+      const response = await fetch("/api/canvases", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: title }),
+      });
+
+      const payload = (await response.json().catch(() => null)) as {
+        canvas?: CanvasRow;
+      } | null;
+
+      const created = payload?.canvas;
+
+      if (!response.ok || !created) throw new Error("failed");
+
+      setCanvases((current) => [toCanvasItem(created), ...current]);
+      setNewCanvasTitle("");
+      setShowCreatePanel(false);
+    } catch {
+      setCanvasError("That canvas could not be created.");
+    } finally {
+      setIsCreating(false);
     }
-
-    const id =
-      `${title
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-|-$/g, "")}-${Date.now()}`;
-
-    const newCanvas: CanvasItem = {
-      id,
-      title,
-      description:
-        "A new intelligent workspace ready for ideas, collaboration and execution.",
-      type: newCanvasType,
-      status: "draft",
-      updatedAt: "Just now",
-      collaborators: 1,
-      progress: 0,
-      tags: [
-        TYPE_META[newCanvasType].label,
-        "New",
-      ],
-    };
-
-    setCanvases((current) => [
-      newCanvas,
-      ...current,
-    ]);
-
-    setNewCanvasTitle("");
-    setNewCanvasType("document");
-    setShowCreatePanel(false);
-  }
-
-  function archiveCanvas(id: string) {
-    setCanvases((current) =>
-      current.map((canvas) =>
-        canvas.id === id
-          ? {
-              ...canvas,
-              status:
-                canvas.status === "archived"
-                  ? "active"
-                  : "archived",
-            }
-          : canvas
-      )
-    );
   }
 
   return (
     <div className="bg-background text-foreground">
-      <div className="mx-auto w-full max-w-[1600px] px-4 py-5 sm:px-6 lg:px-10 lg:py-8">
-        {/* HEADER */}
+      <div className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        {/* Header */}
+        <header className="flex flex-col gap-6 border-b border-white/[0.07] pb-8 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <h1 className="text-3xl font-semibold tracking-tight">
+              Canvases
+            </h1>
 
-        <section className="rounded-[28px] border border-white/10 bg-gradient-to-br from-white/[0.07] via-white/[0.025] to-transparent p-5 shadow-2xl shadow-black/30 backdrop-blur-xl sm:p-7 lg:p-8">
-          <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
-            <div className="max-w-3xl">
-              <div className="mb-5 flex items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-cyan-400/20 bg-cyan-400/10 text-xl text-cyan-200 shadow-lg shadow-cyan-950/20">
-                  ◈
-                </div>
-
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-cyan-300/70">
-                    SYRAVEN Workspace
-                  </p>
-
-                  <p className="mt-1 text-sm text-foreground/40">
-                    Intelligent creation environment
-                  </p>
-                </div>
-              </div>
-
-              <h1 className="text-3xl font-semibold tracking-tight text-foreground sm:text-5xl">
-                Canvas
-              </h1>
-
-              <p className="mt-4 max-w-2xl text-sm leading-7 text-foreground/55 sm:text-base">
-                Build, organize and evolve your most
-                important ideas inside a unified
-                intelligent workspace. Every canvas can
-                become a document, research system,
-                strategy, analysis, presentation or
-                automated execution environment.
-              </p>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-3">
-              {/*
-                Phase 12: this was a Link to /canvas/new, a route that
-                does not exist — the primary CTA on this page returned a
-                404. Canvases are created by the panel below (see
-                `createCanvas`), which the adjacent "Quick Create" button
-                already opens, so this now opens the same panel rather
-                than navigating nowhere.
-              */}
-              <button
-                type="button"
-                onClick={() => setShowCreatePanel(true)}
-                className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white px-4 py-3 text-sm font-semibold text-black transition hover:scale-[1.02] hover:bg-white/90 active:scale-[0.98]"
-              >
-                <span className="text-lg leading-none">
-                  +
-                </span>
-                New Canvas
-              </button>
-
-              <button
-                type="button"
-                onClick={() =>
-                  setShowCreatePanel((value) => !value)
-                }
-                className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-medium text-foreground/75 transition hover:border-white/20 hover:bg-white/[0.08] hover:text-foreground"
-              >
-                Quick Create
-              </button>
-            </div>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-foreground/50">
+              Spatial workspaces for thinking through a problem — notes,
+              connections and structure on one surface.
+            </p>
           </div>
 
-          <div className="mt-8 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <StatCard
-              label="Total Canvases"
-              value={stats.total}
-              description="Across your workspace"
-            />
+          <button
+            type="button"
+            onClick={() => setShowCreatePanel((value) => !value)}
+            className="inline-flex h-11 shrink-0 items-center justify-center rounded-xl bg-primary px-5 text-sm font-semibold text-primary-foreground transition hover:opacity-90"
+          >
+            New canvas
+          </button>
+        </header>
 
-            <StatCard
-              label="Active"
-              value={stats.active}
-              description="Currently evolving"
-            />
-
-            <StatCard
-              label="Drafts"
-              value={stats.draft}
-              description="Ready for refinement"
-            />
-
-            <StatCard
-              label="Collaboration"
-              value={stats.collaborators}
-              description="Workspace participants"
-            />
-          </div>
-        </section>
-
-        {/* QUICK CREATE */}
-
+        {/* Create */}
         {showCreatePanel ? (
-          <section className="mt-6 overflow-hidden rounded-[24px] border border-cyan-400/15 bg-cyan-400/[0.035]">
-            <div className="grid gap-5 p-5 lg:grid-cols-[1fr_220px_auto] lg:items-end">
-              <label className="block">
-                <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-foreground/40">
-                  Canvas title
-                </span>
+          <div className="mt-6 rounded-2xl border border-border bg-card p-5">
+            <label
+              htmlFor="canvas-title"
+              className="text-sm font-medium"
+            >
+              Canvas name
+            </label>
 
-                <input
-                  value={newCanvasTitle}
-                  onChange={(event) =>
-                    setNewCanvasTitle(
-                      event.target.value
-                    )
-                  }
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      createCanvas();
-                    }
-                  }}
-                  placeholder="Example: Global Expansion Strategy"
-                  className="h-12 w-full rounded-xl border border-white/10 bg-black/20 px-4 text-sm text-foreground outline-none transition placeholder:text-foreground/25 focus:border-cyan-400/40 focus:bg-black/30"
-                />
-              </label>
-
-              <label className="block">
-                <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-foreground/40">
-                  Workspace type
-                </span>
-
-                <select
-                  value={newCanvasType}
-                  onChange={(event) =>
-                    setNewCanvasType(
-                      event.target
-                        .value as CanvasType
-                    )
-                  }
-                  className="h-12 w-full rounded-xl border border-white/10 bg-background px-4 text-sm text-foreground outline-none"
-                >
-                  {(
-                    Object.keys(
-                      TYPE_META
-                    ) as CanvasType[]
-                  ).map((type) => (
-                    <option
-                      key={type}
-                      value={type}
-                    >
-                      {TYPE_META[type].label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <button
-                type="button"
-                onClick={createCanvas}
-                className="h-12 rounded-xl bg-cyan-300 px-5 text-sm font-bold text-black transition hover:bg-cyan-200 active:scale-[0.98]"
-              >
-                Create Canvas
-              </button>
-            </div>
-          </section>
-        ) : null}
-
-        {/* TOOLBAR */}
-
-        <section className="mt-6 rounded-[24px] border border-white/[0.08] bg-white/[0.025] p-4 sm:p-5">
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-            <div className="flex flex-1 flex-col gap-3 lg:flex-row">
-              <div className="relative min-w-0 flex-1">
-                <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm text-foreground/35">
-                  ⌕
-                </span>
-
-                <input
-                  value={query}
-                  onChange={(event) =>
-                    setQuery(event.target.value)
-                  }
-                  placeholder="Search canvases, tags and ideas..."
-                  className="h-12 w-full rounded-xl border border-white/10 bg-black/20 pl-11 pr-4 text-sm text-foreground outline-none transition placeholder:text-foreground/25 focus:border-white/25"
-                />
-              </div>
-
-              <select
-                value={selectedType}
-                onChange={(event) =>
-                  setSelectedType(
-                    event.target
-                      .value as CanvasType | "all"
-                  )
-                }
-                className="h-12 rounded-xl border border-white/10 bg-background px-4 text-sm text-foreground/70 outline-none"
-              >
-                <option value="all">
-                  All types
-                </option>
-
-                {(
-                  Object.keys(
-                    TYPE_META
-                  ) as CanvasType[]
-                ).map((type) => (
-                  <option
-                    key={type}
-                    value={type}
-                  >
-                    {TYPE_META[type].label}
-                  </option>
-                ))}
-              </select>
-
-              <select
-                value={selectedStatus}
-                onChange={(event) =>
-                  setSelectedStatus(
-                    event.target
-                      .value as
-                        | CanvasStatus
-                        | "all"
-                  )
-                }
-                className="h-12 rounded-xl border border-white/10 bg-background px-4 text-sm text-foreground/70 outline-none"
-              >
-                <option value="all">
-                  All status
-                </option>
-
-                <option value="active">
-                  Active
-                </option>
-
-                <option value="draft">
-                  Draft
-                </option>
-
-                <option value="archived">
-                  Archived
-                </option>
-              </select>
-            </div>
-
-            <div className="flex items-center gap-2 self-end xl:self-auto">
-              <button
-                type="button"
-                onClick={() => setView("grid")}
-                className={`rounded-xl px-4 py-3 text-sm transition ${
-                  view === "grid"
-                    ? "bg-white text-black"
-                    : "border border-white/10 bg-white/[0.03] text-white/55 hover:bg-white/[0.07]"
-                }`}
-              >
-                Grid
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setView("list")}
-                className={`rounded-xl px-4 py-3 text-sm transition ${
-                  view === "list"
-                    ? "bg-white text-black"
-                    : "border border-white/10 bg-white/[0.03] text-white/55 hover:bg-white/[0.07]"
-                }`}
-              >
-                List
-              </button>
-            </div>
-          </div>
-        </section>
-
-        {/* RESULTS */}
-
-        <section className="mt-5">
-          <div className="mb-4 flex items-center justify-between">
-            <div>
-              <h2 className="text-lg font-semibold">
-                Your Canvases
-              </h2>
-
-              <p className="mt-1 text-sm text-foreground/40">
-                {filteredCanvases.length} workspace
-                {filteredCanvases.length === 1
-                  ? ""
-                  : "s"}{" "}
-                found
-              </p>
-            </div>
-
-            {/*
-              Phase 12: this linked to /search?scope=canvas, a page that
-              does not exist — there is no global search route, only
-              /projects/search. The link is removed rather than
-              repointed: this page already has its own search and filter
-              controls in the toolbar below, so an "Advanced search"
-              affordance that goes nowhere is a false promise (rule 24),
-              and /projects/search would take the user out of Canvas to
-              a scope that does not cover it.
-            */}
-          </div>
-
-          {filteredCanvases.length === 0 ? (
-            <div className="rounded-[28px] border border-dashed border-white/15 bg-white/[0.02] px-6 py-20 text-center">
-              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-2xl text-foreground/50">
-                ◈
-              </div>
-
-              <h3 className="mt-5 text-lg font-semibold">
-                No canvases found
-              </h3>
-
-              <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-foreground/40">
-                Try changing your filters or create a
-                new intelligent workspace.
-              </p>
+            <div className="mt-3 flex flex-col gap-3 sm:flex-row">
+              <input
+                id="canvas-title"
+                value={newCanvasTitle}
+                onChange={(event) => setNewCanvasTitle(event.target.value)}
+                placeholder="What are you working through?"
+                className="h-11 w-full rounded-xl border border-border bg-background px-4 text-sm outline-none transition focus:border-primary/40 focus:ring-2 focus:ring-primary/20"
+              />
 
               <button
                 type="button"
                 onClick={() => {
-                  setQuery("");
-                  setSelectedType("all");
-                  setSelectedStatus("all");
+                  void createCanvas();
                 }}
-                className="mt-6 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm text-foreground/70 transition hover:bg-white/[0.08]"
+                disabled={isCreating || !newCanvasTitle.trim()}
+                className="h-11 shrink-0 rounded-xl bg-primary px-5 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Reset filters
+                {isCreating ? "Creating..." : "Create"}
               </button>
             </div>
+          </div>
+        ) : null}
+
+        {/* Error */}
+        {canvasError ? (
+          <div
+            role="alert"
+            className="mt-6 rounded-2xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive"
+          >
+            {canvasError}
+          </div>
+        ) : null}
+
+        {/* Stats */}
+        <section className="mt-8 grid gap-4 sm:grid-cols-3">
+          <StatCard label="Canvases" value={stats.total} />
+          <StatCard label="Nodes" value={stats.nodes} />
+          <StatCard label="Connections" value={stats.edges} />
+        </section>
+
+        {/* Controls */}
+        <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search canvases..."
+            aria-label="Search canvases"
+            className="h-11 w-full rounded-xl border border-border bg-card px-4 text-sm outline-none transition focus:border-primary/40 focus:ring-2 focus:ring-primary/20 sm:max-w-sm"
+          />
+
+          <div className="flex shrink-0 items-center gap-1 rounded-xl border border-border bg-card p-1">
+            {(["grid", "list"] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setView(mode)}
+                aria-pressed={view === mode}
+                className={`h-9 rounded-lg px-4 text-xs font-medium capitalize transition ${
+                  view === mode
+                    ? "bg-primary text-primary-foreground"
+                    : "text-foreground/50 hover:text-foreground"
+                }`}
+              >
+                {mode}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Results */}
+        <section className="mt-6">
+          {isLoading ? (
+            <div
+              role="status"
+              aria-live="polite"
+              className="flex min-h-[280px] items-center justify-center rounded-2xl border border-dashed border-border bg-card/40 text-sm text-foreground/50"
+            >
+              Loading your canvases...
+            </div>
+          ) : filteredCanvases.length === 0 ? (
+            <div className="flex min-h-[280px] flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-card/40 px-6 text-center">
+              <h2 className="text-lg font-semibold">
+                {canvases.length === 0
+                  ? "No canvases yet"
+                  : "No canvases found"}
+              </h2>
+
+              <p className="mt-2 max-w-sm text-sm leading-6 text-foreground/50">
+                {canvases.length === 0
+                  ? "Create one to start mapping out a problem."
+                  : "Try a different search."}
+              </p>
+
+              {canvases.length === 0 ? (
+                <button
+                  type="button"
+                  onClick={() => setShowCreatePanel(true)}
+                  className="mt-5 text-sm font-medium text-primary hover:underline"
+                >
+                  Create your first canvas
+                </button>
+              ) : null}
+            </div>
           ) : view === "grid" ? (
-            <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {filteredCanvases.map((canvas) => (
-                <CanvasCard
-                  key={canvas.id}
-                  canvas={canvas}
-                  onArchive={archiveCanvas}
-                />
+                <CanvasCard key={canvas.id} canvas={canvas} />
               ))}
             </div>
           ) : (
-            <div className="overflow-hidden rounded-[24px] border border-white/[0.08] bg-white/[0.025]">
+            <div className="rounded-2xl border border-border bg-card">
               {filteredCanvases.map((canvas) => (
-                <CanvasListItem
-                  key={canvas.id}
-                  canvas={canvas}
-                  onArchive={archiveCanvas}
-                />
+                <CanvasListItem key={canvas.id} canvas={canvas} />
               ))}
             </div>
           )}
@@ -639,229 +366,92 @@ export default function CanvasPage() {
   );
 }
 
-function StatCard({
-  label,
-  value,
-  description,
-}: {
-  label: string;
-  value: number;
-  description: string;
-}) {
+/* -------------------------------------------------------------------------- */
+/*                                 SUBVIEWS                                   */
+/* -------------------------------------------------------------------------- */
+
+function StatCard({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-2xl border border-white/[0.07] bg-black/15 p-4">
-      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-foreground/35">
-        {label}
-      </p>
-
-      <p className="mt-3 text-3xl font-semibold tracking-tight">
-        {value}
-      </p>
-
-      <p className="mt-1 text-xs text-foreground/35">
-        {description}
-      </p>
+    <div className="rounded-2xl border border-border bg-card p-5">
+      <p className="text-sm text-foreground/50">{label}</p>
+      <p className="mt-3 text-3xl font-semibold">{value}</p>
     </div>
   );
 }
 
-function CanvasCard({
-  canvas,
-  onArchive,
-}: {
-  canvas: CanvasItem;
-  onArchive: (id: string) => void;
-}) {
-  const type = TYPE_META[canvas.type];
-
+/** What a canvas actually contains, counted from its document. */
+function CanvasSize({ canvas }: { canvas: CanvasItem }) {
   return (
-    <article className="group relative overflow-hidden rounded-[26px] border border-white/[0.08] bg-gradient-to-br from-white/[0.055] to-transparent p-5 transition duration-300 hover:-translate-y-1 hover:border-white/15 hover:bg-white/[0.06]">
-      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-300/40 to-transparent opacity-0 transition group-hover:opacity-100" />
+    <span className="text-xs text-foreground/40">
+      {canvas.nodeCount} node{canvas.nodeCount === 1 ? "" : "s"}
+      {" · "}
+      {canvas.edgeCount} connection{canvas.edgeCount === 1 ? "" : "s"}
+    </span>
+  );
+}
 
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-lg text-cyan-200">
-            {type.icon}
-          </div>
+function CanvasCard({ canvas }: { canvas: CanvasItem }) {
+  return (
+    <article className="group flex flex-col rounded-2xl border border-border bg-card p-5 transition-all duration-300 hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-lg">
+      <h3 className="truncate text-base font-semibold">{canvas.title}</h3>
 
-          <div className="min-w-0">
-            <p className="text-xs font-medium text-foreground/35">
-              {type.label}
-            </p>
-
-            <h3 className="mt-1 truncate text-base font-semibold text-foreground">
-              {canvas.title}
-            </h3>
-          </div>
-        </div>
-
-        <span
-          className={`shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${
-            canvas.status === "active"
-              ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-300"
-              : canvas.status === "draft"
-                ? "border-amber-400/20 bg-amber-400/10 text-amber-200"
-                : "border-white/10 bg-white/[0.04] text-white/40"
-          }`}
-        >
-          {formatStatus(canvas.status)}
-        </span>
-      </div>
-
-      <p className="mt-5 min-h-[72px] text-sm leading-6 text-foreground/50">
+      <p className="mt-3 line-clamp-3 min-h-[60px] text-sm leading-6 text-foreground/50">
         {canvas.description}
       </p>
 
-      <div className="mt-5 flex flex-wrap gap-2">
-        {canvas.tags.map((tag) => (
-          <span
-            key={tag}
-            className="rounded-lg border border-white/[0.07] bg-black/15 px-2.5 py-1 text-[11px] text-foreground/40"
+      <div className="mt-5 flex items-center justify-between border-t border-border pt-4">
+        <div className="flex flex-col gap-1">
+          <CanvasSize canvas={canvas} />
+
+          <time
+            dateTime={canvas.updatedAt}
+            className="text-xs text-foreground/35"
           >
-            {tag}
-          </span>
-        ))}
-      </div>
-
-      <div className="mt-6">
-        <div className="flex items-center justify-between text-xs">
-          <span className="text-foreground/35">
-            Workspace progress
-          </span>
-
-          <span className="font-semibold text-foreground/70">
-            {canvas.progress}%
-          </span>
+            Updated {formatUpdatedAt(canvas.updatedAt)}
+          </time>
         </div>
 
-        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.06]">
-          <div
-            className="h-full rounded-full bg-gradient-to-r from-cyan-400 to-blue-400"
-            style={{
-              width: `${canvas.progress}%`,
-            }}
-          />
-        </div>
-      </div>
-
-      <div className="mt-6 flex items-center justify-between border-t border-white/[0.07] pt-4">
-        <div>
-          <p className="text-xs text-foreground/35">
-            Updated {canvas.updatedAt}
-          </p>
-
-          <p className="mt-1 text-xs text-foreground/55">
-            {canvas.collaborators} collaborator
-            {canvas.collaborators === 1 ? "" : "s"}
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() =>
-              onArchive(canvas.id)
-            }
-            className="rounded-lg border border-white/10 px-3 py-2 text-xs text-foreground/45 transition hover:bg-white/[0.07] hover:text-foreground"
-          >
-            {canvas.status === "archived"
-              ? "Restore"
-              : "Archive"}
-          </button>
-
-          <Link
-            href={`/canvas/${encodeURIComponent(
-              canvas.id
-            )}`}
-            className="rounded-lg bg-white px-3 py-2 text-xs font-semibold text-black transition hover:bg-cyan-200"
-          >
-            Open →
-          </Link>
-        </div>
+        <Link
+          href={`/canvas/${encodeURIComponent(canvas.id)}`}
+          className="shrink-0 rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground transition hover:opacity-90"
+        >
+          Open →
+        </Link>
       </div>
     </article>
   );
 }
 
-function CanvasListItem({
-  canvas,
-  onArchive,
-}: {
-  canvas: CanvasItem;
-  onArchive: (id: string) => void;
-}) {
-  const type = TYPE_META[canvas.type];
-
+function CanvasListItem({ canvas }: { canvas: CanvasItem }) {
   return (
-    <article className="flex flex-col gap-4 border-b border-white/[0.07] p-5 last:border-b-0 lg:flex-row lg:items-center lg:justify-between">
-      <div className="flex min-w-0 items-start gap-4">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-lg text-cyan-200">
-          {type.icon}
-        </div>
+    <article className="flex flex-col gap-4 border-b border-border p-5 last:border-b-0 lg:flex-row lg:items-center lg:justify-between">
+      <div className="min-w-0">
+        <h3 className="font-semibold">{canvas.title}</h3>
 
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="font-semibold">
-              {canvas.title}
-            </h3>
+        <p className="mt-1 truncate text-sm text-foreground/40">
+          {canvas.description}
+        </p>
 
-            <span className="rounded-full border border-white/10 px-2 py-0.5 text-[10px] uppercase tracking-wider text-foreground/40">
-              {formatStatus(canvas.status)}
-            </span>
-          </div>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <CanvasSize canvas={canvas} />
 
-          <p className="mt-1 truncate text-sm text-foreground/40">
-            {canvas.description}
-          </p>
+          <span className="text-xs text-foreground/35">·</span>
 
-          <div className="mt-2 flex flex-wrap gap-2 text-xs text-foreground/35">
-            <span>{type.label}</span>
-            <span>•</span>
-            <span>{canvas.updatedAt}</span>
-            <span>•</span>
-            <span>{canvas.collaborators} collaborators</span>
-          </div>
+          <time
+            dateTime={canvas.updatedAt}
+            className="text-xs text-foreground/35"
+          >
+            {formatUpdatedAt(canvas.updatedAt)}
+          </time>
         </div>
       </div>
 
-      <div className="flex shrink-0 items-center gap-2">
-        <div className="mr-2 hidden w-28 lg:block">
-          <div className="mb-1 flex justify-between text-[10px] text-foreground/35">
-            <span>Progress</span>
-            <span>{canvas.progress}%</span>
-          </div>
-
-          <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.06]">
-            <div
-              className="h-full rounded-full bg-cyan-400"
-              style={{
-                width: `${canvas.progress}%`,
-              }}
-            />
-          </div>
-        </div>
-
-        <button
-          type="button"
-          onClick={() =>
-            onArchive(canvas.id)
-          }
-          className="rounded-lg border border-white/10 px-3 py-2 text-xs text-foreground/45 transition hover:bg-white/[0.07] hover:text-foreground"
-        >
-          {canvas.status === "archived"
-            ? "Restore"
-            : "Archive"}
-        </button>
-
-        <Link
-          href={`/canvas/${encodeURIComponent(
-            canvas.id
-          )}`}
-          className="rounded-lg bg-white px-3 py-2 text-xs font-semibold text-black transition hover:bg-cyan-200"
-        >
-          Open
-        </Link>
-      </div>
+      <Link
+        href={`/canvas/${encodeURIComponent(canvas.id)}`}
+        className="shrink-0 self-start rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground transition hover:opacity-90 lg:self-auto"
+      >
+        Open
+      </Link>
     </article>
   );
 }
