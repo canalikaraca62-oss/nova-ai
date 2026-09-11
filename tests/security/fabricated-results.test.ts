@@ -212,6 +212,63 @@ void describe("No stock media is presented as the user's own", () => {
   });
 });
 
+void describe("A security log is never invented", () => {
+  const PRIVACY = stripComments(read("app", "privacy", "activity", "page.tsx"));
+
+  void test("the log is not seeded", () => {
+    /*
+      The worst surface in the product to fabricate. A person reads a
+      security log to decide whether someone else has been in their
+      account: an invented sign-in from an unfamiliar device causes real
+      alarm, and an invented quiet log hides a real intrusion.
+    */
+    assert.ok(
+      !/const\s+ACTIVITIES\s*[:=]/.test(PRIVACY),
+      "/privacy/activity renders invented security events.",
+    );
+  });
+
+  void test("it opens empty", () => {
+    assert.match(
+      PRIVACY,
+      /useState<PrivacyActivity\[\]>\(\[\]\)/,
+      "The log must be empty until real events are recorded.",
+    );
+  });
+});
+
+void describe("A team roster is never invented", () => {
+  const TEAM = stripComments(read("app", "teams", "[id]", "page.tsx"));
+
+  void test("members are not minted client-side", () => {
+    /*
+      Inviting used to mint an id from Date.now() and append to local
+      state under an \"invited\" badge. No invitation was ever sent, and
+      there is no team_members table to hold one.
+    */
+    assert.ok(
+      !/Date\.now\(\)/.test(TEAM),
+      "/teams/[id] mints a member id that belongs to no row.",
+    );
+  });
+
+  void test("the roster is not seeded from an invented array", () => {
+    assert.ok(
+      /*
+        Catches the DECLARATION, not just a call.
+
+        The first version matched only `setMembers(`, so a page could
+        declare `const [members, setMembers] = useState(...)` — a fully
+        mutable roster — and pass, because the destructured name is
+        followed by `]` rather than `(`. Verified: reintroducing exactly
+        that left the guard green.
+      */
+      !/\bsetMembers\b/.test(TEAM),
+      "A locally mutated roster is an invitation nobody received.",
+    );
+  });
+});
+
 void describe("Canvases are stored, never invented", () => {
   const CANVAS = stripComments(read("app", "canvas", "page.tsx"));
 

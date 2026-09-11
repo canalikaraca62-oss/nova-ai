@@ -214,10 +214,21 @@ export default function TeamDetailPage() {
     "overview" | "members" | "activity"
   >("overview");
 
-  const [members, setMembers] = useState<TeamMember[]>(() => {
-    const team = teams.find((item) => item.id === teamId);
-    return team?.members ?? [];
-  });
+  /*
+    MEMBERSHIP IS NOT STORED.
+
+    This seeded from the same invented roster /teams carried — people
+    with @syraven.ai addresses who never existed. Inviting minted an id
+    from Date.now() and pushed to local state; removing filtered it out.
+    Both vanished on reload, and no invitation was ever sent.
+
+    There is no team_members table. An invitation is not an array entry
+    either: it is an email to someone who may not hold an account, with
+    a token, an expiry and an acceptance step. organization_invites
+    models exactly that at the organisation level, so the roster is gone
+    rather than reconstructed in a weaker form.
+  */
+  const members: TeamMember[] = [];
 
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteName, setInviteName] = useState("");
@@ -255,49 +266,15 @@ export default function TeamDetailPage() {
     );
   }
 
-  function addMember() {
-    const name = inviteName.trim();
-    const email = inviteEmail.trim();
+  /*
+    Invitation is not implemented. It used to mint an id from Date.now()
+    and append to local state under an "invited" badge — an invitation
+    nobody was ever sent.
+  */
 
-    if (!name || !email) {
-      return;
-    }
-
-    const initials = name
-      .split(" ")
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((part) => part.charAt(0).toUpperCase())
-      .join("");
-
-    const newMember: TeamMember = {
-      id: `${Date.now()}`,
-      name,
-      email,
-      role: inviteRole,
-      initials: initials || "NM",
-      status: "invited",
-    };
-
-    setMembers((current) => [...current, newMember]);
-
-    setInviteName("");
-    setInviteEmail("");
-    setInviteRole("Member");
-    setInviteOpen(false);
-  }
-
-  function removeMember(memberId: string) {
-    const member = members.find((item) => item.id === memberId);
-
-    if (member?.role === "Owner") {
-      return;
-    }
-
-    setMembers((current) =>
-      current.filter((member) => member.id !== memberId)
-    );
-  }
+    /*
+    Removal is not implemented either, for the same reason.
+  */
 
   return (
     <div className="bg-background text-foreground">
@@ -684,15 +661,7 @@ export default function TeamDetailPage() {
                       {member.role}
                     </span>
 
-                    {member.role !== "Owner" && (
-                      <button
-                        type="button"
-                        onClick={() => removeMember(member.id)}
-                        className="rounded-lg px-3 py-2 text-xs text-foreground/40 transition hover:bg-red-500/10 hover:text-red-300"
-                      >
-                        Remove
-                      </button>
-                    )}
+
                   </div>
                 </div>
               ))}
@@ -826,6 +795,14 @@ export default function TeamDetailPage() {
               </div>
 
               <div className="flex justify-end gap-3 pt-2">
+                <p
+                  id="team-invite-availability"
+                  className="mr-auto text-xs leading-5 text-foreground/40"
+                >
+                  Team invitations are not available yet. Membership is
+                  managed for the organisation.
+                </p>
+
                 <button
                   type="button"
                   onClick={() => setInviteOpen(false)}
@@ -836,8 +813,9 @@ export default function TeamDetailPage() {
 
                 <button
                   type="button"
-                  onClick={addMember}
-                  className="rounded-xl bg-white px-5 py-2.5 text-sm font-semibold text-black transition hover:bg-white/90"
+                  disabled
+                  aria-describedby="team-invite-availability"
+                  className="cursor-not-allowed rounded-xl bg-white px-5 py-2.5 text-sm font-semibold text-black opacity-60"
                 >
                   Send invitation
                 </button>

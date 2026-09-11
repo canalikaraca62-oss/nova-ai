@@ -41,74 +41,25 @@ interface PrivacyActivity {
   status: "success" | "info";
 }
 
-const ACTIVITIES: PrivacyActivity[] = [
-  {
-    id: "activity-1",
-    title: "Successful account sign in",
-    description:
-      "Your SYRAVEN account was successfully accessed.",
-    type: "security",
-    timestamp: "Today, 10:42",
-    location: "Current session",
-    device: "Desktop browser",
-    status: "success",
-  },
-  {
-    id: "activity-2",
-    title: "Privacy preferences updated",
-    description:
-      "Your workspace privacy and communication preferences were changed.",
-    type: "privacy",
-    timestamp: "Today, 09:18",
-    status: "success",
-  },
-  {
-    id: "activity-3",
-    title: "Workspace knowledge accessed",
-    description:
-      "A knowledge resource was opened from your workspace.",
-    type: "workspace",
-    timestamp: "Yesterday, 16:24",
-    status: "info",
-  },
-  {
-    id: "activity-4",
-    title: "Password security check",
-    description:
-      "Your account security configuration was reviewed.",
-    type: "security",
-    timestamp: "Yesterday, 11:08",
-    device: "Desktop browser",
-    status: "success",
-  },
-  {
-    id: "activity-5",
-    title: "Profile information updated",
-    description:
-      "Account profile information was modified.",
-    type: "account",
-    timestamp: "2 days ago",
-    status: "success",
-  },
-  {
-    id: "activity-6",
-    title: "Workspace member permissions changed",
-    description:
-      "Workspace collaboration permissions were updated.",
-    type: "workspace",
-    timestamp: "3 days ago",
-    status: "info",
-  },
-  {
-    id: "activity-7",
-    title: "Data export requested",
-    description:
-      "A request to prepare workspace information for export was created.",
-    type: "privacy",
-    timestamp: "5 days ago",
-    status: "info",
-  },
-];
+/*
+ * THE SECURITY LOG IS NOT SEEDED.
+ *
+ * Five invented events opened this page as though they were the
+ * account's own history: "Successful account sign in ... Today,
+ * 10:42 ... Desktop browser", a privacy-preferences change, a data
+ * export. None of it had happened.
+ *
+ * This is the worst surface in the product to fabricate. A person reads
+ * a security log to decide whether someone else has been in their
+ * account. An invented "successful sign in" from an unfamiliar device
+ * would cause real alarm; an invented quiet log would hide a real one.
+ *
+ * public.audit_logs and public.system_events exist, but no route
+ * exposes them and there is no /api/privacy. So the honest state is
+ * empty, and the page says the log is not being recorded yet rather
+ * than showing a reassuring fiction.
+ */
+
 
 function ActivityIcon({
   type,
@@ -166,7 +117,7 @@ export default function PrivacyActivityPage() {
     useState("");
 
   const [activities, setActivities] =
-    useState<PrivacyActivity[]>(ACTIVITIES);
+    useState<PrivacyActivity[]>([]);
 
   const filteredActivities = useMemo(() => {
     const query =
