@@ -14,7 +14,6 @@ import {
   Database,
   Filter,
   Loader2,
-  MoreHorizontal,
   Pin,
   Plus,
   Search,
@@ -709,13 +708,13 @@ export default function MemoryPage() {
                           <Trash2 className="h-4 w-4" />
                         </button>
 
-                        <button
-                          type="button"
-                          aria-label="More options"
-                          className="flex h-9 w-9 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                        >
-                          <MoreHorizontal className="h-4 w-4" />
-                        </button>
+                        {/*
+                          Removed rather than disabled: "more options"
+                          named no options. Edit, pin and delete are
+                          already present on this row, so an overflow
+                          menu with nothing behind it was an affordance
+                          promising a menu that was never written.
+                        */}
                       </div>
                     </div>
 

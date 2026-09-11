@@ -1967,13 +1967,32 @@ Never invent sources or pretend to have completed an action you did not perform.
                   )}
                 </div>
 
+                {/*
+                  Disabled because there is nothing to converse with
+                  yet. This is the preview beside the create form: the
+                  agent does not exist until the form is submitted, and
+                  on success the page navigates to /agents rather than
+                  keeping an id here. Wiring this needs the created
+                  agent's id, which this screen never holds.
+                */}
+                <p
+                  id="agent-preview-conversation-availability"
+                  className="mt-5 text-xs leading-5 text-zinc-500"
+                >
+                  Create the agent first — you can start a conversation
+                  with it from the agent's own page.
+                </p>
+
                 <button
                   type="button"
+                  disabled
+                  aria-describedby="agent-preview-conversation-availability"
                   className="
-                    mt-5
+                    mt-3
                     flex
                     h-11
                     w-full
+                    cursor-not-allowed
                     items-center
                     justify-center
                     gap-2
@@ -1982,6 +2001,7 @@ Never invent sources or pretend to have completed an action you did not perform.
                     text-sm
                     font-semibold
                     text-black
+                    opacity-60
                   "
                 >
                   <MessageSquare

@@ -218,8 +218,10 @@ export default function ProfilePage() {
 
                       <button
                         type="button"
-                        className="absolute -bottom-2 -right-2 flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-card text-foreground shadow-sm transition-colors hover:bg-muted"
+                        disabled
                         aria-label="Change profile picture"
+                        aria-describedby="profile-photo-availability"
+                        className="absolute -bottom-2 -right-2 flex h-9 w-9 cursor-not-allowed items-center justify-center rounded-xl border border-border bg-card text-foreground opacity-60 shadow-sm"
                       >
                         <Camera className="h-4 w-4" />
                       </button>
@@ -230,13 +232,19 @@ export default function ProfilePage() {
                         Profile photo
                       </h3>
 
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        Upload a profile image for your SYRAVEN account.
+                      <p
+                        id="profile-photo-availability"
+                        className="mt-1 text-sm text-muted-foreground"
+                      >
+                        Photo upload is not available yet. Your initials
+                        stand in for now.
                       </p>
 
                       <button
                         type="button"
-                        className="mt-3 text-sm font-medium text-primary hover:underline"
+                        disabled
+                        aria-describedby="profile-photo-availability"
+                        className="mt-3 cursor-not-allowed text-sm font-medium text-primary opacity-60"
                       >
                         Upload new photo
                       </button>
@@ -387,14 +395,21 @@ export default function ProfilePage() {
                           Password
                         </h3>
 
-                        <p className="mt-1 text-sm text-muted-foreground">
-                          Last updated recently.
+                        <p
+                          id="profile-password-availability"
+                          className="mt-1 text-sm text-muted-foreground"
+                        >
+                          Changing your password from here is not
+                          available yet. Use the password reset link on
+                          the sign-in page.
                         </p>
                       </div>
 
                       <button
                         type="button"
-                        className="inline-flex h-10 items-center justify-center rounded-xl border border-border px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+                        disabled
+                        aria-describedby="profile-password-availability"
+                        className="inline-flex h-10 cursor-not-allowed items-center justify-center rounded-xl border border-border px-4 text-sm font-medium text-foreground opacity-60"
                       >
                         Change password
                       </button>
@@ -406,14 +421,21 @@ export default function ProfilePage() {
                           Two-factor authentication
                         </h3>
 
-                        <p className="mt-1 text-sm text-muted-foreground">
-                          Add an additional layer of account security.
+                        <p
+                          id="profile-2fa-availability"
+                          className="mt-1 text-sm text-muted-foreground"
+                        >
+                          Two-factor authentication is not available
+                          yet. This account is protected by its
+                          password alone.
                         </p>
                       </div>
 
                       <button
                         type="button"
-                        className="inline-flex h-10 items-center justify-center rounded-xl bg-primary px-4 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
+                        disabled
+                        aria-describedby="profile-2fa-availability"
+                        className="inline-flex h-10 cursor-not-allowed items-center justify-center rounded-xl bg-primary px-4 text-sm font-medium text-primary-foreground opacity-60"
                       >
                         Set up
                       </button>

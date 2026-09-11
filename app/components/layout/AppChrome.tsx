@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useCallback, useState, type ReactNode } from "react";
 
 import AppShell from "./AppShell";
 import DesktopSidebar from "./DesktopSidebar";
@@ -56,17 +56,38 @@ export default function AppChrome({
 }: {
   children: ReactNode;
 }) {
+  /*
+    The palette's open state lives here because two things open it: the
+    global Cmd/Ctrl+K listener inside CommandPalette, and the sidebar's
+    visible trigger. That trigger was a button with no handler, so the
+    shortcut worked and the thing advertising the shortcut did not.
+
+    Controlled rather than synthetic: dispatching a fake keydown would
+    have worked and would have been a lie about how the two are
+    connected.
+  */
+  const [paletteOpen, setPaletteOpen] = useState(false);
+
+  const openPalette = useCallback(() => {
+    setPaletteOpen(true);
+  }, []);
+
   return (
     <>
       <AppShell
-        sidebar={<DesktopSidebar />}
+        sidebar={
+          <DesktopSidebar onOpenCommandPalette={openPalette} />
+        }
         mobileNav={<MobileNav />}
       >
         {children}
       </AppShell>
 
       {/* Cmd/Ctrl+K, global. Every destination it offers resolves. */}
-      <CommandPalette />
+      <CommandPalette
+        open={paletteOpen}
+        onOpenChange={setPaletteOpen}
+      />
     </>
   );
 }

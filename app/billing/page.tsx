@@ -1797,16 +1797,20 @@ export default function BillingPage() {
                   )}
                 </div>
 
+                {/*
+                  The "Current plan" branch below is a status, not a
+                  control. It was a disabled <button>, which tells a
+                  screen reader there is an action here that happens to
+                  be unavailable. There is no action: it is the plan the
+                  account is already on.
+                */}
                 <div className="mt-auto pt-8">
                   {isCurrent ? (
-                    <button
-                      type="button"
-                      disabled
+                    <div
                       className="
                         flex
                         h-11
                         w-full
-                        cursor-default
                         items-center
                         justify-center
                         rounded-xl
@@ -1819,7 +1823,7 @@ export default function BillingPage() {
                       "
                     >
                       Current plan
-                    </button>
+                    </div>
                   ) : (
                     <button
                       type="button"

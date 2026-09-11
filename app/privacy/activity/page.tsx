@@ -498,15 +498,22 @@ export default function PrivacyActivityPage() {
                 Need a copy of your activity?
               </h2>
 
-              <p className="mt-2 max-w-xl text-sm leading-6 text-muted-foreground">
-                You can review privacy-related activity and manage your
-                workspace information from the SYRAVEN Privacy Center.
+              <p
+                id="privacy-export-availability"
+                className="mt-2 max-w-xl text-sm leading-6 text-muted-foreground"
+              >
+                Exporting your activity is not available yet. There is
+                no export endpoint behind this button, so it stays
+                disabled rather than appearing to start a download that
+                never arrives.
               </p>
             </div>
 
             <button
               type="button"
-              className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-primary px-5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
+              disabled
+              aria-describedby="privacy-export-availability"
+              className="inline-flex h-11 shrink-0 cursor-not-allowed items-center justify-center gap-2 rounded-xl bg-primary px-5 text-sm font-semibold text-primary-foreground opacity-60"
             >
               <Download className="h-4 w-4" />
               Request export

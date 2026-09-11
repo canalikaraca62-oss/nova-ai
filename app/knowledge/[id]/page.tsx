@@ -231,13 +231,25 @@ export default function KnowledgeDetailPage() {
               </div>
             </div>
 
+            {/*
+              Sharing needs a sharing model -- who a recipient is, what
+              they may see, how access is revoked. None of that exists,
+              and knowledge rows are RLS-scoped to their owner, so this
+              button had nothing to call.
+            */}
             <button
               type="button"
+              disabled
               aria-label="Share knowledge"
-              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              aria-describedby="knowledge-share-availability"
+              className="inline-flex h-10 w-10 shrink-0 cursor-not-allowed items-center justify-center rounded-xl border border-border text-muted-foreground opacity-60"
             >
               <Share2 className="h-4 w-4" />
             </button>
+
+            <span id="knowledge-share-availability" className="sr-only">
+              Sharing is not available yet.
+            </span>
           </div>
         </header>
 

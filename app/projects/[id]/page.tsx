@@ -13,7 +13,6 @@ import {
   ExternalLink,
   FileText,
   FolderKanban,
-  MoreHorizontal,
   Plus,
   Settings,
   Sparkles,
@@ -331,13 +330,12 @@ export default function ProjectDetailPage() {
               Edit project
             </Link>
 
-            <button
-              type="button"
-              aria-label="More project options"
-              className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-card text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            >
-              <MoreHorizontal className="h-5 w-5" />
-            </button>
+            {/*
+              Removed rather than disabled: "more project options"
+              named no options, and "Edit project" beside it already
+              covers the one real action. An overflow control with an
+              empty menu behind it is a promise the page cannot keep.
+            */}
           </div>
         </div>
 

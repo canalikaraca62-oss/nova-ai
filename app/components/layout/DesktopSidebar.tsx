@@ -60,6 +60,21 @@ export type DesktopSidebarProps = {
   onItemClick?: (
     item: SidebarItem
   ) => void;
+
+  /*
+    Opens the command palette.
+
+    The trigger below used to be a button with no handler at all, while
+    Cmd/Ctrl+K worked the whole time -- so the keyboard had the feature
+    and the visible affordance advertising it did nothing. The palette
+    owns its own open state, so the chrome lifts it and hands the setter
+    down rather than this component dispatching a synthetic keystroke.
+
+    Optional: a sidebar rendered without it still renders, and the
+    button simply has no handler -- which is why the dead-control guard
+    covers AppChrome passing it, not just the prop existing.
+  */
+  onOpenCommandPalette?: () => void;
 };
 
 /* ==================================================
@@ -440,6 +455,8 @@ export default function DesktopSidebar({
   footer,
   headerAction,
 
+  onOpenCommandPalette,
+
   className = "",
 
   onItemClick,
@@ -561,6 +578,8 @@ export default function DesktopSidebar({
       <div className="px-3 pb-3">
         <button
           type="button"
+          onClick={onOpenCommandPalette}
+          aria-keyshortcuts="Meta+K Control+K"
           className="flex h-10 w-full items-center gap-3 rounded-xl border border-white/10 px-3 text-left text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
         >
           <Command className="h-4 w-4" />
