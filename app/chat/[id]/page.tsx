@@ -598,7 +598,7 @@ export default function ChatConversationPage() {
 
   if (!conversationId) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-background px-6 text-foreground">
+      <div className="flex items-center justify-center bg-background px-6 text-foreground">
         <div className="max-w-md text-center">
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-red-400/20 bg-red-400/[0.08]">
             <svg
@@ -636,12 +636,12 @@ export default function ChatConversationPage() {
             Back to chats
           </button>
         </div>
-      </main>
+      </div>
     );
   }
 
   return (
-    <main className="min-h-screen bg-background text-foreground">
+    <div className="bg-background text-foreground">
       <div className="mx-auto flex min-h-screen w-full max-w-[1600px] flex-col">
         <header className="sticky top-0 z-30 border-b border-white/[0.07] bg-background/95 backdrop-blur-xl">
           <div className="flex h-16 items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
@@ -998,6 +998,6 @@ export default function ChatConversationPage() {
           </div>
         </section>
       </div>
-    </main>
+    </div>
   );
 }

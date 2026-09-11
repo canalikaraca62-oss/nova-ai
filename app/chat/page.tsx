@@ -417,7 +417,7 @@ export default function ChatPage() {
   }
 
   return (
-    <main className="min-h-screen bg-background text-foreground">
+    <div className="bg-background text-foreground">
       <div className="mx-auto flex min-h-screen w-full max-w-[1600px] flex-col">
         {/* HEADER */}
 
@@ -806,6 +806,6 @@ export default function ChatPage() {
           </div>
         </section>
       </div>
-    </main>
+    </div>
   );
 }

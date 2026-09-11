@@ -348,7 +348,7 @@ export default function MarketplaceDetailPage() {
 
   if (!item) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-background px-6">
+      <div className="flex items-center justify-center bg-background px-6">
         <div className="max-w-md text-center">
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-muted">
             <SearchX className="h-8 w-8 text-muted-foreground" />
@@ -371,12 +371,12 @@ export default function MarketplaceDetailPage() {
             Back to marketplace
           </Link>
         </div>
-      </main>
+      </div>
     );
   }
 
   return (
-    <main className="min-h-screen bg-background">
+    <div className="bg-background">
       <div className="mx-auto w-full max-w-7xl px-6 py-8 lg:px-8 lg:py-10">
         <Link
           href="/marketplace"
@@ -628,6 +628,6 @@ export default function MarketplaceDetailPage() {
           </aside>
         </div>
       </div>
-    </main>
+    </div>
   );
 }

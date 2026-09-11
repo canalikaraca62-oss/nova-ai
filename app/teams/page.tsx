@@ -268,7 +268,7 @@ export default function TeamsPage() {
   }
 
   return (
-    <main className="min-h-screen bg-background text-foreground">
+    <div className="bg-background text-foreground">
       <div className="mx-auto w-full max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8">
         {/* Header */}
         <section className="mb-8 flex flex-col gap-5 border-b border-white/10 pb-8 lg:flex-row lg:items-end lg:justify-between">
@@ -604,6 +604,6 @@ export default function TeamsPage() {
       )}
 
       {/* Invite Member Modal */}
-    </main>
+    </div>
   );
 }

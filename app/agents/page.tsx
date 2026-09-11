@@ -283,7 +283,7 @@ export default function AgentsPage() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <main className="mx-auto w-full max-w-[1600px] px-4 pb-16 pt-6 sm:px-6 lg:px-8 lg:pt-10">
+      <div className="mx-auto w-full max-w-[1600px] px-4 pb-16 pt-6 sm:px-6 lg:px-8 lg:pt-10">
 
         {/* =================================================
          * HERO
@@ -642,7 +642,7 @@ export default function AgentsPage() {
             description="Designed to grow with marketplace, workflow, memory and connected applications."
           />
         </section>
-      </main>
+      </div>
     </div>
   );
 }

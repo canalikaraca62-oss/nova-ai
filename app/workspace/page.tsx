@@ -246,7 +246,7 @@ export default function WorkspacePage() {
   };
 
   return (
-    <main className="min-h-screen bg-background text-foreground">
+    <div className="bg-background text-foreground">
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
         {/* Header */}
         <div className="flex flex-col gap-6 border-b border-white/10 pb-8 lg:flex-row lg:items-end lg:justify-between">
@@ -644,7 +644,7 @@ export default function WorkspacePage() {
           </div>
         </div>
       )}
-    </main>
+    </div>
   );
 }
 

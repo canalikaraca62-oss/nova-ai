@@ -230,7 +230,7 @@ export default function TeamDetailPage() {
 
   if (!team) {
     return (
-      <main className="min-h-screen bg-background px-4 py-10 text-foreground sm:px-6 lg:px-8">
+      <div className="bg-background px-4 py-10 text-foreground sm:px-6 lg:px-8">
         <div className="mx-auto flex min-h-[70vh] max-w-3xl flex-col items-center justify-center text-center">
           <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-2xl">
             ?
@@ -251,7 +251,7 @@ export default function TeamDetailPage() {
             Back to teams
           </Link>
         </div>
-      </main>
+      </div>
     );
   }
 
@@ -300,7 +300,7 @@ export default function TeamDetailPage() {
   }
 
   return (
-    <main className="min-h-screen bg-background text-foreground">
+    <div className="bg-background text-foreground">
       <div className="mx-auto w-full max-w-[1500px] px-4 py-6 sm:px-6 lg:px-8">
         {/* Breadcrumb */}
         <div className="mb-6 flex flex-wrap items-center gap-2 text-sm text-foreground/40">
@@ -846,6 +846,6 @@ export default function TeamDetailPage() {
           </div>
         </div>
       )}
-    </main>
+    </div>
   );
 }

@@ -702,7 +702,7 @@ export default function CanvasDetailPage() {
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-zinc-950 text-white">
+      <div className="bg-zinc-950 text-white">
         <div className="mx-auto flex min-h-screen max-w-[1800px] items-center justify-center px-6">
           <div className="flex flex-col items-center gap-5">
             <div className="h-12 w-12 animate-spin rounded-full border-2 border-white/10 border-t-white" />
@@ -716,13 +716,13 @@ export default function CanvasDetailPage() {
             </div>
           </div>
         </div>
-      </main>
+      </div>
     );
   }
 
   if (error && !canvas) {
     return (
-      <main className="min-h-screen bg-zinc-950 px-6 text-white">
+      <div className="bg-zinc-950 px-6 text-white">
         <div className="mx-auto flex min-h-screen max-w-2xl items-center justify-center">
           <div className="w-full rounded-3xl border border-red-500/20 bg-red-500/[0.04] p-8">
             <div className="text-3xl">
@@ -757,7 +757,7 @@ export default function CanvasDetailPage() {
             </div>
           </div>
         </div>
-      </main>
+      </div>
     );
   }
 
@@ -766,9 +766,9 @@ export default function CanvasDetailPage() {
   }
 
   return (
-    <main
+    <div
       ref={workspaceRef}
-      className="min-h-screen overflow-hidden bg-zinc-950 text-white"
+      className="overflow-hidden bg-zinc-950 text-white"
     >
       <div className="flex min-h-screen flex-col">
         <header className="relative z-30 flex min-h-[72px] shrink-0 items-center justify-between border-b border-white/[0.07] bg-zinc-950/90 px-4 backdrop-blur-xl md:px-6">
@@ -1233,6 +1233,6 @@ export default function CanvasDetailPage() {
           )}
         </div>
       </div>
-    </main>
+    </div>
   );
 }

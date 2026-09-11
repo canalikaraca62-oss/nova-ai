@@ -254,7 +254,7 @@ export default function MarketplacePage() {
   }, []);
 
   return (
-    <main className="min-h-screen bg-background">
+    <div className="bg-background">
       <div className="mx-auto w-full max-w-7xl px-6 py-10 lg:px-8">
         <section className="border-b border-border pb-10">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
@@ -507,6 +507,6 @@ export default function MarketplacePage() {
           )}
         </section>
       </div>
-    </main>
+    </div>
   );
 }

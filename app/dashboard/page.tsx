@@ -160,7 +160,7 @@ export default function DashboardPage() {
   ];
 
   return (
-    <main className="min-h-screen bg-background text-foreground">
+    <div className="bg-background text-foreground">
       <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
         <section className="mb-8">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -537,6 +537,6 @@ export default function DashboardPage() {
           </aside>
         </section>
       </div>
-    </main>
+    </div>
   );
 }

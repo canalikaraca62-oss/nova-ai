@@ -461,9 +461,8 @@ export default function CreateAgentPage() {
    * ================================================== */
 
   return (
-    <main
+    <div
       className="
-        min-h-screen
         bg-background
         text-foreground
       "
@@ -2403,6 +2402,6 @@ Never invent sources or pretend to have completed an action you did not perform.
           </button>
         </aside>
       </div>
-    </main>
+    </div>
   );
 }

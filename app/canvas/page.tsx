@@ -285,7 +285,7 @@ export default function CanvasPage() {
   }
 
   return (
-    <main className="min-h-screen bg-background text-foreground">
+    <div className="bg-background text-foreground">
       <div className="mx-auto w-full max-w-[1600px] px-4 py-5 sm:px-6 lg:px-10 lg:py-8">
         {/* HEADER */}
 
@@ -635,7 +635,7 @@ export default function CanvasPage() {
           )}
         </section>
       </div>
-    </main>
+    </div>
   );
 }
 
