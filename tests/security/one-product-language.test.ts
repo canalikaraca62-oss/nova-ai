@@ -87,6 +87,19 @@ const TURKISH_ONLY = /[şğıçöüŞĞİÇÖÜ]/;
 /** A quoted string literal, single or double. */
 const QUOTED = /"[^"\n]*"|'[^'\n]*'/g;
 
+/**
+ * JSX text content — the words rendered between tags.
+ *
+ * The quoted-literal pattern cannot see these, and that gap was real:
+ * app/agents/[id]/page.tsx carried ten visible Turkish strings as bare
+ * JSX text while this suite reported the product monolingual. A user
+ * reads that text directly; the guard simply was not looking at it.
+ *
+ * Matches a run between `>` and `<` containing at least one letter, so
+ * punctuation and whitespace between tags are ignored.
+ */
+const JSX_TEXT = />([^<>{}\n]*\p{L}[^<>{}\n]*)</gu;
+
 /* -------------------------------------------------------------------------- */
 /*                                 THE RULE                                   */
 /* -------------------------------------------------------------------------- */
@@ -98,10 +111,56 @@ void describe("The interface speaks one language", () => {
     for (const file of SOURCES) {
       const content = readFileSync(file, "utf8");
 
+      /*
+        Both surfaces a user can read: quoted literals, and the text
+        rendered between tags.
+
+        Scanning only the first is what let app/agents/[id]/page.tsx
+        stay visibly Turkish — headings, paragraphs, button labels —
+        while this suite reported the product monolingual.
+      */
       for (const match of content.match(QUOTED) ?? []) {
         if (TURKISH_ONLY.test(match)) {
           offenders.push(
             `${file.replace(ROOT, "").replace(/\\/g, "/")}: ${match}`,
+          );
+        }
+      }
+
+      for (const match of content.matchAll(JSX_TEXT)) {
+        const text = match[1];
+        if (text === undefined) continue;
+
+        /*
+          A language picker is the one place a non-English word is
+          correct.
+
+          app/settings/page.tsx offers <option>Türkçe</option> beside
+          Deutsch, Français and Español. Every language is named in its
+          own script, because that is how a person finds their own
+          language in a list — rendering it as "Turkish" would be the
+          defect, not the fix.
+
+          Scoped to <option> deliberately. This is not a general licence
+          for non-English text: a heading, a button or a paragraph in
+          another language is still caught. The exemption covers exactly
+          the element where endonyms belong.
+        */
+        /*
+          `+ 1` because JSX_TEXT captures after consuming the opening
+          `>`, so match.index points AT that bracket rather than past
+          it. Without it the preceding slice ends in "<option" with no
+          closing bracket and the test never matches — verified against
+          the real indices rather than assumed.
+        */
+        if (/<option[^>]*>\s*$/.test(content.slice(0, match.index + 1))) {
+          continue;
+        }
+
+        if (TURKISH_ONLY.test(text)) {
+          offenders.push(
+            `${file.replace(ROOT, "").replace(/\\/g, "/")}: ` +
+              `${text.trim().slice(0, 80)}`,
           );
         }
       }

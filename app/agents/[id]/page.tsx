@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
 
+import AiActivity from "@/app/components/ui/AiActivity";
+
 type AgentStatus = "ready" | "running" | "paused" | "error";
 type AgentTab =
   | "overview"
@@ -291,6 +293,14 @@ export default function AgentDetailPage() {
   const [isRunning, setIsRunning] = useState(false);
   const [runMessage, setRunMessage] = useState<string | null>(null);
 
+  /*
+    What the last run actually settled as. Set only from a real
+    response, never from a timer.
+  */
+  const [runState, setRunState] = useState<
+    "approval" | "failed" | "done" | null
+  >(null);
+
   const status = isRunning ? STATUS_CONFIG.running : STATUS_CONFIG[agent.status];
 
   const handleRun = useCallback(async () => {
@@ -319,6 +329,7 @@ export default function AgentDetailPage() {
 
     setIsRunning(true);
     setRunMessage(null);
+    setRunState(null);
 
     try {
       /*
@@ -351,6 +362,7 @@ export default function AgentDetailPage() {
       } | null;
 
       if (payload?.status === "awaiting_approval") {
+        setRunState("approval");
         /*
           Not a failure. The plan is sound and one of its steps needs a
           person to agree to it — which is the safeguard working, and
@@ -368,6 +380,7 @@ export default function AgentDetailPage() {
       }
 
       if (!response.ok || !payload) {
+        setRunState("failed");
         setRunMessage(
           payload?.message ??
             "That task could not be run. Please try again.",
@@ -375,6 +388,8 @@ export default function AgentDetailPage() {
 
         return;
       }
+
+      setRunState("done");
 
       const steps = payload.data?.steps ?? [];
 
@@ -386,6 +401,7 @@ export default function AgentDetailPage() {
           : "The agent completed without needing to take any action.",
       );
     } catch {
+      setRunState("failed");
       setRunMessage("That task could not be run. Please try again.");
     } finally {
       setIsRunning(false);
@@ -429,7 +445,7 @@ export default function AgentDetailPage() {
             className="flex w-fit items-center gap-2 text-sm text-zinc-400 transition hover:text-foreground"
           >
             <span>←</span>
-            Agents&apos;a dön
+            Back to agents
           </button>
 
           <div className="rounded-3xl border border-white/[0.08] bg-gradient-to-b from-white/[0.04] to-transparent p-5 sm:p-8">
@@ -486,7 +502,7 @@ export default function AgentDetailPage() {
                   href={`/chat?agent=${encodeURIComponent(agent.id)}`}
                   className="rounded-xl border border-white/[0.1] bg-white/[0.04] px-4 py-2.5 text-sm font-medium text-zinc-200 transition hover:bg-white/[0.08]"
                 >
-                  Chat&apos;te Aç
+                  Open in chat
                 </Link>
 
                 <button
@@ -494,7 +510,7 @@ export default function AgentDetailPage() {
                   onClick={() => setActiveTab("settings")}
                   className="rounded-xl border border-white/[0.1] bg-white/[0.04] px-4 py-2.5 text-sm font-medium text-zinc-200 transition hover:bg-white/[0.08]"
                 >
-                  Yapılandır
+                  Configure
                 </button>
               </div>
             </div>
@@ -539,12 +555,11 @@ export default function AgentDetailPage() {
                 </p>
 
                 <h2 className="mt-2 text-xl font-semibold">
-                  Bu agent&apos;a bir görev ver
+                  Give this agent a task
                 </h2>
 
                 <p className="mt-2 text-sm leading-6 text-zinc-500">
-                  SYRAVEN görevi analiz eder, gerekli araçları planlar ve
-                  execution sistemine aktarır.
+                  SYRAVEN analyses the task, plans the tools it needs, and hands it to the execution system.
                 </p>
               </div>
 
@@ -558,8 +573,7 @@ export default function AgentDetailPage() {
 
               <div className="mt-4 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
                 <p className="text-xs text-zinc-600">
-                  Hassas veya dış dünyada işlem yapacak görevlerde SYRAVEN
-                  gerekli yerlerde açık onay ister.
+                  For anything sensitive, or anything that reaches outside SYRAVEN, it asks for your explicit approval first.
                 </p>
 
                 <button
@@ -572,17 +586,39 @@ export default function AgentDetailPage() {
                 </button>
               </div>
 
-              {runMessage && (
-                <div className="mt-4 rounded-2xl border border-blue-500/15 bg-blue-500/[0.06] px-4 py-3 text-sm text-blue-200">
-                  {runMessage}
+              {(isRunning || runMessage) && (
+                <div className="mt-4 flex flex-col gap-3">
+                  {/*
+                    Driven entirely by real request state: isRunning is
+                    an open fetch, and runMessage is what the server
+                    actually answered. AiActivity owns no timer, so it
+                    cannot advance on its own.
+                  */}
+                  <AiActivity
+                    state={
+                      isRunning
+                        ? "thinking"
+                        : runState === "approval"
+                          ? "approval"
+                          : runState === "failed"
+                            ? "failed"
+                            : "done"
+                    }
+                  />
+
+                  {runMessage && (
+                    <div className="whitespace-pre-line rounded-2xl border border-white/[0.08] bg-white/[0.025] px-4 py-3 text-sm text-zinc-300">
+                      {runMessage}
+                    </div>
+                  )}
                 </div>
               )}
 
               <div className="mt-8 border-t border-white/[0.06] pt-6">
                 <div className="mb-4 flex items-center justify-between gap-4">
-                  <h3 className="font-medium">Hızlı başlangıç</h3>
+                  <h3 className="font-medium">Quick start</h3>
                   <span className="text-xs text-zinc-600">
-                    Önerilen görevler
+                    Suggested tasks
                   </span>
                 </div>
 
@@ -626,12 +662,12 @@ export default function AgentDetailPage() {
 
               <section className="rounded-3xl border border-white/[0.08] bg-white/[0.025] p-5">
                 <div className="flex items-center justify-between">
-                  <h2 className="font-semibold">Bağlantılar</h2>
+                  <h2 className="font-semibold">Connections</h2>
                   <Link
                     href="/apps"
                     className="text-xs text-zinc-500 transition hover:text-foreground"
                   >
-                    Yönet →
+                    Manage →
                   </Link>
                 </div>
 
@@ -657,12 +693,11 @@ export default function AgentDetailPage() {
                 </p>
 
                 <h3 className="mt-3 text-lg font-semibold">
-                  Tek agent değil, bir ekip oluştur.
+                  Build a team, not just a single agent.
                 </h3>
 
                 <p className="mt-2 text-sm leading-6 text-zinc-400">
-                  Birden fazla agent&apos;ı aynı Workspace içinde
-                  çalıştırabilir ve görevleri birbirine devredebilirsin.
+                  Run several agents in the same workspace and hand work between them.
                 </p>
 
                 <Link
@@ -691,11 +726,10 @@ export default function AgentDetailPage() {
                 ✦
               </div>
 
-              <h3 className="font-medium">Henüz kayıtlı çalışma yok</h3>
+              <h3 className="font-medium">No runs recorded yet</h3>
 
               <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-zinc-500">
-                Agent çalıştırıldığında execution geçmişi, durum, kullanılan
-                araçlar ve sonuç özeti burada görüntülenecek.
+                Once this agent runs, its execution history, status, the tools it used and a summary of the result will appear here.
               </p>
             </div>
           </section>
@@ -710,12 +744,11 @@ export default function AgentDetailPage() {
                 </p>
 
                 <h2 className="mt-2 text-xl font-semibold">
-                  Bilgi kaynakları
+                  Knowledge sources
                 </h2>
 
                 <p className="mt-2 text-sm text-zinc-500">
-                  Bu agent için hangi Knowledge kaynaklarının kullanılacağını
-                  yönet.
+                  Choose which knowledge sources this agent may use.
                 </p>
               </div>
 
@@ -723,13 +756,12 @@ export default function AgentDetailPage() {
                 href="/knowledge"
                 className="rounded-xl border border-white/[0.1] bg-white/[0.04] px-4 py-2.5 text-sm transition hover:bg-white/[0.08]"
               >
-                Knowledge&apos;ı Aç
+                Open knowledge
               </Link>
             </div>
 
             <div className="mt-6 rounded-2xl border border-dashed border-white/[0.1] px-6 py-12 text-center text-sm text-zinc-500">
-              Knowledge kaynakları `KnowledgeContext`, `useKnowledge` ve
-              `services/knowledge.ts` katmanları üzerinden bağlanacak.
+              Knowledge sources are not connected to this screen yet.
             </div>
           </section>
         )}
@@ -744,9 +776,7 @@ export default function AgentDetailPage() {
               <h2 className="mt-2 text-xl font-semibold">Agent izinleri</h2>
 
               <p className="mt-2 text-sm leading-6 text-zinc-500">
-                Agent yalnızca izin verdiğin kaynaklara erişebilir. Dış
-                dünyada etkisi olan işlemler için execution katmanında ayrıca
-                kullanıcı onayı korunur.
+                An agent can reach only the sources you permit. Anything that has an effect outside SYRAVEN also requires your explicit approval at the execution layer.
               </p>
             </div>
 
@@ -803,45 +833,41 @@ export default function AgentDetailPage() {
               Agent Configuration
             </p>
 
-            <h2 className="mt-2 text-xl font-semibold">Agent ayarları</h2>
+            <h2 className="mt-2 text-xl font-semibold">Agent settings</h2>
 
             <div className="mt-6 grid gap-4 md:grid-cols-2">
               <div className="rounded-2xl border border-white/[0.07] bg-black/10 p-5">
-                <h3 className="font-medium">Agent davranışı</h3>
+                <h3 className="font-medium">Agent behaviour</h3>
                 <p className="mt-2 text-sm leading-6 text-zinc-500">
-                  Model, çalışma tarzı, otomasyon seviyesi ve yanıt
-                  tercihleri AgentBuilder sistemi tarafından yönetilecek.
+                  Model, working style, automation level and response preferences are not configurable here yet.
                 </p>
               </div>
 
               <div className="rounded-2xl border border-white/[0.07] bg-black/10 p-5">
                 <h3 className="font-medium">Usage & Limits</h3>
                 <p className="mt-2 text-sm leading-6 text-zinc-500">
-                  Kullanım limitleri aktif plan ve billing katmanına göre
-                  `UsageMeter` ve `services/usage.ts` üzerinden gösterilecek.
+                  Usage limits follow your active plan. They are not shown on this screen yet.
                 </p>
               </div>
 
               <div className="rounded-2xl border border-white/[0.07] bg-black/10 p-5">
                 <h3 className="font-medium">Automation</h3>
                 <p className="mt-2 text-sm leading-6 text-zinc-500">
-                  Agent&apos;ı manuel çalıştırmanın yanında Tasks ve
-                  Automation sistemlerine bağlayabilirsin.
+                  Besides running this agent by hand, you can reach it from Tasks.
                 </p>
 
                 <Link
                   href="/tasks"
                   className="mt-4 inline-flex text-sm text-zinc-300 hover:text-foreground"
                 >
-                  Tasks&apos;ı aç →
+                  Open tasks →
                 </Link>
               </div>
 
               <div className="rounded-2xl border border-white/[0.07] bg-black/10 p-5">
-                <h3 className="font-medium">Gelişmiş yapılandırma</h3>
+                <h3 className="font-medium">Advanced configuration</h3>
                 <p className="mt-2 text-sm leading-6 text-zinc-500">
-                  Özel agent ayarları, model tercihleri ve execution
-                  politikaları AgentBuilder ekranında yönetilecek.
+                  Custom agent settings, model preferences and execution policies are not available yet.
                 </p>
 
                 <Link
@@ -864,7 +890,7 @@ export default function AgentDetailPage() {
 
             <p className="mt-1 text-sm text-zinc-500">
               Agent&apos;lar Chat, Workspace, Knowledge, Projects ve Tasks
-              sistemleri arasında ortak bağlamla çalışacak.
+              share context across the product.
             </p>
           </div>
 
@@ -880,7 +906,7 @@ export default function AgentDetailPage() {
               href="/agents/create"
               className="rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-black transition hover:bg-zinc-200"
             >
-              Yeni Agent Oluştur
+              Create a new agent
             </Link>
           </div>
         </section>
