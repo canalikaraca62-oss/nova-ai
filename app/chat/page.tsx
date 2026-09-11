@@ -155,7 +155,13 @@ function subscribeToNothing(): () => void {
  */
 function formatTime(value: string): string {
   try {
-    return new Intl.DateTimeFormat("tr-TR", {
+    /*
+      en-GB, not tr-TR. The product settled on English, and a Turkish
+      locale here renders Turkish-formatted times to every reader. The
+      24-hour clock the "2-digit" options were reaching for is what
+      en-GB gives.
+    */
+    return new Intl.DateTimeFormat("en-GB", {
       hour: "2-digit",
       minute: "2-digit",
     }).format(new Date(value));

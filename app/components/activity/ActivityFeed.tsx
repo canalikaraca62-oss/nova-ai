@@ -396,8 +396,9 @@ function formatRelativeTime(
   }
 
   try {
+    /* en-GB, not tr-TR — the interface is English. */
     return new Intl.DateTimeFormat(
-      "tr-TR",
+      "en-GB",
       {
         day: "numeric",
         month: "short",
@@ -474,12 +475,14 @@ export default function ActivityFeed({
 
   const filteredActivities =
     useMemo(() => {
+      /*
+        PLAIN toLowerCase. Turkish lowercases a capital I to a dotless
+        letter, so normalising a query that way stopped it matching
+        anything typed with one. Case folding for a filter is not a
+        presentation choice and does not follow the interface language.
+      */
       const normalizedQuery =
-        searchQuery
-          .trim()
-          .toLocaleLowerCase(
-            "tr-TR"
-          );
+        searchQuery.trim().toLowerCase();
 
       const filtered =
         activities.filter(
@@ -513,9 +516,7 @@ export default function ActivityFeed({
               ]
                 .filter(Boolean)
                 .join(" ")
-                .toLocaleLowerCase(
-                  "tr-TR"
-                );
+                .toLowerCase();
 
             return searchableContent.includes(
               normalizedQuery

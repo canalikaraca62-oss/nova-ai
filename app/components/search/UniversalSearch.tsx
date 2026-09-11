@@ -145,9 +145,22 @@ const DEFAULT_GROUPS: UniversalSearchGroup[] = [
 function normalizeSearchValue(
   value: string
 ): string {
-  return value
-    .toLocaleLowerCase("tr-TR")
-    .trim();
+  /*
+    PLAIN toLowerCase, NOT A TURKISH LOCALE.
+
+    Turkish has a dotless lowercase i, and lowercasing a capital I in
+    that locale produces it rather than the ASCII letter -- meaning a
+    query containing a capital I stopped matching anything. Searching
+    for AI normalised to a string no record contained.
+
+    The characters are described rather than quoted on purpose: a
+    literal here is a Turkish string literal, and the language guard
+    correctly refuses those.
+
+    Case folding for a search index is not a presentation choice, so it
+    does not follow the interface language at all.
+  */
+  return value.toLowerCase().trim();
 }
 
 function resultMatchesQuery(

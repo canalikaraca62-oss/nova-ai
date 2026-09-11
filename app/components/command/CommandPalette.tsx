@@ -527,9 +527,16 @@ export default function CommandPalette({
     ]
   );
 
-  useEffect(() => {
-    setSelectedIndex(0);
-  }, [query]);
+  /*
+    The highlight reset moved to the input's onChange.
+
+    It was an effect watching [query] that called setSelectedIndex(0) --
+    a setState synchronised to another piece of state, which cascades a
+    render on every keystroke. selectedIndex is genuinely state (arrow
+    keys and clicks write it too), so it cannot be derived; but the
+    moment it needs resetting is the moment the query changes, and that
+    is a handler, not an effect.
+  */
 
   useEffect(() => {
     if (!isOpen) {
@@ -762,6 +769,9 @@ export default function CommandPalette({
               setQuery(
                 event.target.value
               );
+
+              /* A new query means the old highlight is meaningless. */
+              setSelectedIndex(0);
             }}
             placeholder={placeholder}
             className="h-14 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"

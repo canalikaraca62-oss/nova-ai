@@ -123,7 +123,12 @@ function formatPrice(
   currency: string
 ) {
   try {
-    return new Intl.NumberFormat("tr-TR", {
+    /*
+      en-GB, not tr-TR. This renders a PRICE on /pricing, and the
+      Turkish locale put the symbol after the amount with Turkish
+      grouping -- "50 €" where an English page shows "€50".
+    */
+    return new Intl.NumberFormat("en-GB", {
       style: "currency",
       currency,
       maximumFractionDigits: 0,

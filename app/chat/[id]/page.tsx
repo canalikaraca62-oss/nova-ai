@@ -121,8 +121,9 @@ function formatTime(
   value: string
 ): string {
   try {
+    /* en-GB, not tr-TR — see the same fix on /chat. */
     return new Intl.DateTimeFormat(
-      "tr-TR",
+      "en-GB",
       {
         hour: "2-digit",
         minute: "2-digit",
@@ -260,8 +261,19 @@ export default function ChatConversationPage() {
   const [input, setInput] =
     useState("");
 
-  const [title, setTitle] =
-    useState("New chat");
+  /*
+    DERIVED, NOT SYNCHRONISED.
+
+    This was state written from two effects, and one of those writes was
+    a cascading setState the linter objected to. It was also redundant:
+    saveConversation always persists createTitle(messages), so a stored
+    title can never differ from the derived one for the same messages,
+    and createTitle returns "New chat" for an empty conversation.
+
+    Deriving it removes the write, the effect dependency and the reset
+    in the clear handler at once.
+  */
+  const title = useMemo(() => createTitle(messages), [messages]);
 
   const [isLoadingConversation, setIsLoadingConversation] =
     useState(true);
@@ -310,32 +322,50 @@ export default function ChatConversationPage() {
     [messages]
   );
 
+  /*
+    Deferred off the render pass, the same way the billing loaders are.
+
+    This effect must stay an effect: it reads localStorage keyed by the
+    route's conversationId, so it has to re-run when the route changes,
+    and a lazy useState initialiser runs once. What it must not do is
+    set state synchronously inside the effect body, which cascades a
+    render before the first paint completes.
+
+    The cancelled flag matters here more than elsewhere: navigating
+    between two conversations quickly would otherwise let a slower
+    resolution overwrite a newer one.
+  */
   useEffect(() => {
-    if (!conversationId) {
+    let cancelled = false;
+
+    void Promise.resolve().then(() => {
+      if (cancelled) return;
+
+      /*
+        The no-conversation case settles inside the deferred callback
+        too. Clearing the flag in an early return would have left one
+        synchronous setState in the effect body -- the same cascade,
+        surviving on the branch nobody looks at.
+      */
+      if (!conversationId) {
+        setIsLoadingConversation(false);
+        return;
+      }
+
+      setIsLoadingConversation(true);
+      setError(null);
+
+      const conversation = loadConversation(conversationId);
+
+      if (cancelled) return;
+
+      setMessages(conversation ? conversation.messages : []);
       setIsLoadingConversation(false);
-      return;
-    }
+    });
 
-    setIsLoadingConversation(true);
-    setError(null);
-
-    const conversation =
-      loadConversation(conversationId);
-
-    if (conversation) {
-      setMessages(
-        conversation.messages
-      );
-
-      setTitle(
-        conversation.title
-      );
-    } else {
-      setMessages([]);
-      setTitle("New chat");
-    }
-
-    setIsLoadingConversation(false);
+    return () => {
+      cancelled = true;
+    };
   }, [conversationId]);
 
   useEffect(() => {
@@ -349,10 +379,6 @@ export default function ChatConversationPage() {
     saveConversation(
       conversationId,
       messages
-    );
-
-    setTitle(
-      createTitle(messages)
     );
   }, [
     conversationId,
@@ -599,7 +625,6 @@ export default function ChatConversationPage() {
     setMessages([]);
     setInput("");
     setError(null);
-    setTitle("New chat");
 
     requestAnimationFrame(() => {
       textareaRef.current?.focus();

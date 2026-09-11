@@ -147,8 +147,9 @@ function formatPrice(
   amount: number
 ) {
   try {
+    /* en-GB, not tr-TR — a price on an English surface. */
     return new Intl.NumberFormat(
-      "tr-TR",
+      "en-GB",
       {
         style: "currency",
         currency: "EUR",

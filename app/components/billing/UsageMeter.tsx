@@ -57,8 +57,9 @@ function formatNumber(
   value: number
 ) {
   try {
+    /* en-GB, not tr-TR — Turkish groups thousands differently. */
     return new Intl.NumberFormat(
-      "tr-TR"
+      "en-GB"
     ).format(value);
   } catch {
     return String(value);
@@ -86,8 +87,9 @@ function formatResetDate(
       return null;
     }
 
+    /* en-GB, not tr-TR — the interface is English. */
     return new Intl.DateTimeFormat(
-      "tr-TR",
+      "en-GB",
       {
         day: "numeric",
         month: "long",
