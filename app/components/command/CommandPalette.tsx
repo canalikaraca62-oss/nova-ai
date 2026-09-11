@@ -12,6 +12,7 @@ import {
   MessageSquare,
   Mic,
   PanelLeft,
+  Plug,
   Plus,
   Search,
   Settings,
@@ -324,6 +325,26 @@ function createDefaultCommands(): CommandPaletteItem[] {
       shortcut: ["⌘", "K"],
       icon: (
         <Search className="h-4 w-4" />
+      ),
+    },
+    {
+      id: "connectors",
+      title: "Connectors",
+      description:
+        "What SYRAVEN can do in your other services",
+      group: "System",
+      keywords: [
+        "connectors",
+        "integrations",
+        "gmail",
+        "calendar",
+        "github",
+        "slack",
+        "notion",
+      ],
+      href: "/connectors",
+      icon: (
+        <Plug className="h-4 w-4" />
       ),
     },
     {

@@ -19,6 +19,7 @@ import {
   LayoutDashboard,
   MessageSquare,
   PanelLeft,
+  Plug,
   Plus,
   Search,
   Share2,
@@ -180,6 +181,13 @@ const DEFAULT_SECTIONS: MobileNavSection[] = [
         href: "/apps",
         icon: (
           <Grid2X2 className="h-5 w-5" />
+        ),
+      },
+      {
+        label: "Connectors",
+        href: "/connectors",
+        icon: (
+          <Plug className="h-5 w-5" />
         ),
       },
       {

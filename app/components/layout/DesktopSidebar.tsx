@@ -18,6 +18,7 @@ import {
   LayoutDashboard,
   MessageSquare,
   PanelLeft,
+  Plug,
   Plus,
   Search,
   Share2,
@@ -194,6 +195,13 @@ const DEFAULT_SECTIONS: SidebarSection[] = [
         href: "/apps",
         icon: (
           <Grid2X2 className="h-4 w-4" />
+        ),
+      },
+      {
+        label: "Connectors",
+        href: "/connectors",
+        icon: (
+          <Plug className="h-4 w-4" />
         ),
       },
       {

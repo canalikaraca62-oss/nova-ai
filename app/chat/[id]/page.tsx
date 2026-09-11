@@ -1,13 +1,12 @@
 "use client";
 
-import type {
-  FormEvent,
-  KeyboardEvent} from "react";
 import {
   useEffect,
   useMemo,
   useRef,
   useState,
+  type FormEvent,
+  type KeyboardEvent,
 } from "react";
 import {
   useParams,
@@ -286,8 +285,21 @@ export default function ChatConversationPage() {
       null
     );
 
-  const lastUserMessageRef =
-    useRef<string | null>(null);
+  /*
+    STATE, NOT A REF.
+
+    This was a ref whose .current was read directly in JSX to decide
+    whether the Retry button renders. React flags that — a ref read
+    during render is not tracked, so the button could be a paint behind
+    the value it depends on, and the component would not re-render when
+    the ref changed.
+
+    It gates what the user sees, so it is state. The two non-render
+    readers below work the same way with a setter.
+  */
+  const [lastUserMessage, setLastUserMessage] = useState<string | null>(
+    null,
+  );
 
   const apiMessages = useMemo(
     () =>
@@ -410,8 +422,7 @@ export default function ChatConversationPage() {
         content
       );
 
-    lastUserMessageRef.current =
-      content;
+    setLastUserMessage(content);
 
     const requestMessages = [
       ...apiMessages,
@@ -537,8 +548,7 @@ export default function ChatConversationPage() {
   }
 
   function handleRetry() {
-    const message =
-      lastUserMessageRef.current;
+    const message = lastUserMessage;
 
     if (!message || isSending) {
       return;
@@ -876,7 +886,7 @@ export default function ChatConversationPage() {
                 </p>
 
                 <div className="flex shrink-0 items-center gap-3">
-                  {lastUserMessageRef.current && (
+                  {lastUserMessage && (
                     <button
                       type="button"
                       onClick={
@@ -885,7 +895,7 @@ export default function ChatConversationPage() {
                       disabled={isSending}
                       className="text-xs text-cyan-200 transition hover:text-cyan-100 disabled:opacity-40"
                     >
-                      Tekrar dene
+                      Try again
                     </button>
                   )}
 
