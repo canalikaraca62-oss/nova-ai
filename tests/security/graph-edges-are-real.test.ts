@@ -125,17 +125,21 @@ void describe("Every edge comes from a foreign key", () => {
     }
   });
 
-  void test("the unsecured relation table is not read", () => {
+  void test("the unpopulated relation table is not read", () => {
     /*
      * public.ai_memory_relations carries typed relations and would make
-     * a richer graph — but it has NO row level security, so reading it
-     * from a user session would cross a tenant boundary. It stays
-     * unused until a migration gives it a policy.
+     * a richer graph. It is RLS-protected and owner-scoped — an earlier
+     * version of this comment claimed otherwise and was wrong.
+     *
+     * It stays unused because nothing in the product writes to it: no
+     * API route, no service, no UI. The table holds zero rows, so any
+     * edge drawn from it would be an edge the user cannot possibly
+     * verify. Using it means building the producer first.
      */
     assert.ok(
       !/ai_memory_relations/.test(PAGE_CODE + SCENE_CODE),
-      "ai_memory_relations has no RLS; reading it would cross a tenant " +
-        "boundary.",
+      "ai_memory_relations has no writer and holds no rows; an edge " +
+        "from it would be unverifiable.",
     );
   });
 });

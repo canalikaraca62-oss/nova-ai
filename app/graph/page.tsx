@@ -24,11 +24,14 @@ import type { GraphEdge, GraphNode } from "./GraphScene";
   WHAT IS DELIBERATELY ABSENT
 
   public.ai_memory_relations would be the richer source — typed
-  relations with a strength score — and it exists. It has NO row level
-  security, so reading it from a user session would cross a tenant
-  boundary. Using it needs a migration that adds a policy, and that is
-  behind an approval gate. Until then this graph shows less and means
-  it.
+  relations with a strength score — and it exists, with row level
+  security enabled and an ownership policy that joins through
+  ai_memories.user_id.
+
+  It is unused here for a simpler reason: nothing in the product writes
+  to it. No API route, no service, no UI touches that table, so it holds
+  zero rows and a view of it would draw nothing. Wiring it up means
+  building the producer first, not adding a query here.
 
   Agents, documents, decisions and outcomes are not here either. The
   product has no edge data for them, and a graph that invents

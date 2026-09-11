@@ -19,9 +19,9 @@ import { useEffect, useRef, useState } from "react";
   WHY NOT MORE
 
   public.ai_memory_relations exists and would be the obvious richer
-  source — but it carries NO row level security, so reading it from a
-  user session would cross a tenant boundary. It is deliberately unused
-  until a migration gives it a policy.
+  source. It is RLS-protected and owner-scoped, and it is still unused
+  here: no code in the product writes to it, so it holds zero rows.
+  Drawing from it would add nothing but the suggestion of depth.
 
   WHY IT IS LOADED THIS WAY
 
