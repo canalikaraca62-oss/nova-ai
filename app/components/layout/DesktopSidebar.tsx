@@ -20,6 +20,7 @@ import {
   PanelLeft,
   Plus,
   Search,
+  Share2,
   Settings,
   Sparkles,
   Workflow,
@@ -157,6 +158,13 @@ const DEFAULT_SECTIONS: SidebarSection[] = [
         href: "/search",
         icon: (
           <Search className="h-4 w-4" />
+        ),
+      },
+      {
+        label: "Work graph",
+        href: "/graph",
+        icon: (
+          <Share2 className="h-4 w-4" />
         ),
       },
     ],

@@ -22,6 +22,7 @@ import {
   PanelLeft,
   Plus,
   Search,
+  Share2,
   Settings,
   Sparkles,
   Workflow,
@@ -159,6 +160,13 @@ const DEFAULT_SECTIONS: MobileNavSection[] = [
         href: "/search",
         icon: (
           <Search className="h-5 w-5" />
+        ),
+      },
+      {
+        label: "Work graph",
+        href: "/graph",
+        icon: (
+          <Share2 className="h-5 w-5" />
         ),
       },
     ],
