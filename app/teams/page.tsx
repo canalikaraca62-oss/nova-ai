@@ -268,14 +268,14 @@ export default function TeamsPage() {
   }
 
   return (
-    <main className="min-h-screen bg-background text-white">
+    <main className="min-h-screen bg-background text-foreground">
       <div className="mx-auto w-full max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8">
         {/* Header */}
         <section className="mb-8 flex flex-col gap-5 border-b border-white/10 pb-8 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <div className="mb-3 flex items-center gap-2 text-sm text-muted-foreground">
               <span>Workspace</span>
-              <span className="text-white/30">/</span>
+              <span className="text-foreground/30">/</span>
               <span>Teams</span>
             </div>
 
@@ -283,7 +283,7 @@ export default function TeamsPage() {
               Teams
             </h1>
 
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-white/50 sm:text-base">
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-foreground/50 sm:text-base">
               Organize your people, projects and collaboration into focused
               high-performance teams.
             </p>
@@ -311,12 +311,12 @@ export default function TeamsPage() {
 
         <section className="mb-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
-            <p className="text-sm text-white/45">Total teams</p>
+            <p className="text-sm text-foreground/45">Total teams</p>
             <p className="mt-3 text-3xl font-semibold">{teams.length}</p>
           </div>
 
           <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
-            <p className="text-sm text-white/45">Collaboration status</p>
+            <p className="text-sm text-foreground/45">Collaboration status</p>
 
             <div className="mt-4 flex items-center gap-2">
               <span className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
@@ -332,7 +332,7 @@ export default function TeamsPage() {
               <div className="flex items-center justify-between gap-4">
                 <h2 className="font-semibold">Your teams</h2>
 
-                <span className="rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1 text-xs text-white/50">
+                <span className="rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1 text-xs text-foreground/50">
                   {filteredTeams.length}
                 </span>
               </div>
@@ -342,7 +342,7 @@ export default function TeamsPage() {
                   value={searchQuery}
                   onChange={(event) => setSearchQuery(event.target.value)}
                   placeholder="Search teams..."
-                  className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm outline-none placeholder:text-white/25 focus:border-white/25"
+                  className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm outline-none placeholder:text-foreground/25 focus:border-white/25"
                 />
               </div>
             </div>
@@ -354,13 +354,13 @@ export default function TeamsPage() {
                   aria-live="polite"
                   className="p-8 text-center"
                 >
-                  <p className="text-sm text-white/45">
+                  <p className="text-sm text-foreground/45">
                     Loading your teams...
                   </p>
                 </div>
               ) : filteredTeams.length === 0 ? (
                 <div className="p-8 text-center">
-                  <p className="text-sm text-white/45">
+                  <p className="text-sm text-foreground/45">
                     {teams.length === 0
                       ? "You have not created a team yet."
                       : "No teams found."}
@@ -401,11 +401,11 @@ export default function TeamsPage() {
                               )}
                             </div>
 
-                            <p className="mt-1 line-clamp-2 text-xs leading-5 text-white/45">
+                            <p className="mt-1 line-clamp-2 text-xs leading-5 text-foreground/45">
                               {team.description}
                             </p>
 
-                            <div className="mt-3 text-xs text-white/40">
+                            <div className="mt-3 text-xs text-foreground/40">
                               <span>
                                 Created {team.createdAt.slice(0, 10)}
                               </span>
@@ -426,7 +426,7 @@ export default function TeamsPage() {
               <div className="flex min-h-[500px] items-center justify-center rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-8 text-center">
                 <div>
                   <h2 className="text-xl font-semibold">Select a team</h2>
-                  <p className="mt-2 text-sm text-white/45">
+                  <p className="mt-2 text-sm text-foreground/45">
                     Choose a team from the left to view its members and details.
                   </p>
                 </div>
@@ -455,7 +455,7 @@ export default function TeamsPage() {
                             </span>
                           </div>
 
-                          <p className="mt-3 max-w-2xl text-sm leading-6 text-white/50">
+                          <p className="mt-3 max-w-2xl text-sm leading-6 text-foreground/50">
                             {selectedTeam.description}
                           </p>
                         </div>
@@ -474,7 +474,7 @@ export default function TeamsPage() {
 
                     <div className="mt-8 grid gap-4 border-t border-white/10 pt-6 sm:grid-cols-3">
                       <div>
-                        <p className="text-xs uppercase tracking-wider text-white/35">
+                        <p className="text-xs uppercase tracking-wider text-foreground/35">
                           Created
                         </p>
                         <p className="mt-2 text-lg font-medium">
@@ -502,7 +502,7 @@ export default function TeamsPage() {
                 <div className="rounded-2xl border border-white/10 bg-white/[0.025] p-6">
                   <h2 className="font-semibold">Team members</h2>
 
-                  <p className="mt-2 max-w-prose text-sm leading-6 text-white/40">
+                  <p className="mt-2 max-w-prose text-sm leading-6 text-foreground/40">
                     Membership and invitations are handled for the whole
                     organisation rather than per team, so everyone you
                     invite there can reach this team.
@@ -510,7 +510,7 @@ export default function TeamsPage() {
 
                   <Link
                     href="/settings"
-                    className="mt-5 inline-flex items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm text-white/70 transition hover:bg-white/[0.07] hover:text-white"
+                    className="mt-5 inline-flex items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm text-foreground/70 transition hover:bg-white/[0.07] hover:text-foreground"
                   >
                     Manage organisation members
                   </Link>
@@ -537,7 +537,7 @@ export default function TeamsPage() {
             <div className="flex items-center justify-between border-b border-white/10 px-6 py-5">
               <div>
                 <h2 className="text-lg font-semibold">Create a new team</h2>
-                <p className="mt-1 text-sm text-white/40">
+                <p className="mt-1 text-sm text-foreground/40">
                   Build a dedicated workspace for your collaborators.
                 </p>
               </div>
@@ -545,7 +545,7 @@ export default function TeamsPage() {
               <button
                 type="button"
                 onClick={() => setShowCreateModal(false)}
-                className="rounded-lg p-2 text-white/40 transition hover:bg-white/5 hover:text-white"
+                className="rounded-lg p-2 text-foreground/40 transition hover:bg-white/5 hover:text-foreground"
               >
                 ✕
               </button>
@@ -562,7 +562,7 @@ export default function TeamsPage() {
                   value={newTeamName}
                   onChange={(event) => setNewTeamName(event.target.value)}
                   placeholder="e.g. Global Intelligence"
-                  className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm outline-none placeholder:text-white/25 focus:border-white/25"
+                  className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm outline-none placeholder:text-foreground/25 focus:border-white/25"
                 />
               </div>
 
@@ -578,7 +578,7 @@ export default function TeamsPage() {
                   }
                   placeholder="What will this team work on?"
                   rows={4}
-                  className="w-full resize-none rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm outline-none placeholder:text-white/25 focus:border-white/25"
+                  className="w-full resize-none rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm outline-none placeholder:text-foreground/25 focus:border-white/25"
                 />
               </div>
 
@@ -586,7 +586,7 @@ export default function TeamsPage() {
                 <button
                   type="button"
                   onClick={() => setShowCreateModal(false)}
-                  className="rounded-xl px-4 py-2.5 text-sm text-white/50 transition hover:bg-white/5 hover:text-white"
+                  className="rounded-xl px-4 py-2.5 text-sm text-foreground/50 transition hover:bg-white/5 hover:text-foreground"
                 >
                   Cancel
                 </button>

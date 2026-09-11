@@ -243,7 +243,7 @@ export default function PlanCard({
           isPopular && !isCurrent && "pt-3"
         )}
       >
-        <h3 className="text-2xl font-bold tracking-tight text-zinc-950 dark:text-white">
+        <h3 className="text-2xl font-bold tracking-tight text-zinc-950 dark:text-foreground">
           {resolvedName}
         </h3>
 
@@ -253,12 +253,12 @@ export default function PlanCard({
 
         <div className="mt-7 flex items-end gap-2">
           {resolvedPrice === null ? (
-            <span className="text-3xl font-bold tracking-tight text-zinc-950 dark:text-white">
+            <span className="text-3xl font-bold tracking-tight text-zinc-950 dark:text-foreground">
               Custom
             </span>
           ) : (
             <>
-              <span className="text-4xl font-bold tracking-tight text-zinc-950 dark:text-white">
+              <span className="text-4xl font-bold tracking-tight text-zinc-950 dark:text-foreground">
                 {formatPrice(
                   resolvedPrice,
                   currency

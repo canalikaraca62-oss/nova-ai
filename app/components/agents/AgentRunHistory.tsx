@@ -581,7 +581,7 @@ export default function AgentRunHistory({
                 </div>
 
                 <div>
-                  <h2 className="text-base font-semibold text-white">
+                  <h2 className="text-base font-semibold text-foreground">
                     {title}
                   </h2>
 
@@ -595,7 +595,7 @@ export default function AgentRunHistory({
             <div className="flex flex-wrap items-center gap-2">
               <div className="flex overflow-hidden rounded-xl border border-white/[0.07] bg-black/20">
                 <div className="px-3 py-2 text-center">
-                  <div className="text-sm font-semibold text-white">
+                  <div className="text-sm font-semibold text-foreground">
                     {stats.total}
                   </div>
 
@@ -635,7 +635,7 @@ export default function AgentRunHistory({
                     isRefreshing ||
                     isLoading
                   }
-                  className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.025] text-zinc-400 transition hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.025] text-zinc-400 transition hover:bg-white/[0.06] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
                   aria-label="Refresh run history"
                 >
                   <RefreshCw
@@ -744,7 +744,7 @@ export default function AgentRunHistory({
               <Sparkles className="h-7 w-7 text-violet-300" />
             </div>
 
-            <h3 className="mt-5 text-base font-semibold text-white">
+            <h3 className="mt-5 text-base font-semibold text-foreground">
               No runs found
             </h3>
 
@@ -905,7 +905,7 @@ export default function AgentRunHistory({
                           onClick={() => {
                             void onRunAgain(run);
                           }}
-                          className="inline-flex h-10 items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.025] px-3 text-xs font-medium text-zinc-400 transition hover:bg-white/[0.06] hover:text-white"
+                          className="inline-flex h-10 items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.025] px-3 text-xs font-medium text-zinc-400 transition hover:bg-white/[0.06] hover:text-foreground"
                         >
                           <RotateCcw className="h-3.5 w-3.5" />
 
@@ -921,7 +921,7 @@ export default function AgentRunHistory({
                           onClick={() =>
                             onOpenRun(run)
                           }
-                          className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.025] text-zinc-500 transition hover:bg-white/[0.06] hover:text-white"
+                          className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.025] text-zinc-500 transition hover:bg-white/[0.06] hover:text-foreground"
                           aria-label="Open run"
                         >
                           <ExternalLink className="h-4 w-4" />
@@ -1003,7 +1003,7 @@ export default function AgentRunHistory({
                                   run.id,
                                 );
                               }}
-                              className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/[0.06] bg-black/20 text-zinc-500 transition hover:text-white"
+                              className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/[0.06] bg-black/20 text-zinc-500 transition hover:text-foreground"
                               aria-label="Copy run ID"
                             >
                               {copiedRunId ===
@@ -1188,7 +1188,7 @@ export default function AgentRunHistory({
                 disabled={
                   currentPage === 1
                 }
-                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.025] text-zinc-500 transition hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.025] text-zinc-500 transition hover:bg-white/[0.06] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
                 aria-label="Previous page"
               >
                 <ChevronLeft className="h-4 w-4" />
@@ -1214,7 +1214,7 @@ export default function AgentRunHistory({
                   currentPage ===
                   totalPages
                 }
-                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.025] text-zinc-500 transition hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.025] text-zinc-500 transition hover:bg-white/[0.06] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
                 aria-label="Next page"
               >
                 <ChevronRight className="h-4 w-4" />

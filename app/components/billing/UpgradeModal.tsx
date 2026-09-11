@@ -439,7 +439,7 @@ export default function UpgradeModal({
 
             <h2
               id="upgrade-modal-title"
-              className="text-2xl font-bold tracking-tight text-zinc-950 dark:text-white sm:text-3xl"
+              className="text-2xl font-bold tracking-tight text-zinc-950 dark:text-foreground sm:text-3xl"
             >
               {title}
             </h2>
@@ -476,7 +476,7 @@ export default function UpgradeModal({
                   Choose your plan
                 </p>
 
-                <h3 className="mt-2 text-xl font-semibold text-zinc-950 dark:text-white">
+                <h3 className="mt-2 text-xl font-semibold text-zinc-950 dark:text-foreground">
                   Scale your AI workspace
                 </h3>
               </div>
@@ -658,7 +658,7 @@ export default function UpgradeModal({
 
                 <div className="mt-3 flex items-center justify-between gap-4">
                   <div>
-                    <p className="font-semibold text-zinc-950 dark:text-white">
+                    <p className="font-semibold text-zinc-950 dark:text-foreground">
                       {
                         currentConfig.name
                       }{" "}
@@ -691,7 +691,7 @@ export default function UpgradeModal({
 
               <div className="mt-3 flex items-start justify-between gap-4">
                 <div>
-                  <h3 className="text-3xl font-bold tracking-tight text-zinc-950 dark:text-white">
+                  <h3 className="text-3xl font-bold tracking-tight text-zinc-950 dark:text-foreground">
                     {
                       selectedConfig.name
                     }
@@ -723,7 +723,7 @@ export default function UpgradeModal({
                       Pricing
                     </p>
 
-                    <p className="mt-2 text-4xl font-bold tracking-tight text-zinc-950 dark:text-white">
+                    <p className="mt-2 text-4xl font-bold tracking-tight text-zinc-950 dark:text-foreground">
                       Custom
                     </p>
 
@@ -746,7 +746,7 @@ export default function UpgradeModal({
                     </p>
 
                     <div className="mt-2 flex items-end gap-2">
-                      <span className="text-4xl font-bold tracking-tight text-zinc-950 dark:text-white">
+                      <span className="text-4xl font-bold tracking-tight text-zinc-950 dark:text-foreground">
                         {price !== null
                           ? formatPrice(
                               price

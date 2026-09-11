@@ -52,7 +52,7 @@ const capabilities = [
 
 export default function HomePage() {
   return (
-    <main className="min-h-screen overflow-hidden bg-background text-white">
+    <main className="min-h-screen overflow-hidden bg-background text-foreground">
       {/* Background */}
       <div
         aria-hidden="true"
@@ -78,24 +78,24 @@ export default function HomePage() {
             </span>
           </Link>
 
-          <nav className="hidden items-center gap-7 text-sm text-white/60 md:flex">
+          <nav className="hidden items-center gap-7 text-sm text-foreground/60 md:flex">
             <Link
               href="/workspace"
-              className="transition-colors hover:text-white"
+              className="transition-colors hover:text-foreground"
             >
               Workspace
             </Link>
 
             <Link
               href="/marketplace"
-              className="transition-colors hover:text-white"
+              className="transition-colors hover:text-foreground"
             >
               Marketplace
             </Link>
 
             <Link
               href="/pricing"
-              className="transition-colors hover:text-white"
+              className="transition-colors hover:text-foreground"
             >
               Pricing
             </Link>
@@ -104,7 +104,7 @@ export default function HomePage() {
           <div className="flex items-center gap-3">
             <Link
               href="/login"
-              className="hidden rounded-lg px-4 py-2 text-sm font-medium text-white/70 transition-colors hover:bg-white/[0.05] hover:text-white sm:block"
+              className="hidden rounded-lg px-4 py-2 text-sm font-medium text-foreground/70 transition-colors hover:bg-white/[0.05] hover:text-foreground sm:block"
             >
               Sign in
             </Link>
@@ -136,7 +136,7 @@ export default function HomePage() {
           </span>
         </h1>
 
-        <p className="mt-8 max-w-2xl text-base leading-8 text-white/50 sm:text-lg">
+        <p className="mt-8 max-w-2xl text-base leading-8 text-foreground/50 sm:text-lg">
           SYRAVEN brings AI agents, knowledge, projects, automation, and
           collaboration together into one intelligent workspace.
         </p>
@@ -152,14 +152,14 @@ export default function HomePage() {
 
           <Link
             href="/workspace"
-            className="inline-flex h-12 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-6 text-sm font-medium text-white/80 transition-colors hover:bg-white/[0.07] hover:text-white"
+            className="inline-flex h-12 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-6 text-sm font-medium text-foreground/80 transition-colors hover:bg-white/[0.07] hover:text-foreground"
           >
             <Command className="h-4 w-4" />
             Explore workspace
           </Link>
         </div>
 
-        <div className="mt-16 flex flex-wrap justify-center gap-x-6 gap-y-3 text-sm text-white/40">
+        <div className="mt-16 flex flex-wrap justify-center gap-x-6 gap-y-3 text-sm text-foreground/40">
           {capabilities.map((capability) => (
             <div key={capability} className="flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4 shrink-0 text-violet-400/70" />
@@ -181,7 +181,7 @@ export default function HomePage() {
               One intelligence layer for everything.
             </h2>
 
-            <p className="mt-5 text-white/50">
+            <p className="mt-5 text-foreground/50">
               Designed to connect people, AI, knowledge, and execution without
               forcing teams to jump between disconnected tools.
             </p>
@@ -200,11 +200,11 @@ export default function HomePage() {
                     <Icon className="h-5 w-5 text-violet-300" />
                   </div>
 
-                  <h3 className="text-lg font-semibold text-white">
+                  <h3 className="text-lg font-semibold text-foreground">
                     {feature.title}
                   </h3>
 
-                  <p className="mt-3 max-w-md leading-7 text-white/50">
+                  <p className="mt-3 max-w-md leading-7 text-foreground/50">
                     {feature.description}
                   </p>
                 </article>
@@ -228,7 +228,7 @@ export default function HomePage() {
                   Your organization&apos;s intelligence, connected.
                 </h2>
 
-                <p className="mt-6 max-w-xl leading-8 text-white/50">
+                <p className="mt-6 max-w-xl leading-8 text-foreground/50">
                   SYRAVEN turns disconnected information into an intelligent
                   system that can understand context, support decisions, and
                   help teams move faster.
@@ -236,7 +236,7 @@ export default function HomePage() {
 
                 <Link
                   href="/knowledge"
-                  className="mt-8 inline-flex items-center gap-2 text-sm font-medium text-white transition-colors hover:text-violet-300"
+                  className="mt-8 inline-flex items-center gap-2 text-sm font-medium text-foreground transition-colors hover:text-violet-300"
                 >
                   Explore knowledge
                   <ArrowRight className="h-4 w-4" />
@@ -256,11 +256,11 @@ export default function HomePage() {
                       <Brain className="h-5 w-5 shrink-0 text-violet-300" />
 
                       <div>
-                        <div className="text-sm font-medium text-white">
+                        <div className="text-sm font-medium text-foreground">
                           Intelligence Layer
                         </div>
 
-                        <div className="mt-1 text-xs text-white/40">
+                        <div className="mt-1 text-xs text-foreground/40">
                           Understanding context across your workspace
                         </div>
                       </div>
@@ -272,11 +272,11 @@ export default function HomePage() {
                       <MessageSquare className="h-5 w-5 shrink-0 text-indigo-300" />
 
                       <div>
-                        <div className="text-sm font-medium text-white">
+                        <div className="text-sm font-medium text-foreground">
                           AI Collaboration
                         </div>
 
-                        <div className="mt-1 text-xs text-white/40">
+                        <div className="mt-1 text-xs text-foreground/40">
                           Agents working alongside your team
                         </div>
                       </div>
@@ -288,11 +288,11 @@ export default function HomePage() {
                       <Zap className="h-5 w-5 shrink-0 text-yellow-300" />
 
                       <div>
-                        <div className="text-sm font-medium text-white">
+                        <div className="text-sm font-medium text-foreground">
                           Automated Execution
                         </div>
 
-                        <div className="mt-1 text-xs text-white/40">
+                        <div className="mt-1 text-xs text-foreground/40">
                           Turning intelligence into action
                         </div>
                       </div>
@@ -314,7 +314,7 @@ export default function HomePage() {
             Build what comes next.
           </h2>
 
-          <p className="mx-auto mt-5 max-w-xl text-white/50">
+          <p className="mx-auto mt-5 max-w-xl text-foreground/50">
             Start building your intelligent workspace with SYRAVEN.
           </p>
 
@@ -330,7 +330,7 @@ export default function HomePage() {
 
       {/* Footer */}
       <footer className="relative z-10 border-t border-white/[0.06]">
-        <div className="mx-auto flex max-w-7xl flex-col gap-5 px-6 py-8 text-sm text-white/40 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mx-auto flex max-w-7xl flex-col gap-5 px-6 py-8 text-sm text-foreground/40 sm:flex-row sm:items-center sm:justify-between">
           <div>
             © {new Date().getFullYear()} SYRAVEN. All rights reserved.
           </div>
@@ -338,14 +338,14 @@ export default function HomePage() {
           <div className="flex gap-5">
             <Link
               href="/privacy"
-              className="transition-colors hover:text-white"
+              className="transition-colors hover:text-foreground"
             >
               Privacy
             </Link>
 
             <Link
               href="/terms"
-              className="transition-colors hover:text-white"
+              className="transition-colors hover:text-foreground"
             >
               Terms
             </Link>

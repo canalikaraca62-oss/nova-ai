@@ -38,25 +38,25 @@ export default function TermsPage() {
   };
 
   return (
-    <main className="min-h-screen bg-background text-white">
+    <main className="min-h-screen bg-background text-foreground">
       {/* Header */}
       <section className="border-b border-white/10">
         <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
           <div className="max-w-3xl">
-            <div className="mb-6 flex items-center gap-3 text-sm text-white/40">
+            <div className="mb-6 flex items-center gap-3 text-sm text-foreground/40">
               <Link
                 href="/"
-                className="transition hover:text-white"
+                className="transition hover:text-foreground"
               >
                 SYRAVEN
               </Link>
 
               <span>/</span>
 
-              <span className="text-white/70">Legal</span>
+              <span className="text-foreground/70">Legal</span>
             </div>
 
-            <div className="inline-flex items-center rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-medium uppercase tracking-[0.2em] text-white/50">
+            <div className="inline-flex items-center rounded-full border border-white/10 bg-white/[0.03] px-4 py-2 text-xs font-medium uppercase tracking-[0.2em] text-foreground/50">
               Legal Agreement
             </div>
 
@@ -64,13 +64,13 @@ export default function TermsPage() {
               Terms of Service
             </h1>
 
-            <p className="mt-6 max-w-2xl text-base leading-8 text-white/50 sm:text-lg">
+            <p className="mt-6 max-w-2xl text-base leading-8 text-foreground/50 sm:text-lg">
               These Terms of Service govern your access to and use of
               the SYRAVEN platform, products, services, applications,
               artificial intelligence systems, and related technologies.
             </p>
 
-            <div className="mt-8 flex flex-wrap gap-x-8 gap-y-3 text-sm text-white/40">
+            <div className="mt-8 flex flex-wrap gap-x-8 gap-y-3 text-sm text-foreground/40">
               <span>Effective date: January 1, 2026</span>
               <span>Last updated: January 1, 2026</span>
             </div>
@@ -84,7 +84,7 @@ export default function TermsPage() {
           {/* Sidebar */}
           <aside className="lg:sticky lg:top-8 lg:self-start">
             <div className="rounded-2xl border border-white/10 bg-white/[0.025] p-4">
-              <p className="px-3 pb-3 text-xs font-semibold uppercase tracking-[0.18em] text-white/35">
+              <p className="px-3 pb-3 text-xs font-semibold uppercase tracking-[0.18em] text-foreground/35">
                 On this page
               </p>
 
@@ -116,14 +116,14 @@ export default function TermsPage() {
                 Questions about these terms?
               </p>
 
-              <p className="mt-2 text-sm leading-6 text-white/40">
+              <p className="mt-2 text-sm leading-6 text-foreground/40">
                 Contact our legal and support team for additional
                 information.
               </p>
 
               <a
                 href="mailto:legal@syraven.ai"
-                className="mt-4 inline-flex text-sm font-medium text-white transition hover:text-white/70"
+                className="mt-4 inline-flex text-sm font-medium text-foreground transition hover:text-foreground/70"
               >
                 Contact legal →
               </a>
@@ -139,7 +139,7 @@ export default function TermsPage() {
                     1. Acceptance of Terms
                   </h2>
 
-                  <div className="mt-5 space-y-5 text-[15px] leading-8 text-white/55">
+                  <div className="mt-5 space-y-5 text-[15px] leading-8 text-foreground/55">
                     <p>
                       By accessing, creating an account for, or using
                       SYRAVEN, you agree to be bound by these Terms of
@@ -168,7 +168,7 @@ export default function TermsPage() {
                     2. Eligibility and Account
                   </h2>
 
-                  <div className="mt-5 space-y-5 text-[15px] leading-8 text-white/55">
+                  <div className="mt-5 space-y-5 text-[15px] leading-8 text-foreground/55">
                     <p>
                       You must provide accurate and complete information
                       when creating and maintaining your account. You are
@@ -183,7 +183,7 @@ export default function TermsPage() {
                       has been compromised.
                     </p>
 
-                    <ul className="list-disc space-y-3 pl-6 marker:text-white/30">
+                    <ul className="list-disc space-y-3 pl-6 marker:text-foreground/30">
                       <li>
                         Maintain accurate account information.
                       </li>
@@ -208,7 +208,7 @@ export default function TermsPage() {
                     3. Our Services
                   </h2>
 
-                  <div className="mt-5 space-y-5 text-[15px] leading-8 text-white/55">
+                  <div className="mt-5 space-y-5 text-[15px] leading-8 text-foreground/55">
                     <p>
                       SYRAVEN provides software, artificial intelligence,
                       collaboration, automation, knowledge management,
@@ -242,7 +242,7 @@ export default function TermsPage() {
                     4. Acceptable Use
                   </h2>
 
-                  <div className="mt-5 space-y-5 text-[15px] leading-8 text-white/55">
+                  <div className="mt-5 space-y-5 text-[15px] leading-8 text-foreground/55">
                     <p>
                       You may use SYRAVEN only for lawful purposes and in
                       accordance with these Terms. You must not misuse,
@@ -252,7 +252,7 @@ export default function TermsPage() {
 
                     <p>You agree not to:</p>
 
-                    <ul className="list-disc space-y-3 pl-6 marker:text-white/30">
+                    <ul className="list-disc space-y-3 pl-6 marker:text-foreground/30">
                       <li>
                         Violate applicable laws, regulations, or
                         contractual obligations.
@@ -287,7 +287,7 @@ export default function TermsPage() {
                     5. User Content
                   </h2>
 
-                  <div className="mt-5 space-y-5 text-[15px] leading-8 text-white/55">
+                  <div className="mt-5 space-y-5 text-[15px] leading-8 text-foreground/55">
                     <p>
                       You retain ownership of content, data, documents,
                       prompts, files, media, and other materials that you
@@ -316,7 +316,7 @@ export default function TermsPage() {
                     6. AI and Automated Services
                   </h2>
 
-                  <div className="mt-5 space-y-5 text-[15px] leading-8 text-white/55">
+                  <div className="mt-5 space-y-5 text-[15px] leading-8 text-foreground/55">
                     <p>
                       Some SYRAVEN features use artificial intelligence,
                       machine learning, automated reasoning, generative
@@ -354,7 +354,7 @@ export default function TermsPage() {
                     7. Billing and Payments
                   </h2>
 
-                  <div className="mt-5 space-y-5 text-[15px] leading-8 text-white/55">
+                  <div className="mt-5 space-y-5 text-[15px] leading-8 text-foreground/55">
                     <p>
                       Certain SYRAVEN services require payment. Prices,
                       subscription terms, billing intervals, usage limits,
@@ -386,7 +386,7 @@ export default function TermsPage() {
                     8. Intellectual Property
                   </h2>
 
-                  <div className="mt-5 space-y-5 text-[15px] leading-8 text-white/55">
+                  <div className="mt-5 space-y-5 text-[15px] leading-8 text-foreground/55">
                     <p>
                       SYRAVEN, its platform, software, interfaces, systems,
                       branding, documentation, and proprietary technology
@@ -410,7 +410,7 @@ export default function TermsPage() {
                     9. Security and Availability
                   </h2>
 
-                  <div className="mt-5 space-y-5 text-[15px] leading-8 text-white/55">
+                  <div className="mt-5 space-y-5 text-[15px] leading-8 text-foreground/55">
                     <p>
                       We implement technical and organizational measures
                       designed to support the security and reliability of
@@ -435,7 +435,7 @@ export default function TermsPage() {
                     10. Suspension and Termination
                   </h2>
 
-                  <div className="mt-5 space-y-5 text-[15px] leading-8 text-white/55">
+                  <div className="mt-5 space-y-5 text-[15px] leading-8 text-foreground/55">
                     <p>
                       You may stop using SYRAVEN at any time, subject to any
                       active subscription or contractual commitments.
@@ -464,7 +464,7 @@ export default function TermsPage() {
                     11. Disclaimers
                   </h2>
 
-                  <div className="mt-5 space-y-5 text-[15px] leading-8 text-white/55">
+                  <div className="mt-5 space-y-5 text-[15px] leading-8 text-foreground/55">
                     <p>
                       To the maximum extent permitted by applicable law,
                       SYRAVEN services are provided on an “as is” and “as
@@ -487,7 +487,7 @@ export default function TermsPage() {
                     12. Limitation of Liability
                   </h2>
 
-                  <div className="mt-5 space-y-5 text-[15px] leading-8 text-white/55">
+                  <div className="mt-5 space-y-5 text-[15px] leading-8 text-foreground/55">
                     <p>
                       To the maximum extent permitted by applicable law,
                       SYRAVEN and its affiliates, officers, employees,
@@ -512,7 +512,7 @@ export default function TermsPage() {
                     13. Changes to These Terms
                   </h2>
 
-                  <div className="mt-5 space-y-5 text-[15px] leading-8 text-white/55">
+                  <div className="mt-5 space-y-5 text-[15px] leading-8 text-foreground/55">
                     <p>
                       We may update these Terms from time to time to
                       reflect changes in our services, technology,
@@ -541,7 +541,7 @@ export default function TermsPage() {
                     14. Contact Us
                   </h2>
 
-                  <div className="mt-5 text-[15px] leading-8 text-white/55">
+                  <div className="mt-5 text-[15px] leading-8 text-foreground/55">
                     <p>
                       If you have questions, concerns, or requests related
                       to these Terms of Service, you may contact the SYRAVEN
@@ -549,18 +549,18 @@ export default function TermsPage() {
                     </p>
 
                     <div className="mt-6 rounded-2xl border border-white/10 bg-black/20 p-6">
-                      <p className="font-medium text-white">
+                      <p className="font-medium text-foreground">
                         SYRAVEN Legal
                       </p>
 
                       <a
                         href="mailto:legal@syraven.ai"
-                        className="mt-3 inline-block text-white/60 transition hover:text-white"
+                        className="mt-3 inline-block text-foreground/60 transition hover:text-foreground"
                       >
                         legal@syraven.ai
                       </a>
 
-                      <p className="mt-3 text-sm text-white/35">
+                      <p className="mt-3 text-sm text-foreground/35">
                         Please include sufficient information so we can
                         understand and respond to your request.
                       </p>
@@ -577,7 +577,7 @@ export default function TermsPage() {
                   Related legal documents
                 </p>
 
-                <p className="mt-1 text-sm text-white/40">
+                <p className="mt-1 text-sm text-foreground/40">
                   Review our privacy practices and platform policies.
                 </p>
               </div>
@@ -585,14 +585,14 @@ export default function TermsPage() {
               <div className="flex flex-wrap gap-3">
                 <Link
                   href="/privacy"
-                  className="rounded-xl border border-white/10 px-4 py-2.5 text-sm text-white/60 transition hover:bg-white/[0.05] hover:text-white"
+                  className="rounded-xl border border-white/10 px-4 py-2.5 text-sm text-foreground/60 transition hover:bg-white/[0.05] hover:text-foreground"
                 >
                   Privacy Policy
                 </Link>
 
                 <Link
                   href="/settings"
-                  className="rounded-xl border border-white/10 px-4 py-2.5 text-sm text-white/60 transition hover:bg-white/[0.05] hover:text-white"
+                  className="rounded-xl border border-white/10 px-4 py-2.5 text-sm text-foreground/60 transition hover:bg-white/[0.05] hover:text-foreground"
                 >
                   Settings
                 </Link>

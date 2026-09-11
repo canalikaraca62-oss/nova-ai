@@ -258,7 +258,7 @@ export default function ChatActions({
       {isOpen && (
         <div className="absolute right-0 top-[calc(100%+0.5rem)] z-50 w-64 overflow-hidden rounded-2xl border border-zinc-200 bg-white p-2 shadow-2xl dark:border-zinc-800 dark:bg-zinc-950">
           <div className="border-b border-zinc-100 px-3 py-2.5 dark:border-zinc-800">
-            <p className="truncate text-xs font-semibold text-zinc-900 dark:text-white">
+            <p className="truncate text-xs font-semibold text-zinc-900 dark:text-foreground">
               {title}
             </p>
 
@@ -425,7 +425,7 @@ export default function ChatActions({
       {isRenameOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-3xl border border-zinc-200 bg-white p-6 shadow-2xl dark:border-zinc-800 dark:bg-zinc-950">
-            <h2 className="text-lg font-bold text-zinc-950 dark:text-white">
+            <h2 className="text-lg font-bold text-zinc-950 dark:text-foreground">
               Rename conversation
             </h2>
 
@@ -480,7 +480,7 @@ export default function ChatActions({
                 onClick={() =>
                   void handleRename()
                 }
-                className="rounded-xl bg-violet-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-xl bg-violet-600 px-5 py-2.5 text-sm font-semibold text-foreground transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {isLoading
                   ? "Saving..."
@@ -498,7 +498,7 @@ export default function ChatActions({
               !
             </div>
 
-            <h2 className="mt-5 text-lg font-bold text-zinc-950 dark:text-white">
+            <h2 className="mt-5 text-lg font-bold text-zinc-950 dark:text-foreground">
               Delete conversation?
             </h2>
 

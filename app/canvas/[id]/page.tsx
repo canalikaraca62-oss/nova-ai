@@ -775,7 +775,7 @@ export default function CanvasDetailPage() {
           <div className="flex min-w-0 items-center gap-3">
             <Link
               href="/canvas"
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/10 text-zinc-400 transition hover:bg-white/5 hover:text-white"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/10 text-zinc-400 transition hover:bg-white/5 hover:text-foreground"
               aria-label="Back to canvases"
             >
               ←
@@ -862,7 +862,7 @@ export default function CanvasDetailPage() {
                 onClick={() =>
                   addNode("note")
                 }
-                className="rounded-xl border border-white/10 bg-zinc-950/80 px-3 py-2 text-sm text-zinc-300 backdrop-blur transition hover:bg-white/10 hover:text-white"
+                className="rounded-xl border border-white/10 bg-zinc-950/80 px-3 py-2 text-sm text-zinc-300 backdrop-blur transition hover:bg-white/10 hover:text-foreground"
               >
                 + Note
               </button>
@@ -872,7 +872,7 @@ export default function CanvasDetailPage() {
                 onClick={() =>
                   addNode("idea")
                 }
-                className="rounded-xl border border-white/10 bg-zinc-950/80 px-3 py-2 text-sm text-zinc-300 backdrop-blur transition hover:bg-white/10 hover:text-white"
+                className="rounded-xl border border-white/10 bg-zinc-950/80 px-3 py-2 text-sm text-zinc-300 backdrop-blur transition hover:bg-white/10 hover:text-foreground"
               >
                 ✦ Idea
               </button>
@@ -882,7 +882,7 @@ export default function CanvasDetailPage() {
                 onClick={() =>
                   addNode("task")
                 }
-                className="rounded-xl border border-white/10 bg-zinc-950/80 px-3 py-2 text-sm text-zinc-300 backdrop-blur transition hover:bg-white/10 hover:text-white"
+                className="rounded-xl border border-white/10 bg-zinc-950/80 px-3 py-2 text-sm text-zinc-300 backdrop-blur transition hover:bg-white/10 hover:text-foreground"
               >
                 ✓ Task
               </button>
@@ -892,7 +892,7 @@ export default function CanvasDetailPage() {
                 onClick={() =>
                   addNode("text")
                 }
-                className="rounded-xl border border-white/10 bg-zinc-950/80 px-3 py-2 text-sm text-zinc-300 backdrop-blur transition hover:bg-white/10 hover:text-white"
+                className="rounded-xl border border-white/10 bg-zinc-950/80 px-3 py-2 text-sm text-zinc-300 backdrop-blur transition hover:bg-white/10 hover:text-foreground"
               >
                 + Text
               </button>
@@ -962,7 +962,7 @@ export default function CanvasDetailPage() {
                         </div>
 
                         <div className="p-4">
-                          <h3 className="truncate font-semibold text-white">
+                          <h3 className="truncate font-semibold text-foreground">
                             {node.title}
                           </h3>
 
@@ -1023,7 +1023,7 @@ export default function CanvasDetailPage() {
               <button
                 type="button"
                 onClick={handleZoomOut}
-                className="flex h-9 w-9 items-center justify-center rounded-xl text-zinc-400 transition hover:bg-white/10 hover:text-white"
+                className="flex h-9 w-9 items-center justify-center rounded-xl text-zinc-400 transition hover:bg-white/10 hover:text-foreground"
                 aria-label="Zoom out"
               >
                 −
@@ -1040,7 +1040,7 @@ export default function CanvasDetailPage() {
               <button
                 type="button"
                 onClick={handleZoomIn}
-                className="flex h-9 w-9 items-center justify-center rounded-xl text-zinc-400 transition hover:bg-white/10 hover:text-white"
+                className="flex h-9 w-9 items-center justify-center rounded-xl text-zinc-400 transition hover:bg-white/10 hover:text-foreground"
                 aria-label="Zoom in"
               >
                 +
@@ -1053,7 +1053,7 @@ export default function CanvasDetailPage() {
                 onClick={() =>
                   void toggleFullscreen()
                 }
-                className="flex h-9 w-9 items-center justify-center rounded-xl text-zinc-400 transition hover:bg-white/10 hover:text-white"
+                className="flex h-9 w-9 items-center justify-center rounded-xl text-zinc-400 transition hover:bg-white/10 hover:text-foreground"
                 aria-label="Toggle fullscreen"
               >
                 {fullscreen ? "⊙" : "⛶"}
@@ -1112,7 +1112,7 @@ export default function CanvasDetailPage() {
                               }
                             )
                           }
-                          className="mt-2 w-full rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5 text-sm text-white outline-none transition focus:border-white/30"
+                          className="mt-2 w-full rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5 text-sm text-foreground outline-none transition focus:border-white/30"
                         />
                       </div>
 

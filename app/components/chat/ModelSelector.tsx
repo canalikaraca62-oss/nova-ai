@@ -529,7 +529,7 @@ export default function ModelSelector({
 
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <span className="truncate text-sm font-semibold text-zinc-900 dark:text-white">
+            <span className="truncate text-sm font-semibold text-zinc-900 dark:text-foreground">
               {model.name}
             </span>
 
@@ -663,7 +663,7 @@ export default function ModelSelector({
             </>
           ) : selectedModel ? (
             <>
-              <p className="truncate text-sm font-semibold text-zinc-900 dark:text-white">
+              <p className="truncate text-sm font-semibold text-zinc-900 dark:text-foreground">
                 {selectedModel.name}
               </p>
 

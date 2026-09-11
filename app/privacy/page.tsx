@@ -7,7 +7,7 @@ export default function PrivacyPage() {
         {/* Back */}
         <Link
           href="/"
-          className="inline-flex items-center text-sm text-zinc-500 transition hover:text-white"
+          className="inline-flex items-center text-sm text-zinc-500 transition hover:text-foreground"
         >
           ← Back to SYRAVEN
         </Link>
@@ -30,7 +30,7 @@ export default function PrivacyPage() {
         {/* Content */}
         <div className="space-y-12 py-12 text-zinc-400">
           <section>
-            <h2 className="text-2xl font-semibold text-white">
+            <h2 className="text-2xl font-semibold text-foreground">
               1. Introduction
             </h2>
 
@@ -42,7 +42,7 @@ export default function PrivacyPage() {
           </section>
 
           <section>
-            <h2 className="text-2xl font-semibold text-white">
+            <h2 className="text-2xl font-semibold text-foreground">
               2. Information We Collect
             </h2>
 
@@ -55,7 +55,7 @@ export default function PrivacyPage() {
           </section>
 
           <section>
-            <h2 className="text-2xl font-semibold text-white">
+            <h2 className="text-2xl font-semibold text-foreground">
               3. How We Use Information
             </h2>
 
@@ -68,7 +68,7 @@ export default function PrivacyPage() {
           </section>
 
           <section>
-            <h2 className="text-2xl font-semibold text-white">
+            <h2 className="text-2xl font-semibold text-foreground">
               4. Conversations and AI Processing
             </h2>
 
@@ -80,7 +80,7 @@ export default function PrivacyPage() {
           </section>
 
           <section>
-            <h2 className="text-2xl font-semibold text-white">
+            <h2 className="text-2xl font-semibold text-foreground">
               5. Files and Documents
             </h2>
 
@@ -93,7 +93,7 @@ export default function PrivacyPage() {
           </section>
 
           <section>
-            <h2 className="text-2xl font-semibold text-white">
+            <h2 className="text-2xl font-semibold text-foreground">
               6. Memory
             </h2>
 
@@ -106,7 +106,7 @@ export default function PrivacyPage() {
           </section>
 
           <section>
-            <h2 className="text-2xl font-semibold text-white">
+            <h2 className="text-2xl font-semibold text-foreground">
               7. Data Security
             </h2>
 
@@ -118,7 +118,7 @@ export default function PrivacyPage() {
           </section>
 
           <section>
-            <h2 className="text-2xl font-semibold text-white">
+            <h2 className="text-2xl font-semibold text-foreground">
               8. Third-Party Services
             </h2>
 
@@ -130,7 +130,7 @@ export default function PrivacyPage() {
           </section>
 
           <section>
-            <h2 className="text-2xl font-semibold text-white">
+            <h2 className="text-2xl font-semibold text-foreground">
               9. Changes to This Policy
             </h2>
 
@@ -142,7 +142,7 @@ export default function PrivacyPage() {
           </section>
 
           <section>
-            <h2 className="text-2xl font-semibold text-white">
+            <h2 className="text-2xl font-semibold text-foreground">
               10. Contact
             </h2>
 
@@ -151,7 +151,7 @@ export default function PrivacyPage() {
               us at{" "}
               <a
                 href="mailto:support@syraven.com"
-                className="text-white underline decoration-white/30 underline-offset-4 transition hover:decoration-white"
+                className="text-foreground underline decoration-white/30 underline-offset-4 transition hover:decoration-white"
               >
                 support@syraven.com
               </a>

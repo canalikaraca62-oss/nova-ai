@@ -497,7 +497,7 @@ export default function FeatureComparison({
             Compare plans
           </div>
 
-          <h2 className="text-2xl font-bold tracking-tight text-zinc-950 dark:text-white sm:text-3xl">
+          <h2 className="text-2xl font-bold tracking-tight text-zinc-950 dark:text-foreground sm:text-3xl">
             Tüm özellikleri karşılaştır
           </h2>
 
@@ -534,7 +534,7 @@ export default function FeatureComparison({
                     SYRAVEN
                   </p>
 
-                  <h3 className="mt-2 text-lg font-semibold text-zinc-950 dark:text-white">
+                  <h3 className="mt-2 text-lg font-semibold text-zinc-950 dark:text-foreground">
                     Plan comparison
                   </h3>
                 </div>
@@ -559,7 +559,7 @@ export default function FeatureComparison({
                     )}
 
                     <div className="min-h-[148px]">
-                      <h3 className="text-lg font-bold text-zinc-950 dark:text-white">
+                      <h3 className="text-lg font-bold text-zinc-950 dark:text-foreground">
                         {plan.name}
                       </h3>
 
@@ -568,7 +568,7 @@ export default function FeatureComparison({
                       </p>
 
                       <div className="mt-4 flex items-baseline gap-1">
-                        <span className="text-2xl font-bold tracking-tight text-zinc-950 dark:text-white">
+                        <span className="text-2xl font-bold tracking-tight text-zinc-950 dark:text-foreground">
                           {plan.price}
                         </span>
 
@@ -664,7 +664,7 @@ export default function FeatureComparison({
       <div className="mt-6 rounded-2xl border border-zinc-200 bg-zinc-50 p-5 dark:border-zinc-800 dark:bg-zinc-900/40">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h3 className="font-semibold text-zinc-950 dark:text-white">
+            <h3 className="font-semibold text-zinc-950 dark:text-foreground">
               Daha büyük bir çözüm mü gerekiyor?
             </h3>
 

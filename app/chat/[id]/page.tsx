@@ -598,7 +598,7 @@ export default function ChatConversationPage() {
 
   if (!conversationId) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-background px-6 text-white">
+      <main className="flex min-h-screen items-center justify-center bg-background px-6 text-foreground">
         <div className="max-w-md text-center">
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-red-400/20 bg-red-400/[0.08]">
             <svg
@@ -622,7 +622,7 @@ export default function ChatConversationPage() {
             Invalid chat
           </h1>
 
-          <p className="mt-2 text-sm leading-6 text-white/45">
+          <p className="mt-2 text-sm leading-6 text-foreground/45">
             This chat id cannot be used.
           </p>
 
@@ -631,7 +631,7 @@ export default function ChatConversationPage() {
             onClick={() =>
               router.push("/chat")
             }
-            className="mt-6 rounded-xl border border-white/[0.09] bg-white/[0.04] px-4 py-2.5 text-sm text-white/80 transition hover:bg-white/[0.08]"
+            className="mt-6 rounded-xl border border-white/[0.09] bg-white/[0.04] px-4 py-2.5 text-sm text-foreground/80 transition hover:bg-white/[0.08]"
           >
             Back to chats
           </button>
@@ -641,7 +641,7 @@ export default function ChatConversationPage() {
   }
 
   return (
-    <main className="min-h-screen bg-background text-white">
+    <main className="min-h-screen bg-background text-foreground">
       <div className="mx-auto flex min-h-screen w-full max-w-[1600px] flex-col">
         <header className="sticky top-0 z-30 border-b border-white/[0.07] bg-background/95 backdrop-blur-xl">
           <div className="flex h-16 items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
@@ -651,7 +651,7 @@ export default function ChatConversationPage() {
                 onClick={() =>
                   router.push("/chat")
                 }
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.03] text-white/55 transition hover:bg-white/[0.07] hover:text-white"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.03] text-foreground/55 transition hover:bg-white/[0.07] hover:text-foreground"
                 aria-label="Back to chats"
               >
                 <svg
@@ -669,12 +669,12 @@ export default function ChatConversationPage() {
                 <div className="flex items-center gap-2">
                   <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400" />
 
-                  <span className="truncate text-sm font-semibold text-white/90">
+                  <span className="truncate text-sm font-semibold text-foreground/90">
                     {title}
                   </span>
                 </div>
 
-                <p className="mt-0.5 truncate text-[10px] tracking-[0.12em] text-white/30">
+                <p className="mt-0.5 truncate text-[10px] tracking-[0.12em] text-foreground/30">
                   SYRAVEN AI CONVERSATION
                 </p>
               </div>
@@ -686,7 +686,7 @@ export default function ChatConversationPage() {
                 onClick={
                   handleClearConversation
                 }
-                className="hidden h-9 items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 text-xs text-white/55 transition hover:border-red-400/20 hover:bg-red-400/[0.06] hover:text-red-200 sm:inline-flex"
+                className="hidden h-9 items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 text-xs text-foreground/55 transition hover:border-red-400/20 hover:bg-red-400/[0.06] hover:text-red-200 sm:inline-flex"
               >
                 Clear
               </button>
@@ -719,7 +719,7 @@ export default function ChatConversationPage() {
           <div className="mx-auto flex w-full max-w-5xl flex-col px-4 pb-6 pt-6 sm:px-6 lg:px-8">
             {isLoadingConversation ? (
               <div className="flex flex-1 items-center justify-center py-20">
-                <div className="flex items-center gap-3 text-sm text-white/40">
+                <div className="flex items-center gap-3 text-sm text-foreground/40">
                   <span className="h-5 w-5 animate-spin rounded-full border-2 border-cyan-300/20 border-t-cyan-300" />
                   Loading chat...
                 </div>
@@ -738,7 +738,7 @@ export default function ChatConversationPage() {
                       Let’s start a conversation.
                     </h1>
 
-                    <p className="mt-3 max-w-xl text-sm leading-7 text-white/40">
+                    <p className="mt-3 max-w-xl text-sm leading-7 text-foreground/40">
                       Research, analyse, create and move
                       your project forward with
                       SYRAVEN AI.
@@ -827,7 +827,7 @@ export default function ChatConversationPage() {
                             <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-white/[0.09] bg-white/[0.06]">
                               <svg
                                 viewBox="0 0 24 24"
-                                className="h-4 w-4 text-white/65"
+                                className="h-4 w-4 text-foreground/65"
                                 fill="none"
                                 stroke="currentColor"
                                 strokeWidth="1.8"
@@ -924,18 +924,18 @@ export default function ChatConversationPage() {
                   }
                   rows={1}
                   placeholder="Mesaj yaz..."
-                  className="max-h-60 min-h-[52px] w-full resize-none bg-transparent px-3 py-3 text-sm leading-6 text-white outline-none placeholder:text-white/25 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="max-h-60 min-h-[52px] w-full resize-none bg-transparent px-3 py-3 text-sm leading-6 text-foreground outline-none placeholder:text-foreground/25 disabled:cursor-not-allowed disabled:opacity-50"
                 />
 
                 <div className="flex items-center justify-between gap-3 px-1 pb-1">
-                  <div className="hidden items-center gap-2 text-[10px] text-white/25 sm:flex">
+                  <div className="hidden items-center gap-2 text-[10px] text-foreground/25 sm:flex">
                     <kbd className="rounded border border-white/[0.08] px-1.5 py-0.5">
                       Enter
                     </kbd>
 
                     <span>to send</span>
 
-                    <span className="text-white/10">
+                    <span className="text-foreground/10">
                       ·
                     </span>
 
@@ -947,7 +947,7 @@ export default function ChatConversationPage() {
                   </div>
 
                   <div className="ml-auto flex items-center gap-2">
-                    <span className="hidden text-[10px] text-white/20 sm:block">
+                    <span className="hidden text-[10px] text-foreground/20 sm:block">
                       {input.length} karakter
                     </span>
 
@@ -990,7 +990,7 @@ export default function ChatConversationPage() {
                 </div>
               </div>
 
-              <p className="mt-2 text-center text-[10px] text-white/20">
+              <p className="mt-2 text-center text-[10px] text-foreground/20">
                 SYRAVEN AI can make mistakes.
                 Verify important information.
               </p>

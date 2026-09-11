@@ -637,7 +637,7 @@ export default function ActivityFeed({
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
               <div className="flex items-center gap-3">
-                <h2 className="text-lg font-semibold tracking-tight text-white">
+                <h2 className="text-lg font-semibold tracking-tight text-foreground">
                   {title}
                 </h2>
 
@@ -649,7 +649,7 @@ export default function ActivityFeed({
               </div>
 
               {subtitle && (
-                <p className="mt-1 text-sm text-white/40">
+                <p className="mt-1 text-sm text-foreground/40">
                   {subtitle}
                 </p>
               )}
@@ -662,7 +662,7 @@ export default function ActivityFeed({
                   onClick={
                     markAllAsRead
                   }
-                  className="hidden rounded-lg px-2.5 py-2 text-[11px] text-white/40 transition hover:bg-white/[0.05] hover:text-white/75 sm:inline-flex"
+                  className="hidden rounded-lg px-2.5 py-2 text-[11px] text-foreground/40 transition hover:bg-white/[0.05] hover:text-foreground/75 sm:inline-flex"
                 >
                   Tümünü okundu yap
                 </button>
@@ -678,7 +678,7 @@ export default function ActivityFeed({
                     disabled={
                       isRefreshing
                     }
-                    className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.03] text-white/50 transition hover:bg-white/[0.07] hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                    className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.03] text-foreground/50 transition hover:bg-white/[0.07] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
                     aria-label="Aktiviteleri yenile"
                   >
                     <svg
@@ -704,7 +704,7 @@ export default function ActivityFeed({
             <div className="flex flex-col gap-3 sm:flex-row">
               {showSearch && (
                 <label className="relative block min-w-0 flex-1">
-                  <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-white/25">
+                  <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-foreground/25">
                     <svg
                       viewBox="0 0 24 24"
                       className="h-4 w-4"
@@ -733,7 +733,7 @@ export default function ActivityFeed({
                       )
                     }
                     placeholder="Aktivitelerde ara..."
-                    className="h-10 w-full rounded-xl border border-white/[0.08] bg-white/[0.03] pl-10 pr-4 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-cyan-400/30 focus:bg-white/[0.05]"
+                    className="h-10 w-full rounded-xl border border-white/[0.08] bg-white/[0.03] pl-10 pr-4 text-sm text-foreground outline-none transition placeholder:text-foreground/25 focus:border-cyan-400/30 focus:bg-white/[0.05]"
                   />
                 </label>
               )}
@@ -789,7 +789,7 @@ export default function ActivityFeed({
         {filteredActivities.length ===
         0 ? (
           <div className="flex min-h-[300px] flex-col items-center justify-center px-6 py-14 text-center">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/[0.08] bg-white/[0.035] text-white/30">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/[0.08] bg-white/[0.035] text-foreground/30">
               <svg
                 viewBox="0 0 24 24"
                 className="h-6 w-6"
@@ -806,11 +806,11 @@ export default function ActivityFeed({
               </svg>
             </div>
 
-            <h3 className="mt-5 text-sm font-semibold text-white/80">
+            <h3 className="mt-5 text-sm font-semibold text-foreground/80">
               {emptyTitle}
             </h3>
 
-            <p className="mt-2 max-w-md text-xs leading-6 text-white/35">
+            <p className="mt-2 max-w-md text-xs leading-6 text-foreground/35">
               {searchQuery ||
               filter !== "all"
                 ? "Try changing your search or filters."
@@ -830,7 +830,7 @@ export default function ActivityFeed({
                     "all"
                   );
                 }}
-                className="mt-5 rounded-xl border border-white/[0.08] bg-white/[0.04] px-3.5 py-2 text-xs text-white/55 transition hover:bg-white/[0.08] hover:text-white"
+                className="mt-5 rounded-xl border border-white/[0.08] bg-white/[0.04] px-3.5 py-2 text-xs text-foreground/55 transition hover:bg-white/[0.08] hover:text-foreground"
               >
                 Filtreleri temizle
               </button>
@@ -908,7 +908,7 @@ export default function ActivityFeed({
                               }
                             </p>
 
-                            <span className="rounded-md border border-white/[0.07] bg-white/[0.025] px-1.5 py-0.5 text-[9px] uppercase tracking-[0.08em] text-white/30">
+                            <span className="rounded-md border border-white/[0.07] bg-white/[0.025] px-1.5 py-0.5 text-[9px] uppercase tracking-[0.08em] text-foreground/30">
                               {
                                 typeLabels[
                                   activity.type
@@ -918,7 +918,7 @@ export default function ActivityFeed({
                           </div>
 
                           {activity.description && (
-                            <p className="mt-1.5 line-clamp-2 text-xs leading-5 text-white/38">
+                            <p className="mt-1.5 line-clamp-2 text-xs leading-5 text-foreground/38">
                               {
                                 activity.description
                               }
@@ -926,7 +926,7 @@ export default function ActivityFeed({
                           )}
                         </div>
 
-                        <span className="shrink-0 whitespace-nowrap text-[10px] text-white/25">
+                        <span className="shrink-0 whitespace-nowrap text-[10px] text-foreground/25">
                           {formatRelativeTime(
                             activity.timestamp
                           )}
@@ -935,7 +935,7 @@ export default function ActivityFeed({
 
                       <div className="mt-2.5 flex items-center gap-2">
                         {activity.actor && (
-                          <span className="text-[10px] text-white/28">
+                          <span className="text-[10px] text-foreground/28">
                             {
                               activity.actor
                             }
@@ -945,7 +945,7 @@ export default function ActivityFeed({
                         {activity.actionable && (
                           <>
                             {activity.actor && (
-                              <span className="text-white/15">
+                              <span className="text-foreground/15">
                                 ·
                               </span>
                             )}
@@ -959,7 +959,7 @@ export default function ActivityFeed({
                       </div>
                     </div>
 
-                    <div className="mt-2 shrink-0 text-white/15 transition group-hover:translate-x-0.5 group-hover:text-white/45">
+                    <div className="mt-2 shrink-0 text-foreground/15 transition group-hover:translate-x-0.5 group-hover:text-foreground/45">
                       <svg
                         viewBox="0 0 24 24"
                         className="h-4 w-4"
@@ -993,14 +993,14 @@ export default function ActivityFeed({
               </div>
 
               <div className="min-w-0">
-                <p className="text-sm font-semibold text-white/90">
+                <p className="text-sm font-semibold text-foreground/90">
                   {
                     selectedActivity.title
                   }
                 </p>
 
                 {selectedActivity.description && (
-                  <p className="mt-2 text-xs leading-6 text-white/45">
+                  <p className="mt-2 text-xs leading-6 text-foreground/45">
                     {
                       selectedActivity.description
                     }
@@ -1016,7 +1016,7 @@ export default function ActivityFeed({
                   null
                 )
               }
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-white/35 transition hover:bg-white/[0.06] hover:text-white"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-foreground/35 transition hover:bg-white/[0.06] hover:text-foreground"
               aria-label="Hide details"
             >
               <svg
@@ -1048,11 +1048,11 @@ export default function ActivityFeed({
                       key={key}
                       className="rounded-xl border border-white/[0.06] bg-black/10 px-3 py-2.5"
                     >
-                      <p className="text-[9px] uppercase tracking-[0.12em] text-white/25">
+                      <p className="text-[9px] uppercase tracking-[0.12em] text-foreground/25">
                         {key}
                       </p>
 
-                      <p className="mt-1 truncate text-xs text-white/65">
+                      <p className="mt-1 truncate text-xs text-foreground/65">
                         {value === null
                           ? "—"
                           : String(

@@ -417,7 +417,7 @@ export default function ChatPage() {
   }
 
   return (
-    <main className="min-h-screen bg-background text-white">
+    <main className="min-h-screen bg-background text-foreground">
       <div className="mx-auto flex min-h-screen w-full max-w-[1600px] flex-col">
         {/* HEADER */}
 
@@ -444,14 +444,14 @@ export default function ChatPage() {
               </div>
 
               <div className="min-w-0">
-                <h1 className="truncate text-sm font-semibold tracking-[0.14em] text-white">
+                <h1 className="truncate text-sm font-semibold tracking-[0.14em] text-foreground">
                   SYRAVEN AI
                 </h1>
 
                 <div className="flex items-center gap-2">
                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
 
-                  <p className="text-xs text-white/45">
+                  <p className="text-xs text-foreground/45">
                     AI workspace
                   </p>
                 </div>
@@ -462,7 +462,7 @@ export default function ChatPage() {
               <button
                 type="button"
                 onClick={handleNewChat}
-                className="inline-flex h-9 items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 text-xs font-medium text-white/75 transition hover:border-white/[0.14] hover:bg-white/[0.06] hover:text-white"
+                className="inline-flex h-9 items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 text-xs font-medium text-foreground/75 transition hover:border-white/[0.14] hover:bg-white/[0.06] hover:text-foreground"
               >
                 <svg
                   viewBox="0 0 24 24"
@@ -506,7 +506,7 @@ export default function ChatPage() {
                     SYRAVEN Intelligence
                   </div>
 
-                  <h2 className="text-3xl font-semibold tracking-tight text-white sm:text-5xl">
+                  <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-5xl">
                     What do you want to
                     <span className="text-cyan-300">
                       {" "}
@@ -514,7 +514,7 @@ export default function ChatPage() {
                     </span>
                   </h2>
 
-                  <p className="mx-auto mt-4 max-w-2xl text-sm leading-7 text-white/45 sm:text-base">
+                  <p className="mx-auto mt-4 max-w-2xl text-sm leading-7 text-foreground/45 sm:text-base">
                     Analyse complex problems, research,
                     create, and move your projects
                     forward faster.
@@ -536,11 +536,11 @@ export default function ChatPage() {
                       >
                         <div className="flex items-start justify-between gap-4">
                           <div>
-                            <h3 className="text-sm font-semibold text-white/90">
+                            <h3 className="text-sm font-semibold text-foreground/90">
                               {suggestion.title}
                             </h3>
 
-                            <p className="mt-1.5 text-xs leading-5 text-white/40">
+                            <p className="mt-1.5 text-xs leading-5 text-foreground/40">
                               {
                                 suggestion.description
                               }
@@ -549,7 +549,7 @@ export default function ChatPage() {
 
                           <svg
                             viewBox="0 0 24 24"
-                            className="mt-0.5 h-4 w-4 shrink-0 text-white/20 transition group-hover:translate-x-0.5 group-hover:text-cyan-300"
+                            className="mt-0.5 h-4 w-4 shrink-0 text-foreground/20 transition group-hover:translate-x-0.5 group-hover:text-cyan-300"
                             fill="none"
                             stroke="currentColor"
                             strokeWidth="1.8"
@@ -655,7 +655,7 @@ export default function ChatPage() {
                       <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-white/[0.09] bg-white/[0.06]">
                         <svg
                           viewBox="0 0 24 24"
-                          className="h-4 w-4 text-white/65"
+                          className="h-4 w-4 text-foreground/65"
                           fill="none"
                           stroke="currentColor"
                           strokeWidth="1.8"
@@ -733,18 +733,18 @@ export default function ChatPage() {
                   disabled={isSending}
                   rows={1}
                   placeholder="Message SYRAVEN AI..."
-                  className="max-h-60 min-h-[52px] w-full resize-none bg-transparent px-3 py-3 text-sm leading-6 text-white outline-none placeholder:text-white/25 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="max-h-60 min-h-[52px] w-full resize-none bg-transparent px-3 py-3 text-sm leading-6 text-foreground outline-none placeholder:text-foreground/25 disabled:cursor-not-allowed disabled:opacity-50"
                 />
 
                 <div className="flex items-center justify-between gap-3 px-1 pb-1">
-                  <div className="hidden items-center gap-2 text-[10px] text-white/25 sm:flex">
+                  <div className="hidden items-center gap-2 text-[10px] text-foreground/25 sm:flex">
                     <kbd className="rounded border border-white/[0.08] px-1.5 py-0.5">
                       Enter
                     </kbd>
 
                     <span>to send</span>
 
-                    <span className="text-white/10">
+                    <span className="text-foreground/10">
                       ·
                     </span>
 
@@ -756,7 +756,7 @@ export default function ChatPage() {
                   </div>
 
                   <div className="ml-auto flex items-center gap-2">
-                    <span className="hidden text-[10px] text-white/20 sm:block">
+                    <span className="hidden text-[10px] text-foreground/20 sm:block">
                       {input.length} karakter
                     </span>
 
@@ -798,7 +798,7 @@ export default function ChatPage() {
                 </div>
               </div>
 
-              <p className="mt-2 text-center text-[10px] text-white/20">
+              <p className="mt-2 text-center text-[10px] text-foreground/20">
                 SYRAVEN AI can make mistakes.
                 Verify important information.
               </p>

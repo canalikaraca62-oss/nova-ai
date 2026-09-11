@@ -216,7 +216,7 @@ export default function BillingCancelPage() {
             <div className="text-sm font-semibold tracking-tight">
               SYRAVEN
             </div>
-            <div className="text-[10px] uppercase tracking-[0.22em] text-white/40">
+            <div className="text-[10px] uppercase tracking-[0.22em] text-foreground/40">
               Intelligence Platform
             </div>
           </div>
@@ -224,7 +224,7 @@ export default function BillingCancelPage() {
 
         <Link
           href="/pricing"
-          className="hidden rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-medium text-white/75 transition hover:border-white/20 hover:bg-white/[0.08] hover:text-white sm:inline-flex"
+          className="hidden rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-medium text-foreground/75 transition hover:border-white/20 hover:bg-white/[0.08] hover:text-foreground sm:inline-flex"
         >
           View plans
         </Link>
@@ -235,16 +235,16 @@ export default function BillingCancelPage() {
         <div className="grid w-full items-center gap-10 lg:grid-cols-[1.15fr_0.85fr] lg:gap-16">
           {/* Left */}
           <div className="mx-auto w-full max-w-2xl lg:mx-0">
-            <div className="mb-7 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.045] px-3 py-1.5 text-xs font-medium text-white/60">
+            <div className="mb-7 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.045] px-3 py-1.5 text-xs font-medium text-foreground/60">
               <span className="h-1.5 w-1.5 rounded-full bg-white/50" />
               {copy.eyebrow}
             </div>
 
-            <h1 className="max-w-3xl text-balance text-4xl font-semibold leading-[1.08] tracking-[-0.04em] text-white sm:text-5xl lg:text-6xl">
+            <h1 className="max-w-3xl text-balance text-4xl font-semibold leading-[1.08] tracking-[-0.04em] text-foreground sm:text-5xl lg:text-6xl">
               {copy.title}
             </h1>
 
-            <p className="mt-6 max-w-xl text-pretty text-base leading-8 text-white/55 sm:text-lg">
+            <p className="mt-6 max-w-xl text-pretty text-base leading-8 text-foreground/55 sm:text-lg">
               {copy.description}
             </p>
 
@@ -264,23 +264,23 @@ export default function BillingCancelPage() {
 
               <Link
                 href="/"
-                className="inline-flex min-h-12 items-center justify-center rounded-xl border border-white/10 bg-white/[0.035] px-5 text-sm font-medium text-white/75 transition hover:border-white/20 hover:bg-white/[0.07] hover:text-white"
+                className="inline-flex min-h-12 items-center justify-center rounded-xl border border-white/10 bg-white/[0.035] px-5 text-sm font-medium text-foreground/75 transition hover:border-white/20 hover:bg-white/[0.07] hover:text-foreground"
               >
                 Return to workspace
               </Link>
             </div>
 
             <div className="mt-10 flex items-start gap-3 rounded-2xl border border-white/[0.08] bg-white/[0.025] p-4">
-              <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-white/70">
+              <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-foreground/70">
                 <ShieldIcon />
               </div>
 
               <div>
-                <p className="text-sm font-medium text-white/85">
+                <p className="text-sm font-medium text-foreground/85">
                   Your account is safe
                 </p>
 
-                <p className="mt-1 text-sm leading-6 text-white/45">
+                <p className="mt-1 text-sm leading-6 text-foreground/45">
                   Cancelling checkout does not delete your workspace, projects,
                   conversations, or existing account data.
                 </p>
@@ -296,7 +296,7 @@ export default function BillingCancelPage() {
               <div className="rounded-[1.5rem] border border-white/[0.06] bg-black/20 p-6 sm:p-8">
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <p className="text-sm font-medium text-white/45">
+                    <p className="text-sm font-medium text-foreground/45">
                       Why upgrade?
                     </p>
 
@@ -305,12 +305,12 @@ export default function BillingCancelPage() {
                     </h2>
                   </div>
 
-                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.05] text-white/80">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.05] text-foreground/80">
                     <SparkIcon />
                   </div>
                 </div>
 
-                <p className="mt-4 text-sm leading-7 text-white/50">
+                <p className="mt-4 text-sm leading-7 text-foreground/50">
                   There is no pressure to upgrade. When your workflow grows,
                   your plan can grow with it.
                 </p>
@@ -321,11 +321,11 @@ export default function BillingCancelPage() {
                       key={feature}
                       className="flex items-center gap-3 rounded-xl border border-white/[0.07] bg-white/[0.025] px-4 py-3"
                     >
-                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.05] text-white/75">
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.05] text-foreground/75">
                         <CheckIcon />
                       </span>
 
-                      <span className="text-sm text-white/65">
+                      <span className="text-sm text-foreground/65">
                         {feature}
                       </span>
                     </div>
@@ -333,7 +333,7 @@ export default function BillingCancelPage() {
                 </div>
 
                 <div className="mt-7 border-t border-white/[0.08] pt-6">
-                  <p className="text-xs leading-6 text-white/35">
+                  <p className="text-xs leading-6 text-foreground/35">
                     You can review available plans, features, and billing
                     options at any time before starting a new checkout.
                   </p>

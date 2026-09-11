@@ -712,9 +712,9 @@ export default function PricingPage() {
       {/* Bottom CTA */}
       <section className="bg-zinc-950">
         <div className="mx-auto max-w-4xl px-6 py-20 text-center lg:px-8">
-          <Sparkles className="mx-auto h-8 w-8 text-white" />
+          <Sparkles className="mx-auto h-8 w-8 text-foreground" />
 
-          <h2 className="mt-6 text-3xl font-black tracking-tight text-white sm:text-4xl">
+          <h2 className="mt-6 text-3xl font-black tracking-tight text-foreground sm:text-4xl">
             Experience NOVA before you decide.
           </h2>
 
@@ -736,7 +736,7 @@ export default function PricingPage() {
 
             <Link
               href="/contact"
-              className="inline-flex h-12 items-center justify-center gap-2 rounded-xl border border-white/20 px-6 text-sm font-bold text-white transition hover:bg-white/10"
+              className="inline-flex h-12 items-center justify-center gap-2 rounded-xl border border-white/20 px-6 text-sm font-bold text-foreground transition hover:bg-white/10"
             >
               Talk to Sales
               <ChevronRight className="h-4 w-4" />

@@ -246,22 +246,22 @@ export default function WorkspacePage() {
   };
 
   return (
-    <main className="min-h-screen bg-background text-white">
+    <main className="min-h-screen bg-background text-foreground">
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
         {/* Header */}
         <div className="flex flex-col gap-6 border-b border-white/10 pb-8 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <div className="mb-4 flex items-center gap-2 text-sm text-white/40">
+            <div className="mb-4 flex items-center gap-2 text-sm text-foreground/40">
               <Link
                 href="/"
-                className="transition hover:text-white"
+                className="transition hover:text-foreground"
               >
                 SYRAVEN
               </Link>
 
               <span>/</span>
 
-              <span className="text-white/70">Workspace</span>
+              <span className="text-foreground/70">Workspace</span>
             </div>
 
             <div className="flex flex-wrap items-center gap-4">
@@ -274,7 +274,7 @@ export default function WorkspacePage() {
                   {workspaceName}
                 </h1>
 
-                <p className="mt-1 text-sm text-white/45">
+                <p className="mt-1 text-sm text-foreground/45">
                   {workspaceDescription}
                 </p>
               </div>
@@ -284,14 +284,14 @@ export default function WorkspacePage() {
           <div className="flex flex-wrap gap-3">
             <Link
               href="/teams"
-              className="inline-flex items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm font-medium text-white/70 transition hover:bg-white/[0.07] hover:text-white"
+              className="inline-flex items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm font-medium text-foreground/70 transition hover:bg-white/[0.07] hover:text-foreground"
             >
               Manage team
             </Link>
 
             <Link
               href="/settings"
-              className="inline-flex items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm font-medium text-white/70 transition hover:bg-white/[0.07] hover:text-white"
+              className="inline-flex items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm font-medium text-foreground/70 transition hover:bg-white/[0.07] hover:text-foreground"
             >
               Workspace settings
             </Link>
@@ -336,7 +336,7 @@ export default function WorkspacePage() {
                   Projects
                 </h2>
 
-                <p className="mt-1 text-sm text-white/40">
+                <p className="mt-1 text-sm text-foreground/40">
                   Manage the initiatives and systems inside your workspace.
                 </p>
               </div>
@@ -360,7 +360,7 @@ export default function WorkspacePage() {
             {/* Search */}
             <div className="mt-6">
               <div className="relative">
-                <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-white/30">
+                <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-foreground/30">
                   ⌕
                 </span>
 
@@ -370,7 +370,7 @@ export default function WorkspacePage() {
                     setSearchQuery(event.target.value)
                   }
                   placeholder="Search projects..."
-                  className="w-full rounded-2xl border border-white/10 bg-white/[0.03] py-3 pl-11 pr-4 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-white/20 focus:bg-white/[0.05]"
+                  className="w-full rounded-2xl border border-white/10 bg-white/[0.03] py-3 pl-11 pr-4 text-sm text-foreground outline-none transition placeholder:text-foreground/25 focus:border-white/20 focus:bg-white/[0.05]"
                 />
               </div>
             </div>
@@ -420,15 +420,15 @@ export default function WorkspacePage() {
                     </span>
                   </div>
 
-                  <h3 className="mt-5 font-semibold text-white transition group-hover:text-white/90">
+                  <h3 className="mt-5 font-semibold text-foreground transition group-hover:text-foreground/90">
                     {project.name}
                   </h3>
 
-                  <p className="mt-2 min-h-[48px] text-sm leading-6 text-white/40">
+                  <p className="mt-2 min-h-[48px] text-sm leading-6 text-foreground/40">
                     {project.description}
                   </p>
 
-                  <div className="mt-5 flex items-center justify-between border-t border-white/10 pt-4 text-xs text-white/35">
+                  <div className="mt-5 flex items-center justify-between border-t border-white/10 pt-4 text-xs text-foreground/35">
                     <span className="capitalize">
                       {project.status}
                     </span>
@@ -445,7 +445,7 @@ export default function WorkspacePage() {
                 aria-live="polite"
                 className="mt-5 rounded-2xl border border-dashed border-white/15 bg-white/[0.02] px-6 py-16 text-center"
               >
-                <p className="text-sm text-white/40">
+                <p className="text-sm text-foreground/40">
                   Loading your projects...
                 </p>
               </div>
@@ -457,7 +457,7 @@ export default function WorkspacePage() {
                     : "No projects found"}
                 </p>
 
-                <p className="mt-2 text-sm text-white/40">
+                <p className="mt-2 text-sm text-foreground/40">
                   {projects.length === 0
                     ? "Create your first project to start organising work."
                     : "Try a different search or create a new project."}
@@ -489,14 +489,14 @@ export default function WorkspacePage() {
             <div className="rounded-2xl border border-white/10 bg-white/[0.025] p-5">
               <h2 className="font-semibold">Team members</h2>
 
-              <p className="mt-2 text-xs leading-5 text-white/35">
+              <p className="mt-2 text-xs leading-5 text-foreground/35">
                 Membership is managed for the whole organisation rather
                 than per workspace.
               </p>
 
               <Link
                 href="/teams"
-                className="mt-5 flex w-full items-center justify-center rounded-xl border border-white/10 bg-white/[0.02] px-4 py-2.5 text-sm text-white/60 transition hover:bg-white/[0.06] hover:text-white"
+                className="mt-5 flex w-full items-center justify-center rounded-xl border border-white/10 bg-white/[0.02] px-4 py-2.5 text-sm text-foreground/60 transition hover:bg-white/[0.06] hover:text-foreground"
               >
                 Manage members
               </Link>
@@ -546,14 +546,14 @@ export default function WorkspacePage() {
                 Everything connected
               </h3>
 
-              <p className="mt-2 text-sm leading-6 text-white/45">
+              <p className="mt-2 text-sm leading-6 text-foreground/45">
                 Projects, agents, knowledge, tasks and collaboration
                 operate from one unified workspace.
               </p>
 
               <Link
                 href="/dashboard"
-                className="mt-5 inline-flex text-sm font-medium text-violet-200 transition hover:text-white"
+                className="mt-5 inline-flex text-sm font-medium text-violet-200 transition hover:text-foreground"
               >
                 Open dashboard →
               </Link>
@@ -572,7 +572,7 @@ export default function WorkspacePage() {
                   Create new project
                 </h2>
 
-                <p className="mt-1 text-sm text-white/40">
+                <p className="mt-1 text-sm text-foreground/40">
                   Add a new initiative to your workspace.
                 </p>
               </div>
@@ -580,7 +580,7 @@ export default function WorkspacePage() {
               <button
                 type="button"
                 onClick={() => setShowCreateModal(false)}
-                className="flex h-9 w-9 items-center justify-center rounded-lg text-white/40 transition hover:bg-white/[0.06] hover:text-white"
+                className="flex h-9 w-9 items-center justify-center rounded-lg text-foreground/40 transition hover:bg-white/[0.06] hover:text-foreground"
                 aria-label="Close"
               >
                 ×
@@ -589,7 +589,7 @@ export default function WorkspacePage() {
 
             <div className="mt-6 space-y-5">
               <div>
-                <label className="mb-2 block text-sm font-medium text-white/70">
+                <label className="mb-2 block text-sm font-medium text-foreground/70">
                   Project name
                 </label>
 
@@ -600,12 +600,12 @@ export default function WorkspacePage() {
                   }
                   placeholder="Enter project name"
                   autoFocus
-                  className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm outline-none transition placeholder:text-white/25 focus:border-violet-400/50"
+                  className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm outline-none transition placeholder:text-foreground/25 focus:border-violet-400/50"
                 />
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-medium text-white/70">
+                <label className="mb-2 block text-sm font-medium text-foreground/70">
                   Description
                 </label>
 
@@ -616,7 +616,7 @@ export default function WorkspacePage() {
                   }
                   placeholder="What is this project about?"
                   rows={4}
-                  className="w-full resize-none rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm outline-none transition placeholder:text-white/25 focus:border-violet-400/50"
+                  className="w-full resize-none rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm outline-none transition placeholder:text-foreground/25 focus:border-violet-400/50"
                 />
               </div>
             </div>
@@ -625,7 +625,7 @@ export default function WorkspacePage() {
               <button
                 type="button"
                 onClick={() => setShowCreateModal(false)}
-                className="rounded-xl border border-white/10 px-4 py-2.5 text-sm text-white/60 transition hover:bg-white/[0.05] hover:text-white"
+                className="rounded-xl border border-white/10 px-4 py-2.5 text-sm text-foreground/60 transition hover:bg-white/[0.05] hover:text-foreground"
               >
                 Cancel
               </button>
@@ -661,7 +661,7 @@ function StatCard({
 }) {
   return (
     <div className="rounded-2xl border border-white/10 bg-white/[0.025] p-5">
-      <p className="text-sm text-white/40">
+      <p className="text-sm text-foreground/40">
         {label}
       </p>
 
@@ -676,7 +676,7 @@ function StatCard({
         </p>
       </div>
 
-      <p className="mt-2 text-xs text-white/30">
+      <p className="mt-2 text-xs text-foreground/30">
         {description}
       </p>
     </div>
@@ -698,16 +698,16 @@ function QuickLink({
       className="group flex items-center justify-between rounded-xl border border-transparent px-3 py-3 transition hover:border-white/10 hover:bg-white/[0.04]"
     >
       <div>
-        <p className="text-sm font-medium text-white/75 transition group-hover:text-white">
+        <p className="text-sm font-medium text-foreground/75 transition group-hover:text-foreground">
           {title}
         </p>
 
-        <p className="mt-0.5 text-xs text-white/35">
+        <p className="mt-0.5 text-xs text-foreground/35">
           {description}
         </p>
       </div>
 
-      <span className="text-white/25 transition group-hover:translate-x-0.5 group-hover:text-white/70">
+      <span className="text-foreground/25 transition group-hover:translate-x-0.5 group-hover:text-foreground/70">
         →
       </span>
     </Link>

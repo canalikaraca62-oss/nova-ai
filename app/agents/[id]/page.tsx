@@ -419,14 +419,14 @@ export default function AgentDetailPage() {
   ];
 
   return (
-    <main className="min-h-screen bg-background text-white">
+    <main className="min-h-screen bg-background text-foreground">
       <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
         {/* Top navigation */}
         <div className="mb-6 flex flex-col gap-4">
           <button
             type="button"
             onClick={() => router.back()}
-            className="flex w-fit items-center gap-2 text-sm text-zinc-400 transition hover:text-white"
+            className="flex w-fit items-center gap-2 text-sm text-zinc-400 transition hover:text-foreground"
           >
             <span>←</span>
             Agents&apos;a dön
@@ -553,7 +553,7 @@ export default function AgentDetailPage() {
                 onChange={(event) => setTask(event.target.value)}
                 placeholder={`${agent.name} ile ne yapmak istiyorsun?`}
                 rows={6}
-                className="w-full resize-none rounded-2xl border border-white/[0.08] bg-black/20 px-4 py-4 text-sm text-white outline-none transition placeholder:text-zinc-600 focus:border-white/[0.2] focus:bg-white/[0.025]"
+                className="w-full resize-none rounded-2xl border border-white/[0.08] bg-black/20 px-4 py-4 text-sm text-foreground outline-none transition placeholder:text-zinc-600 focus:border-white/[0.2] focus:bg-white/[0.025]"
               />
 
               <div className="mt-4 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
@@ -598,7 +598,7 @@ export default function AgentDetailPage() {
                         {suggestion}
                       </span>
 
-                      <span className="text-zinc-600 transition group-hover:translate-x-0.5 group-hover:text-white">
+                      <span className="text-zinc-600 transition group-hover:translate-x-0.5 group-hover:text-foreground">
                         →
                       </span>
                     </button>
@@ -629,7 +629,7 @@ export default function AgentDetailPage() {
                   <h2 className="font-semibold">Bağlantılar</h2>
                   <Link
                     href="/apps"
-                    className="text-xs text-zinc-500 transition hover:text-white"
+                    className="text-xs text-zinc-500 transition hover:text-foreground"
                   >
                     Yönet →
                   </Link>
@@ -667,7 +667,7 @@ export default function AgentDetailPage() {
 
                 <Link
                   href="/workspace"
-                  className="mt-5 inline-flex text-sm font-medium text-white hover:text-violet-200"
+                  className="mt-5 inline-flex text-sm font-medium text-foreground hover:text-violet-200"
                 >
                   Workspace&apos;e git →
                 </Link>
@@ -831,7 +831,7 @@ export default function AgentDetailPage() {
 
                 <Link
                   href="/tasks"
-                  className="mt-4 inline-flex text-sm text-zinc-300 hover:text-white"
+                  className="mt-4 inline-flex text-sm text-zinc-300 hover:text-foreground"
                 >
                   Tasks&apos;ı aç →
                 </Link>
@@ -846,7 +846,7 @@ export default function AgentDetailPage() {
 
                 <Link
                   href="/agents/create"
-                  className="mt-4 inline-flex text-sm text-zinc-300 hover:text-white"
+                  className="mt-4 inline-flex text-sm text-zinc-300 hover:text-foreground"
                 >
                   Agent Builder →
                 </Link>

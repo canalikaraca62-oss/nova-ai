@@ -495,7 +495,7 @@ export default function AgentPermissions({
                 </div>
 
                 <div>
-                  <h2 className="text-base font-semibold text-white">
+                  <h2 className="text-base font-semibold text-foreground">
                     Agent permissions
                   </h2>
 
@@ -572,7 +572,7 @@ export default function AgentPermissions({
                   )
                 }
                 disabled={disabled || isSaving}
-                className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.03] px-3.5 py-2.5 text-sm font-medium text-zinc-300 transition hover:bg-white/[0.07] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.03] px-3.5 py-2.5 text-sm font-medium text-zinc-300 transition hover:bg-white/[0.07] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <ShieldCheck className="h-4 w-4 text-violet-300" />
                 Apply profile
@@ -605,7 +605,7 @@ export default function AgentPermissions({
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div>
-                          <h3 className="text-sm font-semibold text-white">
+                          <h3 className="text-sm font-semibold text-foreground">
                             {preset.name}
                           </h3>
 
@@ -682,7 +682,7 @@ export default function AgentPermissions({
                           </div>
 
                           <div>
-                            <h3 className="text-sm font-semibold text-white">
+                            <h3 className="text-sm font-semibold text-foreground">
                               {config.label}
                             </h3>
 
@@ -906,7 +906,7 @@ export default function AgentPermissions({
                 disabled={
                   disabled || isSaving
                 }
-                className="inline-flex items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.025] px-3.5 py-2.5 text-sm font-medium text-zinc-400 transition hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.025] px-3.5 py-2.5 text-sm font-medium text-zinc-400 transition hover:bg-white/[0.06] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <RotateCcw className="h-4 w-4" />
                 Reset

@@ -573,22 +573,22 @@ export default function AgentBuilder({
         <div className="flex flex-col gap-5 border-b border-white/10 pb-8 lg:flex-row lg:items-end lg:justify-between">
           <div className="space-y-2">
             <div className="flex items-center gap-2">
-              <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-sm text-white">
+              <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-sm text-foreground">
                 ✦
               </span>
 
-              <span className="text-xs font-medium uppercase tracking-[0.22em] text-white/45">
+              <span className="text-xs font-medium uppercase tracking-[0.22em] text-foreground/45">
                 Agent Studio
               </span>
             </div>
 
-            <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
               {initialAgent?.id
                 ? "Configure your agent"
                 : "Build a new agent"}
             </h1>
 
-            <p className="max-w-2xl text-sm leading-6 text-white/50">
+            <p className="max-w-2xl text-sm leading-6 text-foreground/50">
               Define the agent&apos;s role,
               expertise, instructions, model
               behavior and operational
@@ -599,11 +599,11 @@ export default function AgentBuilder({
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <div className="min-w-44 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
               <div className="flex items-center justify-between gap-4">
-                <span className="text-xs text-white/45">
+                <span className="text-xs text-foreground/45">
                   Configuration
                 </span>
 
-                <span className="text-sm font-semibold text-white">
+                <span className="text-sm font-semibold text-foreground">
                   {completionScore}%
                 </span>
               </div>
@@ -625,7 +625,7 @@ export default function AgentBuilder({
                   (current) => !current
                 )
               }
-              className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-medium text-white transition hover:bg-white/[0.07]"
+              className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm font-medium text-foreground transition hover:bg-white/[0.07]"
             >
               {isPreviewOpen
                 ? "Hide preview"
@@ -644,11 +644,11 @@ export default function AgentBuilder({
           <div className="space-y-8">
             <section className="rounded-3xl border border-white/10 bg-white/[0.025] p-5 sm:p-7">
               <div className="mb-6">
-                <h2 className="text-base font-semibold text-white">
+                <h2 className="text-base font-semibold text-foreground">
                   Core identity
                 </h2>
 
-                <p className="mt-1 text-sm text-white/45">
+                <p className="mt-1 text-sm text-foreground/45">
                   Give the agent a clear
                   purpose and recognizable
                   identity.
@@ -657,7 +657,7 @@ export default function AgentBuilder({
 
               <div className="grid gap-5">
                 <label className="grid gap-2">
-                  <span className="text-sm font-medium text-white/80">
+                  <span className="text-sm font-medium text-foreground/80">
                     Agent name
                   </span>
 
@@ -670,16 +670,16 @@ export default function AgentBuilder({
                     }
                     maxLength={80}
                     placeholder="e.g. Strategy Copilot"
-                    className="h-12 w-full rounded-xl border border-white/10 bg-black/20 px-4 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-white/30 focus:bg-white/[0.03]"
+                    className="h-12 w-full rounded-xl border border-white/10 bg-black/20 px-4 text-sm text-foreground outline-none transition placeholder:text-foreground/25 focus:border-white/30 focus:bg-white/[0.03]"
                   />
 
-                  <span className="text-xs text-white/35">
+                  <span className="text-xs text-foreground/35">
                     {name.length}/80
                   </span>
                 </label>
 
                 <label className="grid gap-2">
-                  <span className="text-sm font-medium text-white/80">
+                  <span className="text-sm font-medium text-foreground/80">
                     Description
                   </span>
 
@@ -693,10 +693,10 @@ export default function AgentBuilder({
                     maxLength={280}
                     rows={3}
                     placeholder="Explain what this agent specializes in."
-                    className="w-full resize-y rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm leading-6 text-white outline-none transition placeholder:text-white/25 focus:border-white/30 focus:bg-white/[0.03]"
+                    className="w-full resize-y rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm leading-6 text-foreground outline-none transition placeholder:text-foreground/25 focus:border-white/30 focus:bg-white/[0.03]"
                   />
 
-                  <span className="text-xs text-white/35">
+                  <span className="text-xs text-foreground/35">
                     {description.length}/280
                   </span>
                 </label>
@@ -705,11 +705,11 @@ export default function AgentBuilder({
 
             <section className="rounded-3xl border border-white/10 bg-white/[0.025] p-5 sm:p-7">
               <div className="mb-6">
-                <h2 className="text-base font-semibold text-white">
+                <h2 className="text-base font-semibold text-foreground">
                   Agent specialization
                 </h2>
 
-                <p className="mt-1 text-sm text-white/45">
+                <p className="mt-1 text-sm text-foreground/45">
                   Select the primary role that
                   best represents this agent.
                 </p>
@@ -736,7 +736,7 @@ export default function AgentBuilder({
                         ].join(" ")}
                       >
                         <div className="flex items-start justify-between gap-4">
-                          <span className="text-lg text-white">
+                          <span className="text-lg text-foreground">
                             {option.icon}
                           </span>
 
@@ -747,11 +747,11 @@ export default function AgentBuilder({
                           ) : null}
                         </div>
 
-                        <span className="mt-3 text-sm font-semibold text-white">
+                        <span className="mt-3 text-sm font-semibold text-foreground">
                           {option.label}
                         </span>
 
-                        <span className="mt-1 text-xs leading-5 text-white/40">
+                        <span className="mt-1 text-xs leading-5 text-foreground/40">
                           {option.description}
                         </span>
                       </button>
@@ -763,11 +763,11 @@ export default function AgentBuilder({
 
             <section className="rounded-3xl border border-white/10 bg-white/[0.025] p-5 sm:p-7">
               <div className="mb-6">
-                <h2 className="text-base font-semibold text-white">
+                <h2 className="text-base font-semibold text-foreground">
                   System instructions
                 </h2>
 
-                <p className="mt-1 text-sm text-white/45">
+                <p className="mt-1 text-sm text-foreground/45">
                   Define how the agent thinks,
                   responds and approaches its
                   work.
@@ -791,10 +791,10 @@ Your responsibilities:
 - Produce structured, accurate results
 - Be transparent about uncertainty
 - Prefer useful action over unnecessary verbosity`}
-                  className="min-h-80 w-full resize-y rounded-2xl border border-white/10 bg-black/20 px-4 py-4 font-mono text-sm leading-7 text-white outline-none transition placeholder:text-white/25 focus:border-white/30 focus:bg-white/[0.03]"
+                  className="min-h-80 w-full resize-y rounded-2xl border border-white/10 bg-black/20 px-4 py-4 font-mono text-sm leading-7 text-foreground outline-none transition placeholder:text-foreground/25 focus:border-white/30 focus:bg-white/[0.03]"
                 />
 
-                <div className="flex items-center justify-between text-xs text-white/35">
+                <div className="flex items-center justify-between text-xs text-foreground/35">
                   <span>
                     Clear instructions produce
                     more predictable behavior.
@@ -810,11 +810,11 @@ Your responsibilities:
 
             <section className="rounded-3xl border border-white/10 bg-white/[0.025] p-5 sm:p-7">
               <div className="mb-6">
-                <h2 className="text-base font-semibold text-white">
+                <h2 className="text-base font-semibold text-foreground">
                   Capabilities
                 </h2>
 
-                <p className="mt-1 text-sm text-white/45">
+                <p className="mt-1 text-sm text-foreground/45">
                   Choose the tools and
                   operational capabilities
                   available to this agent.
@@ -857,11 +857,11 @@ Your responsibilities:
                         </span>
 
                         <span>
-                          <span className="block text-sm font-medium text-white">
+                          <span className="block text-sm font-medium text-foreground">
                             {capability.label}
                           </span>
 
-                          <span className="mt-1 block text-xs leading-5 text-white/40">
+                          <span className="mt-1 block text-xs leading-5 text-foreground/40">
                             {capability.description}
                           </span>
                         </span>
@@ -874,11 +874,11 @@ Your responsibilities:
 
             <section className="rounded-3xl border border-white/10 bg-white/[0.025] p-5 sm:p-7">
               <div className="mb-6">
-                <h2 className="text-base font-semibold text-white">
+                <h2 className="text-base font-semibold text-foreground">
                   Runtime behavior
                 </h2>
 
-                <p className="mt-1 text-sm text-white/45">
+                <p className="mt-1 text-sm text-foreground/45">
                   Control model selection and
                   response creativity.
                 </p>
@@ -886,7 +886,7 @@ Your responsibilities:
 
               <div className="grid gap-6 sm:grid-cols-2">
                 <label className="grid gap-2">
-                  <span className="text-sm font-medium text-white/80">
+                  <span className="text-sm font-medium text-foreground/80">
                     Model
                   </span>
 
@@ -900,7 +900,7 @@ Your responsibilities:
                         setModel(value);
                       }
                     }}
-                    className="h-12 rounded-xl border border-white/10 bg-black/30 px-4 text-sm text-white outline-none transition focus:border-white/30"
+                    className="h-12 rounded-xl border border-white/10 bg-black/30 px-4 text-sm text-foreground outline-none transition focus:border-white/30"
                   >
                     {MODEL_OPTIONS.map(
                       (option) => (
@@ -919,11 +919,11 @@ Your responsibilities:
 
                 <div className="grid gap-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-white/80">
+                    <span className="text-sm font-medium text-foreground/80">
                       Creativity
                     </span>
 
-                    <span className="rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1 text-xs text-white/60">
+                    <span className="rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1 text-xs text-foreground/60">
                       {temperature.toFixed(1)}
                     </span>
                   </div>
@@ -944,7 +944,7 @@ Your responsibilities:
                     className="w-full accent-white"
                   />
 
-                  <div className="flex justify-between text-xs text-white/30">
+                  <div className="flex justify-between text-xs text-foreground/30">
                     <span>Focused</span>
                     <span>Balanced</span>
                     <span>Creative</span>
@@ -956,11 +956,11 @@ Your responsibilities:
             <section className="rounded-3xl border border-white/10 bg-white/[0.025] p-5 sm:p-7">
               <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <h2 className="text-base font-semibold text-white">
+                  <h2 className="text-base font-semibold text-foreground">
                     Agent visibility
                   </h2>
 
-                  <p className="mt-1 max-w-xl text-sm leading-6 text-white/45">
+                  <p className="mt-1 max-w-xl text-sm leading-6 text-foreground/45">
                     Public agents can be
                     discoverable in shared
                     environments depending on
@@ -1004,7 +1004,7 @@ Your responsibilities:
                   disabled={
                     status === "saving"
                   }
-                  className="rounded-xl px-4 py-3 text-sm text-white/50 transition hover:bg-white/[0.05] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded-xl px-4 py-3 text-sm text-foreground/50 transition hover:bg-white/[0.05] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Reset
                 </button>
@@ -1016,7 +1016,7 @@ Your responsibilities:
                     disabled={
                       status === "saving"
                     }
-                    className="rounded-xl px-4 py-3 text-sm text-white/50 transition hover:bg-white/[0.05] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                    className="rounded-xl px-4 py-3 text-sm text-foreground/50 transition hover:bg-white/[0.05] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     Cancel
                   </button>
@@ -1043,7 +1043,7 @@ Your responsibilities:
           <aside className="space-y-6">
             <div className="sticky top-6 rounded-3xl border border-white/10 bg-white/[0.025] p-5">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-medium uppercase tracking-[0.18em] text-white/40">
+                <span className="text-xs font-medium uppercase tracking-[0.18em] text-foreground/40">
                   Live summary
                 </span>
 
@@ -1061,16 +1061,16 @@ Your responsibilities:
                 </span>
               </div>
 
-              <div className="mt-6 flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.05] text-xl text-white">
+              <div className="mt-6 flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.05] text-xl text-foreground">
                 {selectedRole.icon}
               </div>
 
-              <h3 className="mt-4 text-lg font-semibold text-white">
+              <h3 className="mt-4 text-lg font-semibold text-foreground">
                 {name.trim() ||
                   "Untitled Agent"}
               </h3>
 
-              <p className="mt-2 text-sm leading-6 text-white/45">
+              <p className="mt-2 text-sm leading-6 text-foreground/45">
                 {description.trim() ||
                   "Your agent description will appear here."}
               </p>
@@ -1107,11 +1107,11 @@ Your responsibilities:
 
               <div className="mt-6 border-t border-white/10 pt-5">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-white/40">
+                  <span className="text-xs text-foreground/40">
                     Build readiness
                   </span>
 
-                  <span className="text-sm font-semibold text-white">
+                  <span className="text-sm font-semibold text-foreground">
                     {completionScore}%
                   </span>
                 </div>
@@ -1129,14 +1129,14 @@ Your responsibilities:
 
             {isPreviewOpen ? (
               <div className="rounded-3xl border border-white/10 bg-black/20 p-5">
-                <span className="text-xs font-medium uppercase tracking-[0.18em] text-white/40">
+                <span className="text-xs font-medium uppercase tracking-[0.18em] text-foreground/40">
                   Behavior preview
                 </span>
 
                 <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.025] p-4">
-                  <p className="text-sm leading-6 text-white/70">
+                  <p className="text-sm leading-6 text-foreground/70">
                     I&apos;m{" "}
-                    <span className="font-semibold text-white">
+                    <span className="font-semibold text-foreground">
                       {name.trim() ||
                         "your new agent"}
                     </span>
@@ -1165,11 +1165,11 @@ function SummaryRow({
 }) {
   return (
     <div className="flex items-center justify-between gap-4">
-      <span className="text-xs text-white/40">
+      <span className="text-xs text-foreground/40">
         {label}
       </span>
 
-      <span className="max-w-[190px] truncate text-right text-xs font-medium text-white/75">
+      <span className="max-w-[190px] truncate text-right text-xs font-medium text-foreground/75">
         {value}
       </span>
     </div>

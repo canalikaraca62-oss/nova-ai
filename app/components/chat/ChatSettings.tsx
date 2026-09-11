@@ -204,7 +204,7 @@ export default function ChatSettings({
       <div className="border-b border-zinc-200 px-5 py-5 dark:border-zinc-800 sm:px-6">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-base font-bold text-zinc-950 dark:text-white">
+            <h2 className="text-base font-bold text-zinc-950 dark:text-foreground">
               Chat settings
             </h2>
 
@@ -244,7 +244,7 @@ export default function ChatSettings({
 
         <div>
           <div className="mb-3">
-            <label className="text-sm font-semibold text-zinc-900 dark:text-white">
+            <label className="text-sm font-semibold text-zinc-900 dark:text-foreground">
               AI model
             </label>
 
@@ -287,7 +287,7 @@ export default function ChatSettings({
         <div>
           <div className="flex items-end justify-between gap-4">
             <div>
-              <label className="text-sm font-semibold text-zinc-900 dark:text-white">
+              <label className="text-sm font-semibold text-zinc-900 dark:text-foreground">
                 Creativity
               </label>
 
@@ -338,7 +338,7 @@ export default function ChatSettings({
 
         <div>
           <div className="mb-3">
-            <label className="text-sm font-semibold text-zinc-900 dark:text-white">
+            <label className="text-sm font-semibold text-zinc-900 dark:text-foreground">
               Maximum response length
             </label>
 
@@ -376,7 +376,7 @@ export default function ChatSettings({
 
         <div>
           <div className="mb-3">
-            <label className="text-sm font-semibold text-zinc-900 dark:text-white">
+            <label className="text-sm font-semibold text-zinc-900 dark:text-foreground">
               Custom instructions
             </label>
 
@@ -407,7 +407,7 @@ export default function ChatSettings({
 
         <div className="overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-800">
           <div className="border-b border-zinc-200 px-4 py-4 dark:border-zinc-800">
-            <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">
+            <h3 className="text-sm font-semibold text-zinc-900 dark:text-foreground">
               Capabilities
             </h3>
 
@@ -495,7 +495,7 @@ export default function ChatSettings({
           onClick={() =>
             void handleSave()
           }
-          className="flex items-center justify-center gap-2 rounded-xl bg-violet-600 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-violet-500/20 transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex items-center justify-center gap-2 rounded-xl bg-violet-600 px-5 py-2.5 text-sm font-bold text-foreground shadow-lg shadow-violet-500/20 transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {saving ? (
             <>
@@ -562,7 +562,7 @@ function SettingToggle({
       )}
     >
       <div className="min-w-0">
-        <h4 className="text-sm font-semibold text-zinc-900 dark:text-white">
+        <h4 className="text-sm font-semibold text-zinc-900 dark:text-foreground">
           {title}
         </h4>
 

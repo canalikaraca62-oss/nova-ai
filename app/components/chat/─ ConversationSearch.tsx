@@ -860,7 +860,7 @@ export default function ConversationSearch({
 
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
-                          <p className="truncate text-sm font-semibold text-zinc-900 dark:text-white">
+                          <p className="truncate text-sm font-semibold text-zinc-900 dark:text-foreground">
                             {renderHighlightedText(
                               conversation.title
                             )}

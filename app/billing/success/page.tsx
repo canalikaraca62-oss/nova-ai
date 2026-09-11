@@ -242,7 +242,7 @@ function BillingSuccessLoading() {
   return (
     <main className="min-h-screen bg-zinc-950 text-white">
       <div className="mx-auto flex min-h-screen w-full max-w-7xl items-center justify-center px-6">
-        <div className="flex items-center gap-3 text-sm text-white/60">
+        <div className="flex items-center gap-3 text-sm text-foreground/60">
           <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-white/70" />
           Loading your SYRAVEN workspace...
         </div>
@@ -604,7 +604,7 @@ function BillingSuccessContent() {
                 text-[10px]
                 uppercase
                 tracking-[0.22em]
-                text-white/40
+                text-foreground/40
               "
             >
               Intelligence Platform
@@ -624,7 +624,7 @@ function BillingSuccessContent() {
             px-4
             py-2
             text-sm
-            text-white/60
+            text-foreground/60
             sm:flex
           "
         >
@@ -687,7 +687,7 @@ function BillingSuccessContent() {
                 py-1.5
                 text-xs
                 font-medium
-                text-white/60
+                text-foreground/60
               "
             >
               <span
@@ -699,7 +699,7 @@ function BillingSuccessContent() {
                   justify-center
                   rounded-full
                   bg-white/10
-                  text-white
+                  text-foreground
                 "
               >
                 {syncStatus === "checking" ? (
@@ -728,7 +728,7 @@ function BillingSuccessContent() {
                 font-semibold
                 leading-[1.08]
                 tracking-[-0.04em]
-                text-white
+                text-foreground
                 sm:text-5xl
                 lg:text-6xl
               "
@@ -743,7 +743,7 @@ function BillingSuccessContent() {
                 text-pretty
                 text-base
                 leading-8
-                text-white/55
+                text-foreground/55
                 sm:text-lg
               "
             >
@@ -756,7 +756,7 @@ function BillingSuccessContent() {
                 max-w-xl
                 text-sm
                 leading-7
-                text-white/40
+                text-foreground/40
               "
             >
               {subscriptionText}
@@ -817,11 +817,11 @@ function BillingSuccessContent() {
                   px-5
                   text-sm
                   font-medium
-                  text-white/75
+                  text-foreground/75
                   transition
                   hover:border-white/20
                   hover:bg-white/[0.07]
-                  hover:text-white
+                  hover:text-foreground
                 "
               >
                 Manage billing
@@ -854,7 +854,7 @@ function BillingSuccessContent() {
                   border
                   border-white/10
                   bg-white/[0.04]
-                  text-white/70
+                  text-foreground/70
                 "
               >
                 <ShieldIcon />
@@ -865,7 +865,7 @@ function BillingSuccessContent() {
                   className="
                     text-sm
                     font-medium
-                    text-white/85
+                    text-foreground/85
                   "
                 >
                   Your workspace remains yours
@@ -876,7 +876,7 @@ function BillingSuccessContent() {
                     mt-1
                     text-sm
                     leading-6
-                    text-white/45
+                    text-foreground/45
                   "
                 >
                   Your conversations, projects, knowledge,
@@ -947,7 +947,7 @@ function BillingSuccessContent() {
                       className="
                         text-sm
                         font-medium
-                        text-white/45
+                        text-foreground/45
                       "
                     >
                       Activated plan
@@ -977,7 +977,7 @@ function BillingSuccessContent() {
                       border
                       border-white/10
                       bg-white/[0.05]
-                      text-white/80
+                      text-foreground/80
                     "
                   >
                     <SparkIcon />
@@ -1018,7 +1018,7 @@ function BillingSuccessContent() {
                             border
                             border-white/10
                             bg-white/[0.05]
-                            text-white/75
+                            text-foreground/75
                           "
                         >
                           <CheckIcon />
@@ -1027,7 +1027,7 @@ function BillingSuccessContent() {
                         <span
                           className="
                             text-sm
-                            text-white/65
+                            text-foreground/65
                           "
                         >
                           {feature}
@@ -1074,7 +1074,7 @@ function BillingSuccessContent() {
                         justify-center
                         rounded-xl
                         bg-white/[0.05]
-                        text-white/70
+                        text-foreground/70
                       "
                     >
                       <WorkspaceIcon />
@@ -1086,7 +1086,7 @@ function BillingSuccessContent() {
                           block
                           text-sm
                           font-medium
-                          text-white/80
+                          text-foreground/80
                         "
                       >
                         Workspace
@@ -1097,7 +1097,7 @@ function BillingSuccessContent() {
                           mt-0.5
                           block
                           text-xs
-                          text-white/40
+                          text-foreground/40
                         "
                       >
                         Start building
@@ -1131,7 +1131,7 @@ function BillingSuccessContent() {
                         justify-center
                         rounded-xl
                         bg-white/[0.05]
-                        text-white/70
+                        text-foreground/70
                       "
                     >
                       <AgentIcon />
@@ -1143,7 +1143,7 @@ function BillingSuccessContent() {
                           block
                           text-sm
                           font-medium
-                          text-white/80
+                          text-foreground/80
                         "
                       >
                         Agents
@@ -1154,7 +1154,7 @@ function BillingSuccessContent() {
                           mt-0.5
                           block
                           text-xs
-                          text-white/40
+                          text-foreground/40
                         "
                       >
                         Explore your AI team

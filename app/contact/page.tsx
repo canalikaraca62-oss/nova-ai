@@ -45,12 +45,12 @@ const ENTERPRISE_POINTS: readonly string[] = [
 
 export default function ContactPage() {
   return (
-    <main className="min-h-screen bg-background text-white">
+    <main className="min-h-screen bg-background text-foreground">
       <div className="mx-auto max-w-3xl px-6 py-20 sm:py-28">
         <nav aria-label="Breadcrumb" className="mb-10">
           <Link
             href="/pricing"
-            className="inline-flex items-center gap-2 rounded-lg text-sm text-white/60 transition hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+            className="inline-flex items-center gap-2 rounded-lg text-sm text-foreground/60 transition hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
           >
             <span aria-hidden="true">←</span>
             Back to pricing
@@ -61,7 +61,7 @@ export default function ContactPage() {
           Talk to sales
         </h1>
 
-        <p className="mt-5 max-w-2xl text-base leading-7 text-white/60">
+        <p className="mt-5 max-w-2xl text-base leading-7 text-foreground/60">
           Enterprise plans are configured with your team rather than
           bought self-serve. Tell us what you need and we will get back
           to you.
@@ -73,7 +73,7 @@ export default function ContactPage() {
         >
           <h2
             id="enterprise-heading"
-            className="text-sm font-bold uppercase tracking-[0.16em] text-white/50"
+            className="text-sm font-bold uppercase tracking-[0.16em] text-foreground/50"
           >
             Enterprise includes
           </h2>
@@ -88,7 +88,7 @@ export default function ContactPage() {
                   ✓
                 </span>
 
-                <span className="text-sm leading-6 text-white/75">
+                <span className="text-sm leading-6 text-foreground/75">
                   {point}
                 </span>
               </li>
@@ -112,17 +112,17 @@ export default function ContactPage() {
 
             <Link
               href="/pricing"
-              className="inline-flex h-12 items-center justify-center rounded-xl border border-white/15 px-6 text-sm font-semibold text-white/80 transition hover:border-white/30 hover:bg-white/[0.06] hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+              className="inline-flex h-12 items-center justify-center rounded-xl border border-white/15 px-6 text-sm font-semibold text-foreground/80 transition hover:border-white/30 hover:bg-white/[0.06] hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
             >
               Compare plans
             </Link>
           </div>
 
-          <p className="mt-6 text-sm text-white/50">
+          <p className="mt-6 text-sm text-foreground/50">
             Prefer to write directly?{" "}
             <a
               href={`mailto:${SALES_EMAIL}`}
-              className="font-medium text-white underline underline-offset-4 transition hover:text-white/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+              className="font-medium text-foreground underline underline-offset-4 transition hover:text-foreground/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
             >
               {SALES_EMAIL}
             </a>

@@ -254,7 +254,7 @@ export default function UsageMeter({
           )}
 
           <div className="min-w-0">
-            <h3 className="truncate text-sm font-bold text-zinc-950 dark:text-white">
+            <h3 className="truncate text-sm font-bold text-zinc-950 dark:text-foreground">
               {title}
             </h3>
 
@@ -282,7 +282,7 @@ export default function UsageMeter({
         <div className="mt-6 flex items-end justify-between gap-4">
           <div>
             <div className="flex items-baseline gap-1.5">
-              <span className="text-3xl font-bold tracking-tight text-zinc-950 dark:text-white">
+              <span className="text-3xl font-bold tracking-tight text-zinc-950 dark:text-foreground">
                 {formatNumber(
                   safeUsed
                 )}
@@ -313,7 +313,7 @@ export default function UsageMeter({
           {showPercentage &&
             !isUnlimited && (
               <div className="text-right">
-                <div className="text-2xl font-bold text-zinc-950 dark:text-white">
+                <div className="text-2xl font-bold text-zinc-950 dark:text-foreground">
                   {Math.round(
                     percentage
                   )}
@@ -497,7 +497,7 @@ export default function UsageMeter({
                 Used
               </p>
 
-              <p className="mt-1 font-semibold text-zinc-950 dark:text-white">
+              <p className="mt-1 font-semibold text-zinc-950 dark:text-foreground">
                 {formatNumber(
                   safeUsed
                 )}{" "}
@@ -510,7 +510,7 @@ export default function UsageMeter({
                 Limit
               </p>
 
-              <p className="mt-1 font-semibold text-zinc-950 dark:text-white">
+              <p className="mt-1 font-semibold text-zinc-950 dark:text-foreground">
                 {isUnlimited
                   ? "Unlimited"
                   : `${formatNumber(
@@ -524,7 +524,7 @@ export default function UsageMeter({
                 Remaining
               </p>
 
-              <p className="mt-1 font-semibold text-zinc-950 dark:text-white">
+              <p className="mt-1 font-semibold text-zinc-950 dark:text-foreground">
                 {isUnlimited
                   ? "Unlimited"
                   : `${formatNumber(

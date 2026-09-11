@@ -331,7 +331,7 @@ export default function AgentGrid({
                 AI Workforce
               </div>
 
-              <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">
+              <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
                 {title}
               </h1>
 
@@ -358,7 +358,7 @@ export default function AgentGrid({
                 Total agents
               </div>
 
-              <div className="mt-2 text-2xl font-semibold text-white">
+              <div className="mt-2 text-2xl font-semibold text-foreground">
                 {agents.length}
               </div>
             </div>
@@ -368,7 +368,7 @@ export default function AgentGrid({
                 Active
               </div>
 
-              <div className="mt-2 flex items-center gap-2 text-2xl font-semibold text-white">
+              <div className="mt-2 flex items-center gap-2 text-2xl font-semibold text-foreground">
                 <span className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
                 {statusCounts.active ?? 0}
               </div>
@@ -379,7 +379,7 @@ export default function AgentGrid({
                 Running
               </div>
 
-              <div className="mt-2 flex items-center gap-2 text-2xl font-semibold text-white">
+              <div className="mt-2 flex items-center gap-2 text-2xl font-semibold text-foreground">
                 <Loader2 className="h-4 w-4 animate-spin text-blue-400" />
                 {statusCounts.running ?? 0}
               </div>
@@ -390,7 +390,7 @@ export default function AgentGrid({
                 Needs attention
               </div>
 
-              <div className="mt-2 flex items-center gap-2 text-2xl font-semibold text-white">
+              <div className="mt-2 flex items-center gap-2 text-2xl font-semibold text-foreground">
                 <CircleAlert className="h-4 w-4 text-amber-400" />
                 {statusCounts.error ?? 0}
               </div>
@@ -411,7 +411,7 @@ export default function AgentGrid({
                   setSearchQuery(event.target.value)
                 }
                 placeholder={searchPlaceholder}
-                className="h-11 w-full rounded-xl border border-white/[0.06] bg-white/[0.025] pl-10 pr-10 text-sm text-white outline-none placeholder:text-zinc-600 transition focus:border-white/15 focus:bg-white/[0.04] focus:ring-2 focus:ring-white/[0.04]"
+                className="h-11 w-full rounded-xl border border-white/[0.06] bg-white/[0.025] pl-10 pr-10 text-sm text-foreground outline-none placeholder:text-zinc-600 transition focus:border-white/15 focus:bg-white/[0.04] focus:ring-2 focus:ring-white/[0.04]"
               />
 
               {searchQuery ? (
@@ -420,7 +420,7 @@ export default function AgentGrid({
                   onClick={() =>
                     setSearchQuery("")
                   }
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 transition hover:text-white"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 transition hover:text-foreground"
                   aria-label="Clear search"
                 >
                   <X className="h-4 w-4" />
@@ -587,7 +587,7 @@ export default function AgentGrid({
             <button
               type="button"
               onClick={clearFilters}
-              className="shrink-0 text-xs font-medium text-zinc-400 transition hover:text-white"
+              className="shrink-0 text-xs font-medium text-zinc-400 transition hover:text-foreground"
             >
               Clear filters
             </button>
@@ -603,7 +603,7 @@ export default function AgentGrid({
             </div>
 
             <div className="min-w-0 flex-1">
-              <h3 className="font-semibold text-white">
+              <h3 className="font-semibold text-foreground">
                 Unable to load agents
               </h3>
 
@@ -615,7 +615,7 @@ export default function AgentGrid({
                 <button
                   type="button"
                   onClick={onRetry}
-                  className="mt-4 rounded-xl border border-white/[0.08] bg-white/[0.04] px-3 py-2 text-sm font-medium text-white transition hover:bg-white/[0.08]"
+                  className="mt-4 rounded-xl border border-white/[0.08] bg-white/[0.04] px-3 py-2 text-sm font-medium text-foreground transition hover:bg-white/[0.08]"
                 >
                   Try again
                 </button>
@@ -695,7 +695,7 @@ export default function AgentGrid({
             <Bot className="h-7 w-7 text-zinc-500" />
           </div>
 
-          <h3 className="mt-6 text-lg font-semibold text-white">
+          <h3 className="mt-6 text-lg font-semibold text-foreground">
             {emptyTitle}
           </h3>
 
@@ -710,7 +710,7 @@ export default function AgentGrid({
               <button
                 type="button"
                 onClick={clearFilters}
-                className="rounded-xl border border-white/[0.08] bg-white/[0.04] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-white/[0.08]"
+                className="rounded-xl border border-white/[0.08] bg-white/[0.04] px-4 py-2.5 text-sm font-medium text-foreground transition hover:bg-white/[0.08]"
               >
                 Clear filters
               </button>

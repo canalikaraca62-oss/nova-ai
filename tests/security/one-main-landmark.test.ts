@@ -88,8 +88,28 @@ function pagesUnder(dir: string): string[] {
  * a violation of it. Every converted page carries such a note.
  */
 function stripComments(source: string): string {
+  /*
+   * Strips JSX comments and line comments — but NOT bare block
+   * comments.
+   *
+   * This distinction cost a broken build. A scripted conversion
+   * inserted an explanatory note as a bare block comment inside JSX
+   * children, where it is literal text rather than a comment, and the
+   * word "main" written as a tag inside that prose was parsed as a real
+   * element. Thirty-one files stopped compiling.
+   *
+   * This guard reported 36 of 36 passing throughout, because it stripped
+   * bare block comments before scanning — it deleted the very text that
+   * was breaking the pages. A check that removes the evidence before
+   * looking is worse than no check at all, because it is trusted.
+   *
+   * Only a real JSX comment is removed now. That form cannot contain a
+   * parsed element, so nothing meaningful is lost by ignoring it, and a
+   * bare block comment sitting where it does not belong stays visible to
+   * the assertions below.
+   */
   return source
-    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/\{\/\*[\s\S]*?\*\/\}/g, "")
     .split("\n")
     .filter((line) => !line.trim().startsWith("//"))
     .join("\n");
@@ -121,8 +141,23 @@ void describe("A page under AppChrome emits no main of its own", () => {
       void test(`${relative} renders no <main>`, () => {
         const source = stripComments(readFileSync(page, "utf8"));
 
-        const opens = (source.match(/<main[\s>]/g) ?? []).length;
-        const closes = (source.match(/<\/main>/g) ?? []).length;
+        /*
+          Matched as a TAG, not as the string "<main>" anywhere.
+
+          A real element opens a line (indented or not). The word can
+          also appear mid-sentence inside an explanatory comment — every
+          converted page carries one — and an earlier version of this
+          check counted those, failing eighteen correct pages.
+
+          The opposite mistake was worse and came first: stripping bare
+          block comments before scanning hid a genuine break, because
+          a bare block comment inside JSX children is literal text and
+          the tag written in its prose really was parsed as an element.
+          So prose is no longer deleted, and the match is anchored
+          instead.
+        */
+        const opens = (source.match(/^[ \t]*<main[\s/>]/gm) ?? []).length;
+        const closes = (source.match(/^[ \t]*<\/main>/gm) ?? []).length;
 
         assert.equal(
           opens,

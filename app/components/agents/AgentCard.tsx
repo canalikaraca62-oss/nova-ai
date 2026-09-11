@@ -408,7 +408,7 @@ export default function AgentCard({
         {/* Header */}
         <div className="flex items-start gap-3">
           <div className="relative shrink-0">
-            <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-violet-500/20 via-blue-500/10 to-cyan-400/10 text-sm font-bold text-white shadow-inner shadow-white/5">
+            <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-violet-500/20 via-blue-500/10 to-cyan-400/10 text-sm font-bold text-foreground shadow-inner shadow-white/5">
               {imageSource &&
               !imageError ? (
                 <img
@@ -437,7 +437,7 @@ export default function AgentCard({
           <div className="min-w-0 flex-1">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <h3 className="truncate text-base font-semibold tracking-tight text-white">
+                <h3 className="truncate text-base font-semibold tracking-tight text-foreground">
                   {safeName}
                 </h3>
 
@@ -463,7 +463,7 @@ export default function AgentCard({
                       );
                     }
                   }}
-                  className="flex h-8 w-8 items-center justify-center rounded-lg border border-transparent text-zinc-500 transition hover:border-white/10 hover:bg-white/[0.05] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  className="flex h-8 w-8 items-center justify-center rounded-lg border border-transparent text-zinc-500 transition hover:border-white/10 hover:bg-white/[0.05] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <span className="text-lg leading-none">
                     ⋯
@@ -486,7 +486,7 @@ export default function AgentCard({
                             onEdit
                           )
                         }
-                        className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-zinc-300 transition hover:bg-white/[0.06] hover:text-white"
+                        className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-zinc-300 transition hover:bg-white/[0.06] hover:text-foreground"
                       >
                         Edit agent
                       </button>
@@ -501,7 +501,7 @@ export default function AgentCard({
                             onDuplicate
                           )
                         }
-                        className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-zinc-300 transition hover:bg-white/[0.06] hover:text-white"
+                        className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-zinc-300 transition hover:bg-white/[0.06] hover:text-foreground"
                       >
                         Duplicate
                       </button>

@@ -456,7 +456,7 @@ export default function AgentExecution({
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
-                <h3 className="truncate text-sm font-semibold text-white">
+                <h3 className="truncate text-sm font-semibold text-foreground">
                   {execution.agentName ??
                     "Agent Execution"}
                 </h3>
@@ -672,7 +672,7 @@ export default function AgentExecution({
                 (value) => !value
               )
             }
-            className="text-xs font-medium text-zinc-500 transition hover:text-white"
+            className="text-xs font-medium text-zinc-500 transition hover:text-foreground"
           >
             {expanded
               ? "Hide details"
@@ -688,7 +688,7 @@ export default function AgentExecution({
                     execution
                   )
                 }
-                className="rounded-lg border border-white/[0.08] px-3 py-2 text-xs font-medium text-zinc-400 transition hover:border-white/[0.15] hover:bg-white/[0.04] hover:text-white"
+                className="rounded-lg border border-white/[0.08] px-3 py-2 text-xs font-medium text-zinc-400 transition hover:border-white/[0.15] hover:bg-white/[0.04] hover:text-foreground"
               >
                 Open
               </button>

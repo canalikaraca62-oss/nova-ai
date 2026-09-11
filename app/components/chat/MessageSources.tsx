@@ -319,7 +319,7 @@ export default function MessageSources({
             </div>
 
             <div>
-              <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">
+              <h3 className="text-sm font-semibold text-zinc-900 dark:text-foreground">
                 {title}
               </h3>
 

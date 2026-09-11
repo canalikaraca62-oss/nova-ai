@@ -898,7 +898,7 @@ export default function BillingPage() {
                 text-[10px]
                 uppercase
                 tracking-[0.22em]
-                text-white/40
+                text-foreground/40
               "
             >
               Billing Center
@@ -918,11 +918,11 @@ export default function BillingPage() {
             py-2
             text-sm
             font-medium
-            text-white/70
+            text-foreground/70
             transition
             hover:border-white/20
             hover:bg-white/[0.08]
-            hover:text-white
+            hover:text-foreground
             sm:inline-flex
           "
         >
@@ -976,7 +976,7 @@ export default function BillingPage() {
                 py-1.5
                 text-xs
                 font-medium
-                text-white/55
+                text-foreground/55
               "
             >
               <span
@@ -1012,7 +1012,7 @@ export default function BillingPage() {
                 max-w-2xl
                 text-base
                 leading-8
-                text-white/50
+                text-foreground/50
                 sm:text-lg
               "
             >
@@ -1042,11 +1042,11 @@ export default function BillingPage() {
               px-4
               text-sm
               font-medium
-              text-white/65
+              text-foreground/65
               transition
               hover:border-white/20
               hover:bg-white/[0.07]
-              hover:text-white
+              hover:text-foreground
               disabled:cursor-wait
               disabled:opacity-60
               lg:self-auto
@@ -1169,7 +1169,7 @@ export default function BillingPage() {
                   <p
                     className="
                       text-sm
-                      text-white/45
+                      text-foreground/45
                     "
                   >
                     Current plan
@@ -1205,7 +1205,7 @@ export default function BillingPage() {
                         font-semibold
                         uppercase
                         tracking-[0.16em]
-                        text-white/55
+                        text-foreground/55
                       "
                     >
                       {statusLabel}
@@ -1218,7 +1218,7 @@ export default function BillingPage() {
                       max-w-xl
                       text-sm
                       leading-7
-                      text-white/45
+                      text-foreground/45
                     "
                   >
                     {
@@ -1238,7 +1238,7 @@ export default function BillingPage() {
                     border
                     border-white/10
                     bg-white/[0.05]
-                    text-white/75
+                    text-foreground/75
                   "
                 >
                   <SparkIcon />
@@ -1262,7 +1262,7 @@ export default function BillingPage() {
                       text-xs
                       uppercase
                       tracking-[0.14em]
-                      text-white/35
+                      text-foreground/35
                     "
                   >
                     Subscription
@@ -1273,7 +1273,7 @@ export default function BillingPage() {
                       mt-2
                       text-sm
                       font-medium
-                      text-white/75
+                      text-foreground/75
                     "
                   >
                     {subscriptionStatus ||
@@ -1289,7 +1289,7 @@ export default function BillingPage() {
                       text-xs
                       uppercase
                       tracking-[0.14em]
-                      text-white/35
+                      text-foreground/35
                     "
                   >
                     Renewal
@@ -1300,7 +1300,7 @@ export default function BillingPage() {
                       mt-2
                       text-sm
                       font-medium
-                      text-white/75
+                      text-foreground/75
                     "
                   >
                     {currentPlan === "free"
@@ -1317,7 +1317,7 @@ export default function BillingPage() {
                       text-xs
                       uppercase
                       tracking-[0.14em]
-                      text-white/35
+                      text-foreground/35
                     "
                   >
                     Billing
@@ -1328,7 +1328,7 @@ export default function BillingPage() {
                       mt-2
                       text-sm
                       font-medium
-                      text-white/75
+                      text-foreground/75
                     "
                   >
                     {cancelAtPeriodEnd
@@ -1361,11 +1361,11 @@ export default function BillingPage() {
                     px-4
                     text-sm
                     font-medium
-                    text-white/70
+                    text-foreground/70
                     transition
                     hover:border-white/20
                     hover:bg-white/[0.07]
-                    hover:text-white
+                    hover:text-foreground
                     disabled:cursor-wait
                     disabled:opacity-60
                   "
@@ -1396,7 +1396,7 @@ export default function BillingPage() {
               className="
                 text-sm
                 font-medium
-                text-white/45
+                text-foreground/45
               "
             >
               Workspace activity
@@ -1457,14 +1457,14 @@ export default function BillingPage() {
                   text-sm
                 "
               >
-                <span className="text-white/50">
+                <span className="text-foreground/50">
                   Storage used
                 </span>
 
                 <span
                   className="
                     font-medium
-                    text-white/80
+                    text-foreground/80
                   "
                 >
                   {formatBytes(
@@ -1493,7 +1493,7 @@ export default function BillingPage() {
             <p
               className="
                 text-sm
-                text-white/40
+                text-foreground/40
               "
             >
               Choose your level
@@ -1668,7 +1668,7 @@ export default function BillingPage() {
                       font-semibold
                       uppercase
                       tracking-[0.15em]
-                      text-white/50
+                      text-foreground/50
                     "
                   >
                     {plan.badge}
@@ -1710,7 +1710,7 @@ export default function BillingPage() {
                     min-h-[72px]
                     text-sm
                     leading-6
-                    text-white/45
+                    text-foreground/45
                   "
                 >
                   {plan.description}
@@ -1740,7 +1740,7 @@ export default function BillingPage() {
                       className="
                         mb-1
                         text-xs
-                        text-white/35
+                        text-foreground/35
                       "
                     >
                       / {yearly
@@ -1769,7 +1769,7 @@ export default function BillingPage() {
                           gap-2.5
                           text-sm
                           leading-5
-                          text-white/60
+                          text-foreground/60
                         "
                       >
                         <span
@@ -1785,7 +1785,7 @@ export default function BillingPage() {
                             border
                             border-white/10
                             bg-white/[0.04]
-                            text-white/70
+                            text-foreground/70
                           "
                         >
                           <CheckIcon />
@@ -1815,7 +1815,7 @@ export default function BillingPage() {
                         bg-white/[0.05]
                         text-sm
                         font-medium
-                        text-white/40
+                        text-foreground/40
                       "
                     >
                       Current plan
@@ -1958,11 +1958,11 @@ function UsageRow({
           text-sm
         "
       >
-        <span className="text-white/50">
+        <span className="text-foreground/50">
           {label}
         </span>
 
-        <span className="text-white/80">
+        <span className="text-foreground/80">
           {value}
         </span>
       </div>
@@ -2023,7 +2023,7 @@ function TrustCard({
           border
           border-white/10
           bg-white/[0.04]
-          text-white/65
+          text-foreground/65
         "
       >
         {icon}
@@ -2034,7 +2034,7 @@ function TrustCard({
           className="
             text-sm
             font-medium
-            text-white/80
+            text-foreground/80
           "
         >
           {title}
@@ -2045,7 +2045,7 @@ function TrustCard({
             mt-1
             text-sm
             leading-6
-            text-white/40
+            text-foreground/40
           "
         >
           {description}

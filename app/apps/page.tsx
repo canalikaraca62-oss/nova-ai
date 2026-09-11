@@ -227,7 +227,7 @@ const apps: AppItem[] = [
 function AppIcon({ value }: { value: string }) {
   return (
     <span
-      className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/10 text-sm font-bold text-white shadow-lg ring-1 ring-white/15 backdrop-blur-xl"
+      className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/10 text-sm font-bold text-foreground shadow-lg ring-1 ring-white/15 backdrop-blur-xl"
       aria-hidden="true"
     >
       {value}
@@ -287,7 +287,7 @@ export default function AppsPage() {
   };
 
   return (
-    <main className="min-h-screen bg-background text-white">
+    <main className="min-h-screen bg-background text-foreground">
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
         <div className="absolute left-[10%] top-[-15%] h-[500px] w-[500px] rounded-full bg-violet-600/10 blur-[140px]" />
         <div className="absolute right-[5%] top-[20%] h-[450px] w-[450px] rounded-full bg-cyan-500/10 blur-[140px]" />
@@ -300,7 +300,7 @@ export default function AppsPage() {
             <div className="absolute inset-0 bg-gradient-to-br from-violet-500/[0.12] via-transparent to-cyan-500/[0.08]" />
 
             <div className="relative max-w-4xl">
-              <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/20 px-3 py-1.5 text-xs font-medium text-white/70 backdrop-blur-xl">
+              <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/20 px-3 py-1.5 text-xs font-medium text-foreground/70 backdrop-blur-xl">
                 <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_16px_rgba(74,222,128,0.8)]" />
                 SYRAVEN APPLICATION ECOSYSTEM
               </div>
@@ -312,7 +312,7 @@ export default function AppsPage() {
                 </span>
               </h1>
 
-              <p className="mt-6 max-w-2xl text-base leading-7 text-white/55 sm:text-lg">
+              <p className="mt-6 max-w-2xl text-base leading-7 text-foreground/55 sm:text-lg">
                 Discover intelligent applications built to
                 create, research, automate, collaborate and
                 turn ambitious ideas into real outcomes.
@@ -331,7 +331,7 @@ export default function AppsPage() {
 
                 <a
                   href="#all-apps"
-                  className="rounded-2xl border border-white/10 bg-white/[0.04] px-5 py-3 text-sm font-medium text-white/80 transition hover:border-white/20 hover:bg-white/[0.08]"
+                  className="rounded-2xl border border-white/10 bg-white/[0.04] px-5 py-3 text-sm font-medium text-foreground/80 transition hover:border-white/20 hover:bg-white/[0.08]"
                 >
                   Explore ecosystem
                 </a>
@@ -344,7 +344,7 @@ export default function AppsPage() {
               <p className="text-2xl font-semibold tracking-tight">
                 {apps.length}+
               </p>
-              <p className="mt-1 text-sm text-white/45">
+              <p className="mt-1 text-sm text-foreground/45">
                 Intelligent applications
               </p>
             </div>
@@ -353,7 +353,7 @@ export default function AppsPage() {
               <p className="text-2xl font-semibold tracking-tight">
                 One
               </p>
-              <p className="mt-1 text-sm text-white/45">
+              <p className="mt-1 text-sm text-foreground/45">
                 Unified workspace
               </p>
             </div>
@@ -362,7 +362,7 @@ export default function AppsPage() {
               <p className="text-2xl font-semibold tracking-tight">
                 AI-native
               </p>
-              <p className="mt-1 text-sm text-white/45">
+              <p className="mt-1 text-sm text-foreground/45">
                 Built for ambitious work
               </p>
             </div>
@@ -381,7 +381,7 @@ export default function AppsPage() {
               </h2>
             </div>
 
-            <span className="hidden text-sm text-white/40 sm:block">
+            <span className="hidden text-sm text-foreground/40 sm:block">
               Your most powerful tools, connected.
             </span>
           </div>
@@ -404,7 +404,7 @@ export default function AppsPage() {
                     <AppIcon value={app.icon} />
                   </div>
 
-                  <span className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-[11px] font-medium text-white/50">
+                  <span className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-[11px] font-medium text-foreground/50">
                     {app.status}
                   </span>
                 </div>
@@ -413,7 +413,7 @@ export default function AppsPage() {
                   {app.name}
                 </h3>
 
-                <p className="mt-3 text-sm leading-6 text-white/50">
+                <p className="mt-3 text-sm leading-6 text-foreground/50">
                   {app.description}
                 </p>
 
@@ -422,14 +422,14 @@ export default function AppsPage() {
                     {app.tags.slice(0, 2).map((tag) => (
                       <span
                         key={tag}
-                        className="rounded-lg bg-white/[0.05] px-2 py-1 text-[11px] text-white/45"
+                        className="rounded-lg bg-white/[0.05] px-2 py-1 text-[11px] text-foreground/45"
                       >
                         {tag}
                       </span>
                     ))}
                   </div>
 
-                  <span className="text-white/40 transition group-hover:translate-x-1 group-hover:text-white">
+                  <span className="text-foreground/40 transition group-hover:translate-x-1 group-hover:text-foreground">
                     →
                   </span>
                 </div>
@@ -452,13 +452,13 @@ export default function AppsPage() {
                 Explore everything
               </h2>
 
-              <p className="mt-2 text-sm text-white/45">
+              <p className="mt-2 text-sm text-foreground/45">
                 Find the right intelligence for the work ahead.
               </p>
             </div>
 
             <div className="relative w-full lg:max-w-md">
-              <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm text-white/35">
+              <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm text-foreground/35">
                 ⌕
               </span>
 
@@ -468,7 +468,7 @@ export default function AppsPage() {
                   setQuery(event.target.value)
                 }
                 placeholder="Search applications..."
-                className="h-12 w-full rounded-2xl border border-white/10 bg-white/[0.045] pl-10 pr-4 text-sm text-white outline-none transition placeholder:text-white/30 focus:border-violet-400/50 focus:bg-white/[0.06]"
+                className="h-12 w-full rounded-2xl border border-white/10 bg-white/[0.045] pl-10 pr-4 text-sm text-foreground outline-none transition placeholder:text-foreground/30 focus:border-violet-400/50 focus:bg-white/[0.06]"
               />
             </div>
           </div>
@@ -545,7 +545,7 @@ export default function AppsPage() {
                       }`}
                     />
 
-                    <span className="text-xs text-white/45">
+                    <span className="text-xs text-foreground/45">
                       {app.status}
                     </span>
 
@@ -560,7 +560,7 @@ export default function AppsPage() {
                     {app.name}
                   </h3>
 
-                  <p className="relative mt-3 text-sm leading-6 text-white/48">
+                  <p className="relative mt-3 text-sm leading-6 text-foreground/48">
                     {app.description}
                   </p>
 
@@ -570,7 +570,7 @@ export default function AppsPage() {
                         {app.tags.slice(0, 2).map((tag) => (
                           <span
                             key={tag}
-                            className="rounded-lg bg-white/[0.045] px-2 py-1 text-[10px] text-white/40"
+                            className="rounded-lg bg-white/[0.045] px-2 py-1 text-[10px] text-foreground/40"
                           >
                             {tag}
                           </span>
@@ -578,7 +578,7 @@ export default function AppsPage() {
                       </div>
 
                       {app.usage && (
-                        <span className="text-[11px] text-white/30">
+                        <span className="text-[11px] text-foreground/30">
                           {app.usage}
                         </span>
                       )}
@@ -597,7 +597,7 @@ export default function AppsPage() {
                     */}
                     {app.status === "Coming soon" ? (
                       <p
-                        className="mt-5 flex h-11 items-center rounded-xl border border-dashed border-white/10 bg-white/[0.02] px-4 text-sm font-medium text-white/40"
+                        className="mt-5 flex h-11 items-center rounded-xl border border-dashed border-white/10 bg-white/[0.02] px-4 text-sm font-medium text-foreground/40"
                         role="note"
                       >
                         Not available yet
@@ -605,7 +605,7 @@ export default function AppsPage() {
                     ) : (
                       <Link
                         href={app.href}
-                        className="mt-5 flex h-11 items-center justify-between rounded-xl border border-white/10 bg-white/[0.035] px-4 text-sm font-medium text-white/70 transition hover:border-white/20 hover:bg-white/[0.08] hover:text-white"
+                        className="mt-5 flex h-11 items-center justify-between rounded-xl border border-white/10 bg-white/[0.035] px-4 text-sm font-medium text-foreground/70 transition hover:border-white/20 hover:bg-white/[0.08] hover:text-foreground"
                       >
                         Open application
                         <span>→</span>
@@ -625,7 +625,7 @@ export default function AppsPage() {
                 No applications found
               </h3>
 
-              <p className="mt-2 text-sm text-white/45">
+              <p className="mt-2 text-sm text-foreground/45">
                 Try another search or explore a different category.
               </p>
 
@@ -635,7 +635,7 @@ export default function AppsPage() {
                   setQuery("");
                   setSelectedCategory("All");
                 }}
-                className="mt-5 rounded-xl border border-white/10 px-4 py-2 text-sm text-white/70 transition hover:bg-white/[0.06]"
+                className="mt-5 rounded-xl border border-white/10 px-4 py-2 text-sm text-foreground/70 transition hover:bg-white/[0.06]"
               >
                 Reset filters
               </button>
@@ -654,7 +654,7 @@ export default function AppsPage() {
                 Your next application can start with an idea.
               </h2>
 
-              <p className="mt-4 text-sm leading-6 text-white/50 sm:text-base">
+              <p className="mt-4 text-sm leading-6 text-foreground/50 sm:text-base">
                 Combine AI agents, knowledge, automation,
                 projects and intelligent tools into a system
                 designed around your own workflow.

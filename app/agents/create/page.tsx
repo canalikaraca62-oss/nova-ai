@@ -465,7 +465,7 @@ export default function CreateAgentPage() {
       className="
         min-h-screen
         bg-background
-        text-white
+        text-foreground
       "
     >
       {/* ==================================================
@@ -522,7 +522,7 @@ export default function CreateAgentPage() {
                 transition
                 hover:border-white/[0.15]
                 hover:bg-white/[0.06]
-                hover:text-white
+                hover:text-foreground
               "
               aria-label="Go back"
             >
@@ -544,7 +544,7 @@ export default function CreateAgentPage() {
                     text-sm
                     font-semibold
                     tracking-tight
-                    text-white
+                    text-foreground
                     sm:text-base
                   "
                 >
@@ -834,7 +834,7 @@ export default function CreateAgentPage() {
                       bg-black/20
                       px-4
                       text-sm
-                      text-white
+                      text-foreground
                       outline-none
                       transition
                       placeholder:text-zinc-600
@@ -887,7 +887,7 @@ export default function CreateAgentPage() {
                       py-3
                       text-sm
                       leading-6
-                      text-white
+                      text-foreground
                       outline-none
                       transition
                       placeholder:text-zinc-600
@@ -1196,7 +1196,7 @@ export default function CreateAgentPage() {
                             className="
                               text-sm
                               font-semibold
-                              text-white
+                              text-foreground
                             "
                           >
                             {
@@ -1537,7 +1537,7 @@ Never invent sources or pretend to have completed an action you did not perform.
                     text-zinc-300
                     transition
                     hover:bg-white/[0.08]
-                    hover:text-white
+                    hover:text-foreground
                   "
                   aria-label="Add starter"
                 >

@@ -285,7 +285,7 @@ export default function CanvasPage() {
   }
 
   return (
-    <main className="min-h-screen bg-background text-white">
+    <main className="min-h-screen bg-background text-foreground">
       <div className="mx-auto w-full max-w-[1600px] px-4 py-5 sm:px-6 lg:px-10 lg:py-8">
         {/* HEADER */}
 
@@ -302,17 +302,17 @@ export default function CanvasPage() {
                     SYRAVEN Workspace
                   </p>
 
-                  <p className="mt-1 text-sm text-white/40">
+                  <p className="mt-1 text-sm text-foreground/40">
                     Intelligent creation environment
                   </p>
                 </div>
               </div>
 
-              <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-5xl">
+              <h1 className="text-3xl font-semibold tracking-tight text-foreground sm:text-5xl">
                 Canvas
               </h1>
 
-              <p className="mt-4 max-w-2xl text-sm leading-7 text-white/55 sm:text-base">
+              <p className="mt-4 max-w-2xl text-sm leading-7 text-foreground/55 sm:text-base">
                 Build, organize and evolve your most
                 important ideas inside a unified
                 intelligent workspace. Every canvas can
@@ -347,7 +347,7 @@ export default function CanvasPage() {
                 onClick={() =>
                   setShowCreatePanel((value) => !value)
                 }
-                className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-medium text-white/75 transition hover:border-white/20 hover:bg-white/[0.08] hover:text-white"
+                className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-medium text-foreground/75 transition hover:border-white/20 hover:bg-white/[0.08] hover:text-foreground"
               >
                 Quick Create
               </button>
@@ -387,7 +387,7 @@ export default function CanvasPage() {
           <section className="mt-6 overflow-hidden rounded-[24px] border border-cyan-400/15 bg-cyan-400/[0.035]">
             <div className="grid gap-5 p-5 lg:grid-cols-[1fr_220px_auto] lg:items-end">
               <label className="block">
-                <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-white/40">
+                <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-foreground/40">
                   Canvas title
                 </span>
 
@@ -404,12 +404,12 @@ export default function CanvasPage() {
                     }
                   }}
                   placeholder="Example: Global Expansion Strategy"
-                  className="h-12 w-full rounded-xl border border-white/10 bg-black/20 px-4 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-cyan-400/40 focus:bg-black/30"
+                  className="h-12 w-full rounded-xl border border-white/10 bg-black/20 px-4 text-sm text-foreground outline-none transition placeholder:text-foreground/25 focus:border-cyan-400/40 focus:bg-black/30"
                 />
               </label>
 
               <label className="block">
-                <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-white/40">
+                <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-foreground/40">
                   Workspace type
                 </span>
 
@@ -421,7 +421,7 @@ export default function CanvasPage() {
                         .value as CanvasType
                     )
                   }
-                  className="h-12 w-full rounded-xl border border-white/10 bg-background px-4 text-sm text-white outline-none"
+                  className="h-12 w-full rounded-xl border border-white/10 bg-background px-4 text-sm text-foreground outline-none"
                 >
                   {(
                     Object.keys(
@@ -455,7 +455,7 @@ export default function CanvasPage() {
           <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
             <div className="flex flex-1 flex-col gap-3 lg:flex-row">
               <div className="relative min-w-0 flex-1">
-                <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm text-white/35">
+                <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm text-foreground/35">
                   ⌕
                 </span>
 
@@ -465,7 +465,7 @@ export default function CanvasPage() {
                     setQuery(event.target.value)
                   }
                   placeholder="Search canvases, tags and ideas..."
-                  className="h-12 w-full rounded-xl border border-white/10 bg-black/20 pl-11 pr-4 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-white/25"
+                  className="h-12 w-full rounded-xl border border-white/10 bg-black/20 pl-11 pr-4 text-sm text-foreground outline-none transition placeholder:text-foreground/25 focus:border-white/25"
                 />
               </div>
 
@@ -477,7 +477,7 @@ export default function CanvasPage() {
                       .value as CanvasType | "all"
                   )
                 }
-                className="h-12 rounded-xl border border-white/10 bg-background px-4 text-sm text-white/70 outline-none"
+                className="h-12 rounded-xl border border-white/10 bg-background px-4 text-sm text-foreground/70 outline-none"
               >
                 <option value="all">
                   All types
@@ -507,7 +507,7 @@ export default function CanvasPage() {
                         | "all"
                   )
                 }
-                className="h-12 rounded-xl border border-white/10 bg-background px-4 text-sm text-white/70 outline-none"
+                className="h-12 rounded-xl border border-white/10 bg-background px-4 text-sm text-foreground/70 outline-none"
               >
                 <option value="all">
                   All status
@@ -564,7 +564,7 @@ export default function CanvasPage() {
                 Your Canvases
               </h2>
 
-              <p className="mt-1 text-sm text-white/40">
+              <p className="mt-1 text-sm text-foreground/40">
                 {filteredCanvases.length} workspace
                 {filteredCanvases.length === 1
                   ? ""
@@ -587,7 +587,7 @@ export default function CanvasPage() {
 
           {filteredCanvases.length === 0 ? (
             <div className="rounded-[28px] border border-dashed border-white/15 bg-white/[0.02] px-6 py-20 text-center">
-              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-2xl text-white/50">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-2xl text-foreground/50">
                 ◈
               </div>
 
@@ -595,7 +595,7 @@ export default function CanvasPage() {
                 No canvases found
               </h3>
 
-              <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-white/40">
+              <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-foreground/40">
                 Try changing your filters or create a
                 new intelligent workspace.
               </p>
@@ -607,7 +607,7 @@ export default function CanvasPage() {
                   setSelectedType("all");
                   setSelectedStatus("all");
                 }}
-                className="mt-6 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm text-white/70 transition hover:bg-white/[0.08]"
+                className="mt-6 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm text-foreground/70 transition hover:bg-white/[0.08]"
               >
                 Reset filters
               </button>
@@ -650,7 +650,7 @@ function StatCard({
 }) {
   return (
     <div className="rounded-2xl border border-white/[0.07] bg-black/15 p-4">
-      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/35">
+      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-foreground/35">
         {label}
       </p>
 
@@ -658,7 +658,7 @@ function StatCard({
         {value}
       </p>
 
-      <p className="mt-1 text-xs text-white/35">
+      <p className="mt-1 text-xs text-foreground/35">
         {description}
       </p>
     </div>
@@ -685,11 +685,11 @@ function CanvasCard({
           </div>
 
           <div className="min-w-0">
-            <p className="text-xs font-medium text-white/35">
+            <p className="text-xs font-medium text-foreground/35">
               {type.label}
             </p>
 
-            <h3 className="mt-1 truncate text-base font-semibold text-white">
+            <h3 className="mt-1 truncate text-base font-semibold text-foreground">
               {canvas.title}
             </h3>
           </div>
@@ -708,7 +708,7 @@ function CanvasCard({
         </span>
       </div>
 
-      <p className="mt-5 min-h-[72px] text-sm leading-6 text-white/50">
+      <p className="mt-5 min-h-[72px] text-sm leading-6 text-foreground/50">
         {canvas.description}
       </p>
 
@@ -716,7 +716,7 @@ function CanvasCard({
         {canvas.tags.map((tag) => (
           <span
             key={tag}
-            className="rounded-lg border border-white/[0.07] bg-black/15 px-2.5 py-1 text-[11px] text-white/40"
+            className="rounded-lg border border-white/[0.07] bg-black/15 px-2.5 py-1 text-[11px] text-foreground/40"
           >
             {tag}
           </span>
@@ -725,11 +725,11 @@ function CanvasCard({
 
       <div className="mt-6">
         <div className="flex items-center justify-between text-xs">
-          <span className="text-white/35">
+          <span className="text-foreground/35">
             Workspace progress
           </span>
 
-          <span className="font-semibold text-white/70">
+          <span className="font-semibold text-foreground/70">
             {canvas.progress}%
           </span>
         </div>
@@ -746,11 +746,11 @@ function CanvasCard({
 
       <div className="mt-6 flex items-center justify-between border-t border-white/[0.07] pt-4">
         <div>
-          <p className="text-xs text-white/35">
+          <p className="text-xs text-foreground/35">
             Updated {canvas.updatedAt}
           </p>
 
-          <p className="mt-1 text-xs text-white/55">
+          <p className="mt-1 text-xs text-foreground/55">
             {canvas.collaborators} collaborator
             {canvas.collaborators === 1 ? "" : "s"}
           </p>
@@ -762,7 +762,7 @@ function CanvasCard({
             onClick={() =>
               onArchive(canvas.id)
             }
-            className="rounded-lg border border-white/10 px-3 py-2 text-xs text-white/45 transition hover:bg-white/[0.07] hover:text-white"
+            className="rounded-lg border border-white/10 px-3 py-2 text-xs text-foreground/45 transition hover:bg-white/[0.07] hover:text-foreground"
           >
             {canvas.status === "archived"
               ? "Restore"
@@ -805,16 +805,16 @@ function CanvasListItem({
               {canvas.title}
             </h3>
 
-            <span className="rounded-full border border-white/10 px-2 py-0.5 text-[10px] uppercase tracking-wider text-white/40">
+            <span className="rounded-full border border-white/10 px-2 py-0.5 text-[10px] uppercase tracking-wider text-foreground/40">
               {formatStatus(canvas.status)}
             </span>
           </div>
 
-          <p className="mt-1 truncate text-sm text-white/40">
+          <p className="mt-1 truncate text-sm text-foreground/40">
             {canvas.description}
           </p>
 
-          <div className="mt-2 flex flex-wrap gap-2 text-xs text-white/35">
+          <div className="mt-2 flex flex-wrap gap-2 text-xs text-foreground/35">
             <span>{type.label}</span>
             <span>•</span>
             <span>{canvas.updatedAt}</span>
@@ -826,7 +826,7 @@ function CanvasListItem({
 
       <div className="flex shrink-0 items-center gap-2">
         <div className="mr-2 hidden w-28 lg:block">
-          <div className="mb-1 flex justify-between text-[10px] text-white/35">
+          <div className="mb-1 flex justify-between text-[10px] text-foreground/35">
             <span>Progress</span>
             <span>{canvas.progress}%</span>
           </div>
@@ -846,7 +846,7 @@ function CanvasListItem({
           onClick={() =>
             onArchive(canvas.id)
           }
-          className="rounded-lg border border-white/10 px-3 py-2 text-xs text-white/45 transition hover:bg-white/[0.07] hover:text-white"
+          className="rounded-lg border border-white/10 px-3 py-2 text-xs text-foreground/45 transition hover:bg-white/[0.07] hover:text-foreground"
         >
           {canvas.status === "archived"
             ? "Restore"

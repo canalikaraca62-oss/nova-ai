@@ -200,13 +200,13 @@ export default function ChatHeader({
           </button>
         )}
 
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-600 to-fuchsia-600 text-sm font-black text-white shadow-lg shadow-violet-500/20">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-600 to-fuchsia-600 text-sm font-black text-foreground shadow-lg shadow-violet-500/20">
           S
         </div>
 
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <h1 className="truncate text-sm font-bold text-zinc-950 dark:text-white sm:text-base">
+            <h1 className="truncate text-sm font-bold text-zinc-950 dark:text-foreground sm:text-base">
               {title}
             </h1>
 

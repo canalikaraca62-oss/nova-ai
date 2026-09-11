@@ -282,7 +282,7 @@ export default function AgentsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background text-white">
+    <div className="min-h-screen bg-background text-foreground">
       <main className="mx-auto w-full max-w-[1600px] px-4 pb-16 pt-6 sm:px-6 lg:px-8 lg:pt-10">
 
         {/* =================================================
@@ -302,7 +302,7 @@ export default function AgentsPage() {
                 SYRAVEN Intelligence Network
               </div>
 
-              <h1 className="max-w-3xl text-4xl font-semibold tracking-[-0.04em] text-white sm:text-5xl lg:text-6xl">
+              <h1 className="max-w-3xl text-4xl font-semibold tracking-[-0.04em] text-foreground sm:text-5xl lg:text-6xl">
                 Not a single AI.
                 <span className="block bg-gradient-to-r from-violet-300 via-white to-cyan-300 bg-clip-text text-transparent">
                   Your own AI team.
@@ -327,7 +327,7 @@ export default function AgentsPage() {
 
               <Link
                 href="/marketplace"
-                className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl border border-white/[0.10] bg-white/[0.04] px-5 text-sm font-medium text-zinc-200 transition hover:bg-white/[0.08] hover:text-white"
+                className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl border border-white/[0.10] bg-white/[0.04] px-5 text-sm font-medium text-zinc-200 transition hover:bg-white/[0.08] hover:text-foreground"
               >
                 Marketplace
                 <ArrowRight size={17} />
@@ -389,7 +389,7 @@ export default function AgentsPage() {
 
             <Link
               href="/marketplace"
-              className="hidden items-center gap-1 text-sm text-zinc-400 transition hover:text-white sm:inline-flex"
+              className="hidden items-center gap-1 text-sm text-zinc-400 transition hover:text-foreground sm:inline-flex"
             >
               See all
               <ChevronRight size={16} />
@@ -455,7 +455,7 @@ export default function AgentsPage() {
                   )
                 }
                 placeholder="Agent ara..."
-                className="h-14 w-full rounded-2xl border border-white/[0.08] bg-white/[0.04] pl-12 pr-4 text-sm text-white outline-none transition placeholder:text-zinc-600 focus:border-violet-400/40 focus:bg-white/[0.06]"
+                className="h-14 w-full rounded-2xl border border-white/[0.08] bg-white/[0.04] pl-12 pr-4 text-sm text-foreground outline-none transition placeholder:text-zinc-600 focus:border-violet-400/40 focus:bg-white/[0.06]"
               />
             </div>
 
@@ -502,7 +502,7 @@ export default function AgentsPage() {
                 />
 
                 <p className="text-sm text-zinc-400">
-                  <span className="font-medium text-white">
+                  <span className="font-medium text-foreground">
                     {filteredAgents.length}
                   </span>{" "}
                   agent bulundu
@@ -670,7 +670,7 @@ function AgentCard({
       <div className="relative">
         <div className="flex items-start justify-between gap-3">
 
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/[0.10] bg-black/20 text-white shadow-lg">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/[0.10] bg-black/20 text-foreground shadow-lg">
             {agent.icon}
           </div>
 
@@ -696,7 +696,7 @@ function AgentCard({
         </div>
 
         <div className="mt-5 flex items-center gap-2">
-          <h3 className="font-semibold tracking-tight text-white">
+          <h3 className="font-semibold tracking-tight text-foreground">
             {agent.name}
           </h3>
 
@@ -732,7 +732,7 @@ function AgentCard({
 
         <Link
           href={`/agents/${agent.id}`}
-          className="mt-6 flex h-11 items-center justify-between rounded-xl border border-white/[0.08] bg-black/20 px-4 text-sm font-medium text-zinc-300 transition hover:border-white/[0.16] hover:bg-white/[0.07] hover:text-white"
+          className="mt-6 flex h-11 items-center justify-between rounded-xl border border-white/[0.08] bg-black/20 px-4 text-sm font-medium text-zinc-300 transition hover:border-white/[0.16] hover:bg-white/[0.07] hover:text-foreground"
         >
           Open agent
 

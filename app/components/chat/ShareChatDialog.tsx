@@ -671,7 +671,7 @@ export default function ShareChatDialog({
               <div className="min-w-0">
                 <h2
                   id="share-chat-dialog-title"
-                  className="text-lg font-semibold text-zinc-950 dark:text-white"
+                  className="text-lg font-semibold text-zinc-950 dark:text-foreground"
                 >
                   Share conversation
                 </h2>
@@ -840,7 +840,7 @@ export default function ShareChatDialog({
                     Access
                   </p>
 
-                  <p className="mt-1 text-sm font-semibold text-zinc-900 dark:text-white">
+                  <p className="mt-1 text-sm font-semibold text-zinc-900 dark:text-foreground">
                     {getAccessLabel(
                       settings.access
                     )}
@@ -852,7 +852,7 @@ export default function ShareChatDialog({
                     Expiration
                   </p>
 
-                  <p className="mt-1 text-sm font-semibold text-zinc-900 dark:text-white">
+                  <p className="mt-1 text-sm font-semibold text-zinc-900 dark:text-foreground">
                     {effectiveSettings.expiresAt
                       ? new Date(
                           effectiveSettings.expiresAt
@@ -890,7 +890,7 @@ export default function ShareChatDialog({
             <div className="space-y-6">
               <section>
                 <div className="mb-3">
-                  <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">
+                  <h3 className="text-sm font-semibold text-zinc-900 dark:text-foreground">
                     Who can access?
                   </h3>
 
@@ -944,7 +944,7 @@ export default function ShareChatDialog({
                           </span>
 
                           <span className="min-w-0">
-                            <span className="block text-sm font-semibold text-zinc-900 dark:text-white">
+                            <span className="block text-sm font-semibold text-zinc-900 dark:text-foreground">
                               {getAccessLabel(
                                 access
                               )}
@@ -967,7 +967,7 @@ export default function ShareChatDialog({
                 "private" && (
                 <section className="space-y-3">
                   <div>
-                    <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">
+                    <h3 className="text-sm font-semibold text-zinc-900 dark:text-foreground">
                       Link expiration
                     </h3>
 
@@ -1037,7 +1037,7 @@ export default function ShareChatDialog({
                 <section className="rounded-2xl border border-zinc-200 p-4 dark:border-zinc-800">
                   <div className="flex items-start justify-between gap-4">
                     <div>
-                      <p className="text-sm font-semibold text-zinc-900 dark:text-white">
+                      <p className="text-sm font-semibold text-zinc-900 dark:text-foreground">
                         Search engine visibility
                       </p>
 
@@ -1087,7 +1087,7 @@ export default function ShareChatDialog({
                 <section className="rounded-2xl border border-zinc-200 p-4 dark:border-zinc-800">
                   <div className="flex items-start justify-between gap-4">
                     <div>
-                      <p className="text-sm font-semibold text-zinc-900 dark:text-white">
+                      <p className="text-sm font-semibold text-zinc-900 dark:text-foreground">
                         Allow copying
                       </p>
 
@@ -1154,7 +1154,7 @@ export default function ShareChatDialog({
                       void handleCreateShare()
                     }
                     disabled={isBusy}
-                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-violet-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-violet-600 px-5 py-2.5 text-sm font-semibold text-foreground transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {isSubmitting ? (
                       <>

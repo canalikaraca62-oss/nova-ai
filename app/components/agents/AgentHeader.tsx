@@ -300,7 +300,7 @@ export default function AgentHeader({
           <button
             type="button"
             onClick={onBack}
-            className="mb-5 inline-flex items-center gap-2 text-sm font-medium text-zinc-500 transition hover:text-white"
+            className="mb-5 inline-flex items-center gap-2 text-sm font-medium text-zinc-500 transition hover:text-foreground"
           >
             <ChevronLeft className="h-4 w-4" />
             {backLabel}
@@ -381,7 +381,7 @@ export default function AgentHeader({
                   ) : null}
                 </div>
 
-                <h1 className="truncate text-2xl font-semibold tracking-tight text-white sm:text-3xl">
+                <h1 className="truncate text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
                   {agent.name}
                 </h1>
 
@@ -460,7 +460,7 @@ export default function AgentHeader({
                   type="button"
                   onClick={() => onRefresh(agent)}
                   disabled={isLoading}
-                  className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.025] px-3 text-sm font-medium text-zinc-300 transition hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.025] px-3 text-sm font-medium text-zinc-300 transition hover:bg-white/[0.06] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
                   aria-label="Refresh agent"
                 >
                   <RotateCcw
@@ -478,7 +478,7 @@ export default function AgentHeader({
                 <button
                   type="button"
                   onClick={() => onShare(agent)}
-                  className="inline-flex h-11 items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.025] px-3 text-sm font-medium text-zinc-300 transition hover:bg-white/[0.06] hover:text-white"
+                  className="inline-flex h-11 items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.025] px-3 text-sm font-medium text-zinc-300 transition hover:bg-white/[0.06] hover:text-foreground"
                 >
                   <Share2 className="h-4 w-4" />
 
@@ -492,7 +492,7 @@ export default function AgentHeader({
                 <button
                   type="button"
                   onClick={() => onEdit(agent)}
-                  className="inline-flex h-11 items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.025] px-3 text-sm font-medium text-zinc-300 transition hover:bg-white/[0.06] hover:text-white"
+                  className="inline-flex h-11 items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.025] px-3 text-sm font-medium text-zinc-300 transition hover:bg-white/[0.06] hover:text-foreground"
                 >
                   <Edit3 className="h-4 w-4" />
 
@@ -545,7 +545,7 @@ export default function AgentHeader({
                       (current) => !current,
                     )
                   }
-                  className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.025] text-zinc-400 transition hover:bg-white/[0.06] hover:text-white"
+                  className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.025] text-zinc-400 transition hover:bg-white/[0.06] hover:text-foreground"
                   aria-label="More actions"
                 >
                   <MoreHorizontal className="h-5 w-5" />
@@ -556,7 +556,7 @@ export default function AgentHeader({
                     <button
                       type="button"
                       onClick={handleCopyId}
-                      className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm text-zinc-400 transition hover:bg-white/[0.05] hover:text-white"
+                      className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm text-zinc-400 transition hover:bg-white/[0.05] hover:text-foreground"
                     >
                       {copied ? (
                         <Check className="h-4 w-4 text-emerald-400" />
@@ -577,7 +577,7 @@ export default function AgentHeader({
                             onDuplicate,
                           )
                         }
-                        className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm text-zinc-400 transition hover:bg-white/[0.05] hover:text-white"
+                        className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm text-zinc-400 transition hover:bg-white/[0.05] hover:text-foreground"
                       >
                         <Copy className="h-4 w-4" />
                         Duplicate agent
@@ -590,7 +590,7 @@ export default function AgentHeader({
                         onClick={() =>
                           handleAction(onShare)
                         }
-                        className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm text-zinc-400 transition hover:bg-white/[0.05] hover:text-white"
+                        className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm text-zinc-400 transition hover:bg-white/[0.05] hover:text-foreground"
                       >
                         <ExternalLink className="h-4 w-4" />
                         Open sharing

@@ -301,7 +301,7 @@ export default function MessageFeedback({
         feedback && (
           <div className="mt-3 max-w-xl rounded-2xl border border-zinc-200 bg-zinc-50/70 p-4 dark:border-zinc-800 dark:bg-zinc-950">
             <div className="mb-3">
-              <h4 className="text-sm font-semibold text-zinc-900 dark:text-white">
+              <h4 className="text-sm font-semibold text-zinc-900 dark:text-foreground">
                 {feedback === "like"
                   ? "What was good?"
                   : "What could be improved?"}

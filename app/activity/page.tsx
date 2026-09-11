@@ -288,7 +288,7 @@ export default function ActivityPage() {
   };
 
   return (
-    <main className="min-h-screen bg-background text-white">
+    <main className="min-h-screen bg-background text-foreground">
       <div className="mx-auto w-full max-w-[1700px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
         {/* HEADER */}
 
@@ -308,20 +308,20 @@ export default function ActivityPage() {
                       SYRAVEN Intelligence
                     </p>
 
-                    <p className="mt-1 text-xs text-white/35">
+                    <p className="mt-1 text-xs text-foreground/35">
                       Your complete activity layer
                     </p>
                   </div>
                 </div>
 
-                <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl lg:text-5xl">
+                <h1 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl lg:text-5xl">
                   Everything happening in{" "}
                   <span className="bg-gradient-to-r from-violet-300 via-blue-300 to-cyan-300 bg-clip-text text-transparent">
                     your SYRAVEN world.
                   </span>
                 </h1>
 
-                <p className="mt-5 max-w-2xl text-sm leading-7 text-white/45 sm:text-base">
+                <p className="mt-5 max-w-2xl text-sm leading-7 text-foreground/45 sm:text-base">
                   Follow your AI, agents, projects, automations, files,
                   knowledge and workspace activity from one intelligent
                   timeline.
@@ -333,7 +333,7 @@ export default function ActivityPage() {
                   <button
                     type="button"
                     onClick={markAllAsRead}
-                    className="rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-3 text-sm font-medium text-white/60 transition hover:border-white/[0.14] hover:bg-white/[0.06] hover:text-white"
+                    className="rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-3 text-sm font-medium text-foreground/60 transition hover:border-white/[0.14] hover:bg-white/[0.06] hover:text-foreground"
                   >
                     Mark all as read
                   </button>
@@ -386,7 +386,7 @@ export default function ActivityPage() {
         <section className="mt-6 rounded-[28px] border border-white/[0.07] bg-background/80 p-4 backdrop-blur-xl sm:p-5">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
             <div className="relative w-full xl:max-w-md">
-              <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-white/30">
+              <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-foreground/30">
                 ⌕
               </span>
 
@@ -394,7 +394,7 @@ export default function ActivityPage() {
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder="Search activity..."
-                className="h-12 w-full rounded-xl border border-white/[0.08] bg-black/20 pl-11 pr-4 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-violet-500/40 focus:bg-black/30"
+                className="h-12 w-full rounded-xl border border-white/[0.08] bg-black/20 pl-11 pr-4 text-sm text-foreground outline-none transition placeholder:text-foreground/25 focus:border-violet-500/40 focus:bg-black/30"
               />
             </div>
 
@@ -404,7 +404,7 @@ export default function ActivityPage() {
                 onChange={(event) =>
                   setTimeFilter(event.target.value)
                 }
-                className="h-11 rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 text-sm text-white/70 outline-none"
+                className="h-11 rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 text-sm text-foreground/70 outline-none"
               >
                 <option value="all">All time</option>
                 <option value="today">Today</option>
@@ -464,18 +464,18 @@ export default function ActivityPage() {
           <div className="rounded-[30px] border border-white/[0.07] bg-background/70 p-4 sm:p-6">
             <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h2 className="text-lg font-semibold text-white">
+                <h2 className="text-lg font-semibold text-foreground">
                   Activity timeline
                 </h2>
 
-                <p className="mt-1 text-sm text-white/35">
+                <p className="mt-1 text-sm text-foreground/35">
                   {filteredActivities.length} event
                   {filteredActivities.length !== 1 ? "s" : ""}{" "}
                   matching your filters.
                 </p>
               </div>
 
-              <div className="inline-flex w-fit items-center gap-2 rounded-full border border-white/[0.07] bg-white/[0.03] px-3 py-1.5 text-xs text-white/40">
+              <div className="inline-flex w-fit items-center gap-2 rounded-full border border-white/[0.07] bg-white/[0.03] px-3 py-1.5 text-xs text-foreground/40">
                 <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
                 Live activity feed
               </div>
@@ -494,7 +494,7 @@ export default function ActivityPage() {
                     return (
                       <div key={group}>
                         <div className="mb-5 flex items-center gap-4">
-                          <p className="shrink-0 text-xs font-bold uppercase tracking-[0.2em] text-white/35">
+                          <p className="shrink-0 text-xs font-bold uppercase tracking-[0.2em] text-foreground/35">
                             {group}
                           </p>
 
@@ -548,7 +548,7 @@ export default function ActivityPage() {
             <div className="rounded-[30px] border border-white/[0.07] bg-gradient-to-b from-[#15151d] to-[#0d0d12] p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs font-bold uppercase tracking-[0.2em] text-white/35">
+                  <p className="text-xs font-bold uppercase tracking-[0.2em] text-foreground/35">
                     SYRAVEN Pulse
                   </p>
 
@@ -606,18 +606,18 @@ export default function ActivityPage() {
                 Intelligent activity
               </h3>
 
-              <p className="mt-2 text-sm leading-6 text-white/40">
+              <p className="mt-2 text-sm leading-6 text-foreground/40">
                 As SYRAVEN grows, this feed becomes the central
                 intelligence layer connecting your AI, agents,
                 automations, projects and workspace.
               </p>
 
               <div className="mt-6 rounded-2xl border border-white/[0.06] bg-black/20 p-4">
-                <p className="text-xs font-medium text-white/35">
+                <p className="text-xs font-medium text-foreground/35">
                   NEXT LEVEL
                 </p>
 
-                <p className="mt-2 text-sm leading-6 text-white/60">
+                <p className="mt-2 text-sm leading-6 text-foreground/60">
                   Activity will support deep links, execution history,
                   agent runs, security events and workspace insights.
                 </p>
@@ -664,7 +664,7 @@ function StatCard({
     <div
       className={`rounded-2xl border p-4 sm:p-5 ${accentMap[accent]}`}
     >
-      <p className="text-xs font-medium text-white/35">
+      <p className="text-xs font-medium text-foreground/35">
         {label}
       </p>
 
@@ -672,7 +672,7 @@ function StatCard({
         {value}
       </p>
 
-      <p className="mt-2 text-xs text-white/35">
+      <p className="mt-2 text-xs text-foreground/35">
         {detail}
       </p>
     </div>
@@ -747,16 +747,16 @@ function ActivityRow({
 
       <div className="min-w-0 flex-1">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <h3 className="pr-4 text-sm font-semibold text-white/85 transition group-hover:text-white sm:text-[15px]">
+          <h3 className="pr-4 text-sm font-semibold text-foreground/85 transition group-hover:text-foreground sm:text-[15px]">
             {activity.title}
           </h3>
 
-          <span className="shrink-0 text-xs text-white/30">
+          <span className="shrink-0 text-xs text-foreground/30">
             {activity.createdAt}
           </span>
         </div>
 
-        <p className="mt-2 max-w-4xl text-sm leading-6 text-white/40">
+        <p className="mt-2 max-w-4xl text-sm leading-6 text-foreground/40">
           {activity.description}
         </p>
 
@@ -771,19 +771,19 @@ function ActivityRow({
             {status.label}
           </span>
 
-          <span className="rounded-full border border-white/[0.06] bg-white/[0.025] px-2.5 py-1 text-[11px] text-white/35">
+          <span className="rounded-full border border-white/[0.06] bg-white/[0.025] px-2.5 py-1 text-[11px] text-foreground/35">
             {activity.actor}
           </span>
 
           {activity.workspace && (
-            <span className="rounded-full border border-white/[0.06] bg-white/[0.025] px-2.5 py-1 text-[11px] text-white/35">
+            <span className="rounded-full border border-white/[0.06] bg-white/[0.025] px-2.5 py-1 text-[11px] text-foreground/35">
               {activity.workspace}
             </span>
           )}
         </div>
       </div>
 
-      <span className="absolute bottom-4 right-4 text-lg text-white/10 transition group-hover:translate-x-0.5 group-hover:text-white/40">
+      <span className="absolute bottom-4 right-4 text-lg text-foreground/10 transition group-hover:translate-x-0.5 group-hover:text-foreground/40">
         →
       </span>
     </button>
@@ -806,10 +806,10 @@ function PulseRow({
           className={`h-2 w-2 rounded-full shadow-[0_0_12px_currentColor] ${dot}`}
         />
 
-        <span className="text-sm text-white/45">{label}</span>
+        <span className="text-sm text-foreground/45">{label}</span>
       </div>
 
-      <span className="text-sm font-medium text-white/70">
+      <span className="text-sm font-medium text-foreground/70">
         {value}
       </span>
     </div>
@@ -823,7 +823,7 @@ function EmptyActivityState({
 }) {
   return (
     <div className="flex min-h-[400px] flex-col items-center justify-center px-6 text-center">
-      <div className="flex h-16 w-16 items-center justify-center rounded-3xl border border-white/[0.07] bg-white/[0.03] text-2xl text-white/40">
+      <div className="flex h-16 w-16 items-center justify-center rounded-3xl border border-white/[0.07] bg-white/[0.03] text-2xl text-foreground/40">
         ✦
       </div>
 
@@ -831,7 +831,7 @@ function EmptyActivityState({
         No activity found
       </h3>
 
-      <p className="mt-2 max-w-sm text-sm leading-6 text-white/35">
+      <p className="mt-2 max-w-sm text-sm leading-6 text-foreground/35">
         Try changing your filters or search for something else in
         your SYRAVEN activity.
       </p>
@@ -839,7 +839,7 @@ function EmptyActivityState({
       <button
         type="button"
         onClick={onReset}
-        className="mt-6 rounded-xl border border-white/[0.08] bg-white/[0.04] px-4 py-2.5 text-sm text-white/60 transition hover:bg-white/[0.07] hover:text-white"
+        className="mt-6 rounded-xl border border-white/[0.08] bg-white/[0.04] px-4 py-2.5 text-sm text-foreground/60 transition hover:bg-white/[0.07] hover:text-foreground"
       >
         Reset filters
       </button>
@@ -889,7 +889,7 @@ function ActivityDetailModal({
           <button
             type="button"
             onClick={onClose}
-            className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/[0.07] bg-white/[0.03] text-white/40 transition hover:bg-white/[0.07] hover:text-white"
+            className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/[0.07] bg-white/[0.03] text-foreground/40 transition hover:bg-white/[0.07] hover:text-foreground"
             aria-label="Close activity details"
           >
             ×
@@ -908,16 +908,16 @@ function ActivityDetailModal({
               {status.label}
             </span>
 
-            <span className="text-xs text-white/30">
+            <span className="text-xs text-foreground/30">
               {activity.createdAt}
             </span>
           </div>
 
-          <h2 className="mt-5 text-2xl font-semibold tracking-tight text-white">
+          <h2 className="mt-5 text-2xl font-semibold tracking-tight text-foreground">
             {activity.title}
           </h2>
 
-          <p className="mt-4 text-sm leading-7 text-white/45 sm:text-base">
+          <p className="mt-4 text-sm leading-7 text-foreground/45 sm:text-base">
             {activity.description}
           </p>
         </div>
@@ -933,7 +933,7 @@ function ActivityDetailModal({
 
         {activity.metadata && activity.metadata.length > 0 && (
           <div className="mt-6">
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-white/30">
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-foreground/30">
               Activity metadata
             </p>
 
@@ -941,7 +941,7 @@ function ActivityDetailModal({
               {activity.metadata.map((item) => (
                 <span
                   key={item}
-                  className="rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2 text-xs text-white/55"
+                  className="rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2 text-xs text-foreground/55"
                 >
                   {item}
                 </span>
@@ -973,9 +973,9 @@ function DetailBox({
 }) {
   return (
     <div className="rounded-2xl border border-white/[0.06] bg-black/20 p-4">
-      <p className="text-xs text-white/30">{label}</p>
+      <p className="text-xs text-foreground/30">{label}</p>
 
-      <p className="mt-2 truncate text-sm font-medium text-white/70">
+      <p className="mt-2 truncate text-sm font-medium text-foreground/70">
         {value}
       </p>
     </div>

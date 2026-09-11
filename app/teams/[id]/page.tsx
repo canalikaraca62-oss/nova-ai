@@ -230,7 +230,7 @@ export default function TeamDetailPage() {
 
   if (!team) {
     return (
-      <main className="min-h-screen bg-background px-4 py-10 text-white sm:px-6 lg:px-8">
+      <main className="min-h-screen bg-background px-4 py-10 text-foreground sm:px-6 lg:px-8">
         <div className="mx-auto flex min-h-[70vh] max-w-3xl flex-col items-center justify-center text-center">
           <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-2xl">
             ?
@@ -240,7 +240,7 @@ export default function TeamDetailPage() {
             Team not found
           </h1>
 
-          <p className="mt-3 max-w-md text-sm leading-6 text-white/45">
+          <p className="mt-3 max-w-md text-sm leading-6 text-foreground/45">
             The team you are looking for does not exist or may have been removed.
           </p>
 
@@ -300,13 +300,13 @@ export default function TeamDetailPage() {
   }
 
   return (
-    <main className="min-h-screen bg-background text-white">
+    <main className="min-h-screen bg-background text-foreground">
       <div className="mx-auto w-full max-w-[1500px] px-4 py-6 sm:px-6 lg:px-8">
         {/* Breadcrumb */}
-        <div className="mb-6 flex flex-wrap items-center gap-2 text-sm text-white/40">
+        <div className="mb-6 flex flex-wrap items-center gap-2 text-sm text-foreground/40">
           <Link
             href="/workspace"
-            className="transition hover:text-white"
+            className="transition hover:text-foreground"
           >
             Workspace
           </Link>
@@ -315,14 +315,14 @@ export default function TeamDetailPage() {
 
           <Link
             href="/teams"
-            className="transition hover:text-white"
+            className="transition hover:text-foreground"
           >
             Teams
           </Link>
 
           <span>/</span>
 
-          <span className="text-white/80">{team.name}</span>
+          <span className="text-foreground/80">{team.name}</span>
         </div>
 
         {/* Hero */}
@@ -347,11 +347,11 @@ export default function TeamDetailPage() {
                     </span>
                   </div>
 
-                  <p className="mt-4 max-w-3xl text-sm leading-7 text-white/50 sm:text-base">
+                  <p className="mt-4 max-w-3xl text-sm leading-7 text-foreground/50 sm:text-base">
                     {team.description}
                   </p>
 
-                  <p className="mt-4 text-sm text-white/30">
+                  <p className="mt-4 text-sm text-foreground/30">
                     Created {team.createdAt}
                   </p>
                 </div>
@@ -369,7 +369,7 @@ export default function TeamDetailPage() {
                 <button
                   type="button"
                   onClick={() => router.push("/teams")}
-                  className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm font-medium text-white/70 transition hover:bg-white/[0.08] hover:text-white"
+                  className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm font-medium text-foreground/70 transition hover:bg-white/[0.08] hover:text-foreground"
                 >
                   All teams
                 </button>
@@ -379,7 +379,7 @@ export default function TeamDetailPage() {
             {/* Stats */}
             <div className="mt-10 grid gap-4 border-t border-white/10 pt-7 sm:grid-cols-2 lg:grid-cols-4">
               <div>
-                <p className="text-xs uppercase tracking-[0.15em] text-white/35">
+                <p className="text-xs uppercase tracking-[0.15em] text-foreground/35">
                   Team members
                 </p>
 
@@ -389,7 +389,7 @@ export default function TeamDetailPage() {
               </div>
 
               <div>
-                <p className="text-xs uppercase tracking-[0.15em] text-white/35">
+                <p className="text-xs uppercase tracking-[0.15em] text-foreground/35">
                   Active projects
                 </p>
 
@@ -399,7 +399,7 @@ export default function TeamDetailPage() {
               </div>
 
               <div>
-                <p className="text-xs uppercase tracking-[0.15em] text-white/35">
+                <p className="text-xs uppercase tracking-[0.15em] text-foreground/35">
                   Collaboration
                 </p>
 
@@ -407,7 +407,7 @@ export default function TeamDetailPage() {
               </div>
 
               <div>
-                <p className="text-xs uppercase tracking-[0.15em] text-white/35">
+                <p className="text-xs uppercase tracking-[0.15em] text-foreground/35">
                   Status
                 </p>
 
@@ -466,12 +466,12 @@ export default function TeamDetailPage() {
                       Team performance
                     </h2>
 
-                    <p className="mt-1 text-sm text-white/40">
+                    <p className="mt-1 text-sm text-foreground/40">
                       Current collaboration and execution metrics.
                     </p>
                   </div>
 
-                  <span className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-white/50">
+                  <span className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-foreground/50">
                     Last 30 days
                   </span>
                 </div>
@@ -479,7 +479,7 @@ export default function TeamDetailPage() {
                 <div className="mt-8 grid gap-4 sm:grid-cols-2">
                   <div className="rounded-xl border border-white/8 bg-black/20 p-5">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-white/45">
+                      <span className="text-sm text-foreground/45">
                         Project velocity
                       </span>
 
@@ -499,7 +499,7 @@ export default function TeamDetailPage() {
 
                   <div className="rounded-xl border border-white/8 bg-black/20 p-5">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-white/45">
+                      <span className="text-sm text-foreground/45">
                         Participation
                       </span>
 
@@ -524,7 +524,7 @@ export default function TeamDetailPage() {
                   Active initiatives
                 </h2>
 
-                <p className="mt-1 text-sm text-white/40">
+                <p className="mt-1 text-sm text-foreground/40">
                   Key projects currently owned by this team.
                 </p>
 
@@ -541,7 +541,7 @@ export default function TeamDetailPage() {
                       <div>
                         <p className="font-medium">{project}</p>
 
-                        <p className="mt-1 text-xs text-white/35">
+                        <p className="mt-1 text-xs text-foreground/35">
                           Priority {index === 0 ? "Critical" : "High"}
                         </p>
                       </div>
@@ -574,9 +574,9 @@ export default function TeamDetailPage() {
                       return (
                         <div key={role}>
                           <div className="flex items-center justify-between text-sm">
-                            <span className="text-white/60">{role}</span>
+                            <span className="text-foreground/60">{role}</span>
 
-                            <span className="text-white/40">
+                            <span className="text-foreground/40">
                               {count}
                             </span>
                           </div>
@@ -635,7 +635,7 @@ export default function TeamDetailPage() {
                   Team members
                 </h2>
 
-                <p className="mt-1 text-sm text-white/40">
+                <p className="mt-1 text-sm text-foreground/40">
                   Control access and responsibilities.
                 </p>
               </div>
@@ -671,7 +671,7 @@ export default function TeamDetailPage() {
                         )}
                       </div>
 
-                      <p className="mt-1 truncate text-sm text-white/40">
+                      <p className="mt-1 truncate text-sm text-foreground/40">
                         {member.email}
                       </p>
                     </div>
@@ -688,7 +688,7 @@ export default function TeamDetailPage() {
                       <button
                         type="button"
                         onClick={() => removeMember(member.id)}
-                        className="rounded-lg px-3 py-2 text-xs text-white/40 transition hover:bg-red-500/10 hover:text-red-300"
+                        className="rounded-lg px-3 py-2 text-xs text-foreground/40 transition hover:bg-red-500/10 hover:text-red-300"
                       >
                         Remove
                       </button>
@@ -708,7 +708,7 @@ export default function TeamDetailPage() {
                 Team activity
               </h2>
 
-              <p className="mt-1 text-sm text-white/40">
+              <p className="mt-1 text-sm text-foreground/40">
                 Recent events and collaboration history.
               </p>
             </div>
@@ -735,12 +735,12 @@ export default function TeamDetailPage() {
                         {activity.title}
                       </p>
 
-                      <span className="text-xs text-white/30">
+                      <span className="text-xs text-foreground/30">
                         {activity.time}
                       </span>
                     </div>
 
-                    <p className="mt-2 text-sm leading-6 text-white/45">
+                    <p className="mt-2 text-sm leading-6 text-foreground/45">
                       {activity.description}
                     </p>
                   </div>
@@ -761,7 +761,7 @@ export default function TeamDetailPage() {
                   Invite team member
                 </h2>
 
-                <p className="mt-1 text-sm text-white/40">
+                <p className="mt-1 text-sm text-foreground/40">
                   Add a new collaborator to {team.name}.
                 </p>
               </div>
@@ -769,7 +769,7 @@ export default function TeamDetailPage() {
               <button
                 type="button"
                 onClick={() => setInviteOpen(false)}
-                className="rounded-lg px-3 py-2 text-white/40 transition hover:bg-white/5 hover:text-white"
+                className="rounded-lg px-3 py-2 text-foreground/40 transition hover:bg-white/5 hover:text-foreground"
               >
                 ✕
               </button>
@@ -787,7 +787,7 @@ export default function TeamDetailPage() {
                     setInviteName(event.target.value)
                   }
                   placeholder="Enter full name"
-                  className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm outline-none placeholder:text-white/25 focus:border-white/25"
+                  className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm outline-none placeholder:text-foreground/25 focus:border-white/25"
                 />
               </div>
 
@@ -803,7 +803,7 @@ export default function TeamDetailPage() {
                     setInviteEmail(event.target.value)
                   }
                   placeholder="name@company.com"
-                  className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm outline-none placeholder:text-white/25 focus:border-white/25"
+                  className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm outline-none placeholder:text-foreground/25 focus:border-white/25"
                 />
               </div>
 
@@ -829,7 +829,7 @@ export default function TeamDetailPage() {
                 <button
                   type="button"
                   onClick={() => setInviteOpen(false)}
-                  className="rounded-xl px-4 py-2.5 text-sm text-white/50 transition hover:bg-white/5 hover:text-white"
+                  className="rounded-xl px-4 py-2.5 text-sm text-foreground/50 transition hover:bg-white/5 hover:text-foreground"
                 >
                   Cancel
                 </button>
