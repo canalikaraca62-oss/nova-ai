@@ -382,6 +382,106 @@ void describe("Social proof is never manufactured", () => {
   }
 });
 
+void describe("A task is loaded, never conjured", () => {
+  const TASK = stripComments(
+    read("app", "tasks", "[id]", "page.tsx"),
+  );
+
+  void test("no task database is held in the module", () => {
+    /*
+      Four invented tasks keyed "task-1".."task-4". /tasks links to
+      /tasks/${task.id} with real UUIDs, so none of those keys could
+      ever match a genuine row.
+    */
+    assert.ok(
+      !/taskDatabase/.test(TASK),
+      "/tasks/[id] carries an invented task database.",
+    );
+  });
+
+  void test("an unknown id is not answered with an invented task", () => {
+    /*
+      The worst of the sixteen fabricated surfaces found here.
+      createDefaultTask(id) returned a task for ANY unrecognised id --
+      "Untitled Task", "This task was created in your workspace.",
+      dated today. Because the real UUIDs never matched the four keys,
+      every genuine task rendered as one of these, and the page had no
+      path on which it could say a task did not exist.
+    */
+    assert.ok(
+      !/createDefaultTask/.test(TASK),
+      "An unknown id must produce a not-found state, not a task.",
+    );
+
+    assert.match(
+      TASK,
+      /Task not found/,
+      "There must be a state that reports the task is absent.",
+    );
+  });
+
+  void test("no completion percentage is manufactured", () => {
+    /*
+      getCompletionPercentage mapped status to 0/50/100 and drove a
+      progress bar from it -- the status badge restated as a
+      measurement. public.tasks has no progress column.
+    */
+    assert.ok(
+      !/getCompletionPercentage|completionPercentage/.test(TASK),
+      "/tasks/[id] reports progress that no column supplies.",
+    );
+  });
+
+  void test("it loads from the route that owns the row", () => {
+    assert.match(
+      TASK,
+      /fetch\("\/api\/tasks/,
+      "The task must come from /api/tasks, on the caller's session.",
+    );
+
+    assert.match(
+      TASK,
+      /payload\?\.data\?\.tasks/,
+      "This route wraps rows as { data: { tasks } }; reading another " +
+        "shape would render every task as not found.",
+    );
+  });
+
+  void test("edits reach the server", () => {
+    /*
+      Editing, status changes and completion toggles all called setTask
+      and nothing else: the UI moved, the row never did, and a reload
+      undid it. That is the fake-persistence defect, on a surface where
+      the user has every reason to believe their change was saved.
+    */
+    assert.match(
+      TASK,
+      /method: "PATCH"/,
+      "A change that never leaves the browser has not been saved.",
+    );
+
+    assert.match(
+      TASK,
+      /method: "DELETE"/,
+      "Deleting must remove the row, not just hide the page.",
+    );
+  });
+
+  void test("the status spelling the route accepts is sent", () => {
+    /*
+      The route validates against todo | in_progress | blocked |
+      completed | cancelled. This page displays "in-progress" like
+      /tasks does, so it must convert on the way out or every status
+      change fails with a 400 the user never sees.
+    */
+    assert.match(
+      TASK,
+      /in_progress/,
+      "Sending the hyphenated spelling would be rejected by the route.",
+    );
+  });
+});
+
 void describe("Projects are loaded, never invented", () => {
   const PROJECTS = stripComments(read("app", "projects", "page.tsx"));
 
