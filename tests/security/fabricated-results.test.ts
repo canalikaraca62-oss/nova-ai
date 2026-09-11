@@ -382,6 +382,110 @@ void describe("Social proof is never manufactured", () => {
   }
 });
 
+void describe("Projects are loaded, never invented", () => {
+  const PROJECTS = stripComments(read("app", "projects", "page.tsx"));
+
+  void test("the list is not seeded from a module-scope array", () => {
+    assert.ok(
+      !/const projects\s*:\s*Project\[\]\s*=\s*\[/.test(PROJECTS),
+      "/projects is seeded with invented projects.",
+    );
+  });
+
+  void test("it loads from the route that owns the rows", () => {
+    assert.match(
+      PROJECTS,
+      /fetch\("\/api\/projects/,
+      "Projects must come from /api/projects, on the caller's session.",
+    );
+  });
+
+  void test("no metric is claimed without a column behind it", () => {
+    /*
+      progress, members, tasksCompleted and totalTasks were invented
+      per row. public.projects has none of them.
+
+      The task-completion tile computed
+      Math.round((completedTasks / totalTasks) * 100). With real data
+      and no tasks that is 0/0 -- it would have rendered "NaN%" on the
+      first honest load, which is how a fabricated metric announces
+      itself once the fabrication is removed.
+    */
+    for (const invented of [
+      /\bprogress\b/,
+      /tasksCompleted/,
+      /totalTasks/,
+      /\bmembers\b/,
+    ]) {
+      assert.ok(
+        !invented.test(PROJECTS),
+        `/projects reports ${String(invented)}, which no column supplies.`,
+      );
+    }
+  });
+});
+
+void describe("Agents are loaded, never invented", () => {
+  const AGENTS = stripComments(read("app", "agents", "page.tsx"));
+
+  void test("the list is not seeded from a module-scope array", () => {
+    assert.ok(
+      !/const agents\s*:\s*Agent\[\]\s*=\s*\[/.test(AGENTS),
+      "/agents is seeded with twelve invented agents.",
+    );
+  });
+
+  void test("it reads the envelope this route actually returns", () => {
+    /*
+      /api/agents answers { success, agents: [...] }, not { data }.
+      Assuming a shared envelope has already silently emptied one page
+      in this codebase, so the key is asserted rather than trusted.
+    */
+    assert.match(
+      AGENTS,
+      /fetch\("\/api\/agents/,
+      "Agents must come from /api/agents, on the caller's session.",
+    );
+
+    assert.match(
+      AGENTS,
+      /payload\?\.agents/,
+      "This route returns `agents`; reading `data` would render empty.",
+    );
+  });
+
+  void test("no taxonomy is invented", () => {
+    /*
+      category, featured, premium, popular, colour gradients and tag
+      lists were all client-side inventions. public.agents has none of
+      those columns, so the category chips and the "Featured" rail
+      filtered fiction.
+    */
+    for (const invented of [
+      /\bpremium\b/,
+      /\bpopular\b/,
+      /featuredAgents/,
+      /AgentCategory/,
+    ]) {
+      assert.ok(
+        !invented.test(AGENTS),
+        `/agents carries ${String(invented)}, which no column supplies.`,
+      );
+    }
+  });
+
+  void test("favourites are not kept only in local state", () => {
+    /*
+      A heart button toggled a `favorites` array that nothing stored,
+      so every favourite vanished on reload.
+    */
+    assert.ok(
+      !/\bsetFavorites\b/.test(AGENTS),
+      "A favourite nothing persists is lost on the next page load.",
+    );
+  });
+});
+
 void describe("Knowledge is loaded, never invented", () => {
   const KNOWLEDGE = stripComments(read("app", "knowledge", "page.tsx"));
 

@@ -1,6 +1,8 @@
 "use client";
 
 import {
+  useCallback,
+  useEffect,
   useMemo,
   useState,
 } from "react";
@@ -10,316 +12,181 @@ import Link from "next/link";
 import {
   ArrowRight,
   Bot,
-  Brain,
-  BriefcaseBusiness,
-  CalendarDays,
-  CheckCircle2,
-  ChevronRight,
-  Code2,
   Compass,
-  Database,
-  FileSearch,
-  Globe2,
-  Heart,
   LayoutGrid,
-  Mail,
-  Megaphone,
-  MessageSquareText,
   Plus,
   Search,
   ShieldCheck,
-  ShoppingBag,
   Sparkles,
-  Star,
   TrendingUp,
   Users,
-  WandSparkles,
 } from "lucide-react";
 
-/* =========================================================
- * TYPES
- * ========================================================= */
+/*
+  SYRAVEN — Agents
 
-type AgentCategory =
-  | "All"
-  | "Research"
-  | "Development"
-  | "Business"
-  | "Creative"
-  | "Productivity"
-  | "Personal";
+  WHAT THIS PAGE SHOWS
 
-type Agent = {
+  The caller's own agents, from GET /api/agents on their session.
+  public.agents is owner-scoped, so another person's agents are never
+  returned rather than filtered out here.
+
+  Note the envelope: this route answers { success, agents: [...] }, not
+  { data }. /api/projects and /api/knowledge use `data`. Assuming a
+  shared envelope across routes has already silently emptied one page
+  in this codebase, so the key is read explicitly.
+
+  WHAT IT USED TO SHOW
+
+  A module-scope array of twelve invented agents with an invented
+  taxonomy: category, featured, premium, popular, a colour gradient and
+  a tag list. public.agents has none of those columns. The search box
+  filtered fiction, the category chips filtered fiction, and a
+  "Featured" rail showed four of them.
+
+  Three hero tiles read "{agents.length}+", "24/7" and "∞". The first
+  put a plus on the exact length of a hardcoded array; the others
+  measured nothing at all.
+
+  A heart button toggled a `favorites` array in local state. Nothing
+  stored it, so every favourite vanished on reload -- the same
+  fake-persistence defect removed from a dozen surfaces here.
+
+  WHAT IS DELIBERATELY ABSENT
+
+  Categories, tags, featured and premium flags. Adding a taxonomy means
+  adding columns, and inventing one in the client to make the filter
+  bar look busy is how this page got here.
+
+  Favourites, until something stores them.
+*/
+
+/* -------------------------------------------------------------------------- */
+/*                                  CONTRACT                                  */
+/* -------------------------------------------------------------------------- */
+
+/** An agent row exactly as /api/agents returns it. */
+interface AgentRow {
   id: string;
   name: string;
-  description: string;
-  category: AgentCategory;
-  icon: React.ReactNode;
-  featured?: boolean;
-  premium?: boolean;
-  popular?: boolean;
-  color: string;
-  tags: string[];
-};
+  description: string | null;
+  status: string | null;
+  visibility: string | null;
+  model: string | null;
+  updated_at: string | null;
+}
 
-/* =========================================================
- * AGENTS
- * ========================================================= */
+function formatUpdated(value: string | null): string {
+  if (!value) return "";
 
-const agents: Agent[] = [
-  {
-    id: "research-agent",
-    name: "Research Agent",
-    description:
-      "Researches, compares sources, verifies them and produces decision-ready results.",
-    category: "Research",
-    icon: <FileSearch size={23} />,
-    featured: true,
-    popular: true,
-    color: "from-blue-500/20 via-cyan-500/10 to-transparent",
-    tags: ["Web", "Sources", "Analysis"],
-  },
-  {
-    id: "coding-agent",
-    name: "Coding Agent",
-    description:
-      "Writes code, analyses bugs, refactors and improves project architecture.",
-    category: "Development",
-    icon: <Code2 size={23} />,
-    featured: true,
-    popular: true,
-    color: "from-violet-500/20 via-fuchsia-500/10 to-transparent",
-    tags: ["Code", "Debug", "Refactor"],
-  },
-  {
-    id: "website-agent",
-    name: "Website Agent",
-    description:
-      "Analyses websites, produces an improvement plan and proposes solutions for new features.",
-    category: "Development",
-    icon: <Globe2 size={23} />,
-    featured: true,
-    premium: true,
-    color: "from-emerald-500/20 via-teal-500/10 to-transparent",
-    tags: ["Website", "UX", "Build"],
-  },
-  {
-    id: "business-agent",
-    name: "Business Agent",
-    description:
-      "Your AI partner for business ideas, strategy, operations and growth plans.",
-    category: "Business",
-    icon: <BriefcaseBusiness size={23} />,
-    featured: true,
-    color: "from-orange-500/20 via-amber-500/10 to-transparent",
-    tags: ["Strategy", "Growth", "Planning"],
-  },
-  {
-    id: "marketing-agent",
-    name: "Marketing Agent",
-    description:
-      "Builds campaigns, content ideas, audience definitions and growth strategies.",
-    category: "Business",
-    icon: <Megaphone size={23} />,
-    popular: true,
-    color: "from-pink-500/20 via-rose-500/10 to-transparent",
-    tags: ["Marketing", "Content", "Growth"],
-  },
-  {
-    id: "data-agent",
-    name: "Data Analyst",
-    description:
-      "Analyses data, finds meaningful trends and turns them into clear insights.",
-    category: "Research",
-    icon: <Database size={23} />,
-    premium: true,
-    color: "from-sky-500/20 via-blue-500/10 to-transparent",
-    tags: ["Data", "Insights", "Reports"],
-  },
-  {
-    id: "writing-agent",
-    name: "Writing Agent",
-    description:
-      "Produces articles, emails, content, scripts and professional copy.",
-    category: "Creative",
-    icon: <MessageSquareText size={23} />,
-    color: "from-purple-500/20 via-violet-500/10 to-transparent",
-    tags: ["Writing", "Content", "Ideas"],
-  },
-  {
-    id: "design-agent",
-    name: "Design Agent",
-    description:
-      "Develops product ideas, design systems and creative direction.",
-    category: "Creative",
-    icon: <WandSparkles size={23} />,
-    premium: true,
-    color: "from-fuchsia-500/20 via-purple-500/10 to-transparent",
-    tags: ["Design", "Creative", "Brand"],
-  },
-  {
-    id: "personal-agent",
-    name: "Personal Assistant",
-    description:
-      "Organises your day, tracks important work and offers proactive suggestions.",
-    category: "Personal",
-    icon: <Brain size={23} />,
-    featured: true,
-    color: "from-indigo-500/20 via-blue-500/10 to-transparent",
-    tags: ["Life", "Planning", "Memory"],
-  },
-  {
-    id: "email-agent",
-    name: "Email Agent",
-    description:
-      "Designed to summarise email, draft replies and surface what matters.",
-    category: "Productivity",
-    icon: <Mail size={23} />,
-    color: "from-cyan-500/20 via-sky-500/10 to-transparent",
-    tags: ["Email", "Inbox", "Summary"],
-  },
-  {
-    id: "calendar-agent",
-    name: "Calendar Agent",
-    description:
-      "Makes sense of your calendar, organises your schedule and tracks what is coming up.",
-    category: "Productivity",
-    icon: <CalendarDays size={23} />,
-    color: "from-green-500/20 via-emerald-500/10 to-transparent",
-    tags: ["Calendar", "Schedule", "Planning"],
-  },
-  {
-    id: "shopping-agent",
-    name: "Shopping Research",
-    description:
-      "Researches products, compares options and makes the decision easier.",
-    category: "Personal",
-    icon: <ShoppingBag size={23} />,
-    color: "from-yellow-500/20 via-orange-500/10 to-transparent",
-    tags: ["Products", "Compare", "Research"],
-  },
-];
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "";
 
-const categories: AgentCategory[] = [
-  "All",
-  "Research",
-  "Development",
-  "Business",
-  "Creative",
-  "Productivity",
-  "Personal",
-];
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(parsed);
+}
 
-/* =========================================================
- * PAGE
- * ========================================================= */
+/* -------------------------------------------------------------------------- */
+/*                                    PAGE                                    */
+/* -------------------------------------------------------------------------- */
 
 export default function AgentsPage() {
-  const [search, setSearch] =
-    useState("");
+  const [agents, setAgents] = useState<AgentRow[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  const [activeCategory, setActiveCategory] =
-    useState<AgentCategory>("All");
+  const [search, setSearch] = useState("");
 
-  const [favorites, setFavorites] =
-    useState<string[]>([]);
+  const load = useCallback(async () => {
+    setIsLoading(true);
+    setLoadError(null);
 
-  const filteredAgents =
-    useMemo(() => {
-      const query =
-        search.trim().toLowerCase();
-
-      return agents.filter((agent) => {
-        const categoryMatch =
-          activeCategory === "All" ||
-          agent.category === activeCategory;
-
-        const searchMatch =
-          !query ||
-          agent.name
-            .toLowerCase()
-            .includes(query) ||
-          agent.description
-            .toLowerCase()
-            .includes(query) ||
-          agent.tags.some((tag) =>
-            tag
-              .toLowerCase()
-              .includes(query)
-          );
-
-        return (
-          categoryMatch &&
-          searchMatch
-        );
+    try {
+      const response = await fetch("/api/agents", {
+        cache: "no-store",
       });
-    }, [
-      activeCategory,
-      search,
-    ]);
 
-  const featuredAgents =
-    agents.filter(
+      if (response.status === 401) {
+        setAgents([]);
+        return;
+      }
+
+      if (!response.ok) throw new Error("failed");
+
+      /* `agents`, not `data` — see the note at the top of this file. */
+      const payload = (await response.json().catch(() => null)) as {
+        agents?: AgentRow[];
+      } | null;
+
+      setAgents(payload?.agents ?? []);
+    } catch {
+      setLoadError("Your agents could not be loaded.");
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void Promise.resolve().then(() => {
+      if (cancelled) return undefined;
+
+      return load();
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [load]);
+
+  const filteredAgents = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) return agents;
+
+    return agents.filter(
       (agent) =>
-        agent.featured
+        agent.name.toLowerCase().includes(query) ||
+        (agent.description ?? "").toLowerCase().includes(query),
     );
-
-  function toggleFavorite(
-    agentId: string
-  ) {
-    setFavorites(
-      (previous) =>
-        previous.includes(agentId)
-          ? previous.filter(
-              (id) =>
-                id !== agentId
-            )
-          : [
-              ...previous,
-              agentId,
-            ]
-    );
-  }
+  }, [agents, search]);
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    /*
+      A plain container, not a second <main>: AppChrome already emits
+      the page main landmark, and two of them is invalid HTML.
+    */
+    <div className="bg-background text-foreground">
       <div className="mx-auto w-full max-w-[1600px] px-4 pb-16 pt-6 sm:px-6 lg:px-8 lg:pt-10">
-
-        {/* =================================================
-         * HERO
-         * ================================================= */}
-
-        <section className="relative overflow-hidden rounded-[2rem] border border-white/[0.08] bg-gradient-to-br from-white/[0.07] via-white/[0.03] to-transparent p-6 sm:p-8 lg:p-10">
-          <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-violet-500/[0.10] blur-3xl" />
-
-          <div className="pointer-events-none absolute bottom-0 left-1/3 h-48 w-72 rounded-full bg-blue-500/[0.08] blur-3xl" />
-
+        {/* HERO */}
+        <section className="relative overflow-hidden rounded-[2rem] border border-border bg-card p-6 sm:p-8 lg:p-10">
           <div className="relative flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
-
             <div className="max-w-3xl">
-              <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-violet-400/20 bg-violet-400/[0.08] px-3 py-1.5 text-xs font-medium text-violet-200">
+              <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/[0.08] px-3 py-1.5 text-xs font-medium text-primary">
                 <Sparkles size={14} />
                 SYRAVEN Intelligence Network
               </div>
 
-              <h1 className="max-w-3xl text-4xl font-semibold tracking-[-0.04em] text-foreground sm:text-5xl lg:text-6xl">
+              <h1 className="max-w-3xl text-4xl font-semibold tracking-[-0.04em] sm:text-5xl">
                 Not a single AI.
-                <span className="block bg-gradient-to-r from-violet-300 via-white to-cyan-300 bg-clip-text text-transparent">
+                <span className="block text-primary">
                   Your own AI team.
                 </span>
               </h1>
 
-              <p className="mt-5 max-w-2xl text-sm leading-7 text-zinc-400 sm:text-base">
-                Use SYRAVEN agents built for research,
-                engineering, design, business and everyday
-                work — or create one entirely your own.
+              <p className="mt-5 max-w-2xl text-sm leading-7 text-muted-foreground sm:text-base">
+                Agents you have created, and the work they are set up
+                to do.
               </p>
             </div>
 
             <div className="flex flex-wrap gap-3">
               <Link
                 href="/agents/create"
-                className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl bg-white px-5 text-sm font-semibold text-black transition hover:bg-zinc-200"
+                className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl bg-primary px-5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
               >
                 <Plus size={18} />
                 Create agent
@@ -327,7 +194,7 @@ export default function AgentsPage() {
 
               <Link
                 href="/marketplace"
-                className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl border border-white/[0.10] bg-white/[0.04] px-5 text-sm font-medium text-zinc-200 transition hover:bg-white/[0.08] hover:text-foreground"
+                className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl border border-border px-5 text-sm font-medium transition-colors hover:bg-muted"
               >
                 Marketplace
                 <ArrowRight size={17} />
@@ -335,98 +202,28 @@ export default function AgentsPage() {
             </div>
           </div>
 
-          {/* STATS */}
+          {/*
+            One count, of real rows. Three tiles used to sit here
+            reading "{agents.length}+", "24/7" and "∞" — a plus sign on
+            an exact number, and two figures measuring nothing.
+          */}
+          <div className="relative mt-10 border-t border-border pt-6">
+            <p className="text-2xl font-semibold tracking-tight">
+              {isLoading ? "—" : agents.length}
+            </p>
 
-          <div className="relative mt-10 grid gap-3 border-t border-white/[0.07] pt-6 sm:grid-cols-3">
-            <div className="rounded-2xl border border-white/[0.06] bg-black/20 p-4">
-              <p className="text-2xl font-semibold tracking-tight">
-                {agents.length}+
-              </p>
-
-              <p className="mt-1 text-xs text-zinc-500">
-                Ready-made expert agents
-              </p>
-            </div>
-
-            <div className="rounded-2xl border border-white/[0.06] bg-black/20 p-4">
-              <p className="text-2xl font-semibold tracking-tight">
-                24/7
-              </p>
-
-              <p className="mt-1 text-xs text-zinc-500">
-                AI working capacity
-              </p>
-            </div>
-
-            <div className="rounded-2xl border border-white/[0.06] bg-black/20 p-4">
-              <p className="text-2xl font-semibold tracking-tight">
-                ∞
-              </p>
-
-              <p className="mt-1 text-xs text-zinc-500">
-                Build your own workflow
-              </p>
-            </div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {agents.length === 1 ? "Agent" : "Agents"} you have
+              created
+            </p>
           </div>
         </section>
 
-        {/* =================================================
-         * FEATURED
-         * ================================================= */}
-
-        <section className="mt-12">
-          <div className="mb-5 flex items-end justify-between gap-4">
-            <div>
-              <div className="mb-2 flex items-center gap-2 text-xs font-medium text-violet-300">
-                <Star size={14} />
-                Featured
-              </div>
-
-              <h2 className="text-2xl font-semibold tracking-tight">
-                The most capable agents
-              </h2>
-            </div>
-
-            <Link
-              href="/marketplace"
-              className="hidden items-center gap-1 text-sm text-zinc-400 transition hover:text-foreground sm:inline-flex"
-            >
-              See all
-              <ChevronRight size={16} />
-            </Link>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            {featuredAgents.slice(0, 4).map(
-              (agent) => (
-                <AgentCard
-                  key={agent.id}
-                  agent={agent}
-                  isFavorite={
-                    favorites.includes(
-                      agent.id
-                    )
-                  }
-                  onFavorite={() =>
-                    toggleFavorite(
-                      agent.id
-                    )
-                  }
-                />
-              )
-            )}
-          </div>
-        </section>
-
-        {/* =================================================
-         * SEARCH + FILTERS
-         * ================================================= */}
-
+        {/* SEARCH */}
         <section className="mt-14">
           <div className="flex flex-col gap-5">
-
             <div>
-              <div className="mb-2 flex items-center gap-2 text-xs font-medium text-cyan-300">
+              <div className="mb-2 flex items-center gap-2 text-xs font-medium text-primary">
                 <Compass size={14} />
                 Agent Explorer
               </div>
@@ -434,131 +231,105 @@ export default function AgentsPage() {
               <h2 className="text-2xl font-semibold tracking-tight">
                 Find the right agent for the job
               </h2>
-
-              <p className="mt-2 text-sm text-zinc-500">
-                Filter by speciality, or search
-                directly.
-              </p>
             </div>
 
             <div className="relative">
               <Search
                 size={19}
-                className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500"
+                className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground"
               />
 
               <input
                 value={search}
-                onChange={(event) =>
-                  setSearch(
-                    event.target.value
-                  )
-                }
-                placeholder="Agent ara..."
-                className="h-14 w-full rounded-2xl border border-white/[0.08] bg-white/[0.04] pl-12 pr-4 text-sm text-foreground outline-none transition placeholder:text-zinc-600 focus:border-violet-400/40 focus:bg-white/[0.06]"
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search agents..."
+                aria-label="Search agents"
+                className="h-14 w-full rounded-2xl border border-border bg-card pl-12 pr-4 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-primary"
               />
-            </div>
-
-            <div className="flex gap-2 overflow-x-auto pb-2">
-              {categories.map(
-                (category) => {
-                  const active =
-                    activeCategory ===
-                    category;
-
-                  return (
-                    <button
-                      key={category}
-                      type="button"
-                      onClick={() =>
-                        setActiveCategory(
-                          category
-                        )
-                      }
-                      className={`shrink-0 rounded-full border px-4 py-2 text-sm transition ${
-                        active
-                          ? "border-white bg-white text-black"
-                          : "border-white/[0.08] bg-white/[0.03] text-zinc-400 hover:border-white/[0.15] hover:bg-white/[0.06] hover:text-white"
-                      }`}
-                    >
-                      {category}
-                    </button>
-                  );
-                }
-              )}
             </div>
           </div>
 
-          {/* =================================================
-           * ALL AGENTS
-           * ================================================= */}
+          {loadError ? (
+            <div
+              role="alert"
+              className="mt-6 rounded-2xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive"
+            >
+              {loadError}
 
+              <button
+                type="button"
+                onClick={() => void load()}
+                className="ml-3 font-medium underline"
+              >
+                Try again
+              </button>
+            </div>
+          ) : null}
+
+          {/* AGENTS */}
           <div className="mt-8">
-            <div className="mb-5 flex items-center justify-between gap-4">
-              <div className="flex items-center gap-2">
-                <LayoutGrid
-                  size={17}
-                  className="text-zinc-500"
-                />
+            <div className="mb-5 flex items-center gap-2">
+              <LayoutGrid size={17} className="text-muted-foreground" />
 
-                <p className="text-sm text-zinc-400">
-                  <span className="font-medium text-foreground">
-                    {filteredAgents.length}
-                  </span>{" "}
-                  agent bulundu
-                </p>
-              </div>
+              <p className="text-sm text-muted-foreground">
+                <span className="font-medium text-foreground">
+                  {isLoading ? "—" : filteredAgents.length}
+                </span>{" "}
+                {filteredAgents.length === 1 ? "agent" : "agents"}
+              </p>
             </div>
 
-            {filteredAgents.length > 0 ? (
+            {isLoading ? (
+              <div
+                role="status"
+                aria-live="polite"
+                className="flex min-h-[300px] items-center justify-center rounded-[2rem] border border-dashed border-border px-6 text-center text-sm text-muted-foreground"
+              >
+                Loading your agents...
+              </div>
+            ) : filteredAgents.length > 0 ? (
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                {filteredAgents.map(
-                  (agent) => (
-                    <AgentCard
-                      key={agent.id}
-                      agent={agent}
-                      isFavorite={
-                        favorites.includes(
-                          agent.id
-                        )
-                      }
-                      onFavorite={() =>
-                        toggleFavorite(
-                          agent.id
-                        )
-                      }
-                    />
-                  )
-                )}
+                {filteredAgents.map((agent) => (
+                  <AgentCard key={agent.id} agent={agent} />
+                ))}
               </div>
             ) : (
-              <div className="flex min-h-[300px] flex-col items-center justify-center rounded-[2rem] border border-dashed border-white/[0.10] bg-white/[0.02] px-6 text-center">
-                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/[0.05] text-zinc-400">
+              <div className="flex min-h-[300px] flex-col items-center justify-center rounded-[2rem] border border-dashed border-border px-6 text-center">
+                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
                   <Search size={23} />
                 </div>
 
                 <h3 className="mt-5 text-lg font-semibold">
-                  No agents found
+                  {agents.length === 0
+                    ? "No agents yet"
+                    : "No agents found"}
                 </h3>
 
-                <p className="mt-2 max-w-sm text-sm leading-6 text-zinc-500">
-                  Arama ifadenizi veya kategori
-                  try changing your selection.
+                <p className="mt-2 max-w-sm text-sm leading-6 text-muted-foreground">
+                  {agents.length === 0
+                    ? "Agents you create will appear here."
+                    : "Try a different search."}
                 </p>
+
+                {agents.length === 0 ? (
+                  <Link
+                    href="/agents/create"
+                    className="mt-6 inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-primary px-5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
+                  >
+                    <Plus size={18} />
+                    Create agent
+                  </Link>
+                ) : null}
               </div>
             )}
           </div>
         </section>
 
-        {/* =================================================
-         * CREATE CTA
-         * ================================================= */}
-
-        <section className="mt-14 overflow-hidden rounded-[2rem] border border-white/[0.08] bg-gradient-to-br from-violet-500/[0.12] via-blue-500/[0.06] to-transparent p-6 sm:p-8">
+        {/* CREATE CTA */}
+        <section className="mt-14 overflow-hidden rounded-[2rem] border border-border bg-card p-6 sm:p-8">
           <div className="flex flex-col gap-7 lg:flex-row lg:items-center lg:justify-between">
-
             <div className="max-w-2xl">
-              <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl border border-white/[0.10] bg-white/[0.08]">
+              <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl border border-border bg-muted">
                 <Bot size={22} />
               </div>
 
@@ -566,44 +337,15 @@ export default function AgentsPage() {
                 Create your own AI specialist.
               </h2>
 
-              <p className="mt-3 text-sm leading-7 text-zinc-400">
-                Define an agent’s role, speciality,
-                way of working and behaviour
-                sen belirle. SYRAVEN agent sistemi
-                gelecekte workflow, memory, tools ve
-                so it works alongside your automations.
+              <p className="mt-3 text-sm leading-7 text-muted-foreground">
+                Define an agent&apos;s role, speciality and way of
+                working.
               </p>
-
-              <div className="mt-5 flex flex-wrap gap-3 text-xs text-zinc-400">
-                <span className="inline-flex items-center gap-1.5">
-                  <CheckCircle2
-                    size={14}
-                    className="text-emerald-400"
-                  />
-                  Custom instructions
-                </span>
-
-                <span className="inline-flex items-center gap-1.5">
-                  <CheckCircle2
-                    size={14}
-                    className="text-emerald-400"
-                  />
-                  Memory ready
-                </span>
-
-                <span className="inline-flex items-center gap-1.5">
-                  <CheckCircle2
-                    size={14}
-                    className="text-emerald-400"
-                  />
-                  Tools & workflows
-                </span>
-              </div>
             </div>
 
             <Link
               href="/agents/create"
-              className="inline-flex h-13 shrink-0 items-center justify-center gap-2 rounded-2xl bg-white px-6 py-3 text-sm font-semibold text-black transition hover:bg-zinc-200"
+              className="inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-2xl bg-primary px-6 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
             >
               <Plus size={18} />
               Create new agent
@@ -611,33 +353,22 @@ export default function AgentsPage() {
           </div>
         </section>
 
-        {/* =================================================
-         * TRUST / SYSTEM
-         * ================================================= */}
-
+        {/* WHAT THE ARCHITECTURE GUARANTEES */}
         <section className="mt-8 grid gap-4 md:grid-cols-3">
           <InfoCard
-            icon={
-              <ShieldCheck
-                size={20}
-              />
-            }
+            icon={<ShieldCheck size={20} />}
             title="User control"
             description="An agent asks for explicit confirmation before taking action in the outside world."
           />
 
           <InfoCard
-            icon={
-              <Users size={20} />
-            }
-            title="Ekip uyumlu"
+            icon={<Users size={20} />}
+            title="Built for teams"
             description="The agent architecture supports personal, workspace, team and enterprise use."
           />
 
           <InfoCard
-            icon={
-              <TrendingUp size={20} />
-            }
+            icon={<TrendingUp size={20} />}
             title="Scalable architecture"
             description="Designed to grow with marketplace, workflow, memory and connected applications."
           />
@@ -647,108 +378,59 @@ export default function AgentsPage() {
   );
 }
 
-/* =========================================================
- * AGENT CARD
- * ========================================================= */
+/* -------------------------------------------------------------------------- */
+/*                                   PIECES                                   */
+/* -------------------------------------------------------------------------- */
 
-function AgentCard({
-  agent,
-  isFavorite,
-  onFavorite,
-}: {
-  agent: Agent;
-  isFavorite: boolean;
-  onFavorite: () => void;
-}) {
+function AgentCard({ agent }: { agent: AgentRow }) {
+  const updated = formatUpdated(agent.updated_at);
+
   return (
-    <div className="group relative overflow-hidden rounded-[1.6rem] border border-white/[0.08] bg-white/[0.025] p-5 transition duration-300 hover:-translate-y-1 hover:border-white/[0.14] hover:bg-white/[0.05]">
-
-      <div
-        className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${agent.color} opacity-0 transition duration-500 group-hover:opacity-100`}
-      />
-
-      <div className="relative">
-        <div className="flex items-start justify-between gap-3">
-
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/[0.10] bg-black/20 text-foreground shadow-lg">
-            {agent.icon}
-          </div>
-
-          <button
-            type="button"
-            onClick={onFavorite}
-            className={`flex h-9 w-9 items-center justify-center rounded-xl border transition ${
-              isFavorite
-                ? "border-rose-400/30 bg-rose-400/[0.10] text-rose-300"
-                : "border-white/[0.07] bg-white/[0.03] text-zinc-500 hover:text-white"
-            }`}
-            aria-label="Favorilere ekle"
-          >
-            <Heart
-              size={17}
-              fill={
-                isFavorite
-                  ? "currentColor"
-                  : "none"
-              }
-            />
-          </button>
+    <div className="group rounded-[1.6rem] border border-border bg-card p-5 transition-all hover:-translate-y-1 hover:border-primary/30 hover:shadow-lg">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-border bg-muted">
+          <Bot size={22} />
         </div>
 
-        <div className="mt-5 flex items-center gap-2">
-          <h3 className="font-semibold tracking-tight text-foreground">
-            {agent.name}
-          </h3>
+        {agent.status ? (
+          <span className="rounded-full border border-border px-2.5 py-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+            {agent.status}
+          </span>
+        ) : null}
+      </div>
 
-          {agent.premium && (
-            <span className="rounded-full border border-amber-400/20 bg-amber-400/[0.08] px-2 py-0.5 text-[9px] font-bold tracking-wider text-amber-300">
-              PRO
-            </span>
-          )}
+      <h3 className="mt-5 font-semibold tracking-tight">
+        {agent.name}
+      </h3>
 
-          {agent.popular && (
-            <span className="rounded-full border border-violet-400/20 bg-violet-400/[0.08] px-2 py-0.5 text-[9px] font-bold tracking-wider text-violet-300">
-              POPULAR
-            </span>
-          )}
-        </div>
-
-        <p className="mt-2 min-h-[60px] text-sm leading-6 text-zinc-500">
+      {agent.description ? (
+        <p className="mt-2 line-clamp-3 text-sm leading-6 text-muted-foreground">
           {agent.description}
         </p>
+      ) : null}
 
-        <div className="mt-5 flex flex-wrap gap-2">
-          {agent.tags.map(
-            (tag) => (
-              <span
-                key={tag}
-                className="rounded-lg bg-white/[0.05] px-2.5 py-1 text-[10px] font-medium text-zinc-500"
-              >
-                {tag}
-              </span>
-            )
-          )}
-        </div>
+      {agent.model ? (
+        <p className="mt-4 text-xs text-muted-foreground">
+          {agent.model}
+        </p>
+      ) : null}
 
-        <Link
-          href={`/agents/${agent.id}`}
-          className="mt-6 flex h-11 items-center justify-between rounded-xl border border-white/[0.08] bg-black/20 px-4 text-sm font-medium text-zinc-300 transition hover:border-white/[0.16] hover:bg-white/[0.07] hover:text-foreground"
-        >
-          Open agent
+      {updated ? (
+        <p className="mt-1 text-xs text-muted-foreground">
+          Updated {updated}
+        </p>
+      ) : null}
 
-          <ArrowRight
-            size={17}
-            className="transition group-hover:translate-x-1"
-          />
-        </Link>
-      </div>
+      <Link
+        href={`/agents/${agent.id}`}
+        className="mt-6 flex h-11 items-center justify-between rounded-xl border border-border px-4 text-sm font-medium transition-colors hover:bg-muted"
+      >
+        Open agent
+        <ArrowRight size={17} />
+      </Link>
     </div>
   );
 }
-
-/* =========================================================
- * INFO CARD
- * ========================================================= */
 
 function InfoCard({
   icon,
@@ -760,16 +442,14 @@ function InfoCard({
   description: string;
 }) {
   return (
-    <div className="rounded-2xl border border-white/[0.07] bg-white/[0.025] p-5">
-      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/[0.05] text-zinc-300">
+    <div className="rounded-2xl border border-border bg-card p-5">
+      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted text-muted-foreground">
         {icon}
       </div>
 
-      <h3 className="mt-4 text-sm font-semibold">
-        {title}
-      </h3>
+      <h3 className="mt-4 text-sm font-semibold">{title}</h3>
 
-      <p className="mt-2 text-xs leading-6 text-zinc-500">
+      <p className="mt-2 text-xs leading-6 text-muted-foreground">
         {description}
       </p>
     </div>

@@ -566,7 +566,7 @@ export default function AgentDetailPage() {
               <textarea
                 value={task}
                 onChange={(event) => setTask(event.target.value)}
-                placeholder={`${agent.name} ile ne yapmak istiyorsun?`}
+                placeholder={`What should ${agent.name} do?`}
                 rows={6}
                 className="w-full resize-none rounded-2xl border border-white/[0.08] bg-black/20 px-4 py-4 text-sm text-foreground outline-none transition placeholder:text-zinc-600 focus:border-white/[0.2] focus:bg-white/[0.025]"
               />

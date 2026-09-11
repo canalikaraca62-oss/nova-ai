@@ -82,7 +82,44 @@ const SOURCES = [
  * signal with no false positives, not a language classifier. Every one
  * of the 109 strings removed contained at least one of these.
  */
-const TURKISH_ONLY = /[şğıçöüŞĞİÇÖÜ]/;
+const TURKISH_DIACRITIC = /[şğıçöüŞĞİÇÖÜ]/;
+
+/**
+ * Turkish written in plain ASCII.
+ *
+ * The diacritic test above called its own narrowness deliberate: every
+ * one of the 109 strings removed at the time carried at least one of
+ * those letters, so a wordlist would have added false positives for no
+ * gain.
+ *
+ * That stopped being true. Seven strings survived in reachable UI with
+ * no diacritic at all — "agent bulundu", `aria-label="Favorilere
+ * ekle"`, `title="Ekip uyumlu"`, "Agent ara...", "Aktivitelerde ara...",
+ * "Arama ifadenizi veya kategori", and a textarea placeholder asking
+ * `${agent.name} ile ne yapmak istiyorsun?`. The suite reported the
+ * product monolingual through all of them.
+ *
+ * Every token here is a whole word that does not occur in English.
+ * "ara", "ile" and "veya" are short enough to be worth stating why
+ * they are safe: as \b-delimited words none of them is English, and
+ * the word boundaries stop them matching inside "area", "file" or
+ * "conveyance".
+ */
+const TURKISH_ASCII =
+  /\b(?:bulundu|ara|arama|ifadenizi|kategori|ekle|eklendi|belirle|uyumlu|ekip|sistemi|gelecekte|istiyorsun|yapmak|ile|veya|icin|aktivitelerde|yukleniyor|kaydet|duzenle|secim|secin|gorunum|baslat|durdur|iptal)\b/i;
+
+/**
+ * Either spelling of Turkish, diacritic or ASCII.
+ *
+ * Kept as one predicate so all four extractors below — quoted
+ * literals, JSX text, aria-labels and API messages — gain the ASCII
+ * coverage together rather than one at a time.
+ */
+const TURKISH_ONLY = {
+  test(value: string): boolean {
+    return TURKISH_DIACRITIC.test(value) || TURKISH_ASCII.test(value);
+  },
+};
 
 /**
  * A string literal: single, double, or template.

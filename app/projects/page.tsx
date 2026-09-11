@@ -1,124 +1,98 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import Link from "next/link";
 import {
   Activity,
   ArrowUpRight,
-  CheckCircle2,
-  Clock3,
   FolderKanban,
   Grid2X2,
   List,
   Plus,
   Search,
   Sparkles,
-  Users,
 } from "lucide-react";
+
+/*
+  SYRAVEN — Projects
+
+  WHAT THIS PAGE SHOWS
+
+  The caller's own projects, from GET /api/projects on their session.
+  public.projects is owner-scoped, so somebody else's rows are never
+  returned rather than filtered out here.
+
+  WHAT IT USED TO SHOW
+
+  A module-scope array of invented projects with invented progress
+  percentages, member counts, task tallies and gradient accents. The
+  search box filtered fiction and four stat tiles totalled it.
+
+  One of those tiles computed Math.round((completedTasks / totalTasks)
+  * 100). With real data and no tasks that is 0/0 -- it would have
+  rendered "NaN%" on the first honest load.
+
+  WHAT IS DELIBERATELY ABSENT
+
+  Progress. There is no progress column and no way to derive one: a
+  project is not a percentage of anything the schema records.
+
+  Member counts. Projects have an owner_id and a workspace_id, and
+  there is no project_members table.
+
+  Task tallies. public.tasks does carry project_id, so a count is
+  derivable -- but it costs a second request per project and would be
+  a claim assembled here rather than a fact the row states. If it is
+  worth showing it is worth doing deliberately, not as a side effect
+  of this fix.
+
+  Workspace names. The API returns workspace_id, not a name.
+
+  Accent gradients, which were decoration invented per row.
+*/
+
+/* -------------------------------------------------------------------------- */
+/*                                  CONTRACT                                  */
+/* -------------------------------------------------------------------------- */
 
 type ProjectStatus = "active" | "planning" | "completed" | "archived";
 type ViewMode = "grid" | "list";
 
-interface Project {
+/** A project row exactly as /api/projects returns it. */
+interface ProjectRow {
   id: string;
   name: string;
-  description: string;
-  status: ProjectStatus;
-  workspace: string;
-  progress: number;
-  members: number;
-  tasksCompleted: number;
-  totalTasks: number;
-  updatedAt: string;
-  accent: string;
+  description: string | null;
+  status: string | null;
+  workspace_id: string | null;
+  updated_at: string | null;
 }
 
-const projects: Project[] = [
-  {
-    id: "global-intelligence-platform",
-    name: "Global Intelligence Platform",
-    description:
-      "A next-generation AI intelligence infrastructure for research, automation and strategic decision making.",
-    status: "active",
-    workspace: "SYRAVEN Core",
-    progress: 68,
-    members: 24,
-    tasksCompleted: 86,
-    totalTasks: 126,
-    updatedAt: "Updated 12 minutes ago",
-    accent: "from-violet-500/20 via-blue-500/10 to-transparent",
-  },
-  {
-    id: "research-engine",
-    name: "Research Engine",
-    description:
-      "Autonomous research workflows combining knowledge retrieval, AI agents and structured analysis.",
-    status: "active",
-    workspace: "Research Lab",
-    progress: 47,
-    members: 12,
-    tasksCompleted: 41,
-    totalTasks: 87,
-    updatedAt: "Updated 1 hour ago",
-    accent: "from-cyan-500/20 via-blue-500/10 to-transparent",
-  },
-  {
-    id: "agent-orchestration",
-    name: "Agent Orchestration",
-    description:
-      "A multi-agent system designed to coordinate complex tasks and enterprise workflows.",
-    status: "planning",
-    workspace: "Intelligence",
-    progress: 18,
-    members: 8,
-    tasksCompleted: 12,
-    totalTasks: 68,
-    updatedAt: "Updated yesterday",
-    accent: "from-amber-500/20 via-orange-500/10 to-transparent",
-  },
-  {
-    id: "syraven-marketplace",
-    name: "SYRAVEN Marketplace",
-    description:
-      "A marketplace for AI agents, automation templates, workflows and intelligence tools.",
-    status: "active",
-    workspace: "Product",
-    progress: 74,
-    members: 16,
-    tasksCompleted: 94,
-    totalTasks: 127,
-    updatedAt: "Updated 3 hours ago",
-    accent: "from-emerald-500/20 via-teal-500/10 to-transparent",
-  },
-  {
-    id: "knowledge-graph",
-    name: "Knowledge Graph",
-    description:
-      "A connected intelligence layer for documents, memories, entities and organizational knowledge.",
-    status: "planning",
-    workspace: "SYRAVEN Core",
-    progress: 31,
-    members: 9,
-    tasksCompleted: 22,
-    totalTasks: 71,
-    updatedAt: "Updated 2 days ago",
-    accent: "from-pink-500/20 via-purple-500/10 to-transparent",
-  },
-  {
-    id: "legacy-automation",
-    name: "Legacy Automation",
-    description:
-      "Completed automation infrastructure retained for historical reference and maintenance.",
-    status: "archived",
-    workspace: "Personal Workspace",
-    progress: 100,
-    members: 4,
-    tasksCompleted: 54,
-    totalTasks: 54,
-    updatedAt: "Archived last month",
-    accent: "from-slate-500/20 via-slate-400/10 to-transparent",
-  },
+const KNOWN_STATUSES: readonly ProjectStatus[] = [
+  "active",
+  "planning",
+  "completed",
+  "archived",
 ];
+
+/**
+ * Narrows the free-text status column to one this page can label.
+ *
+ * The column has no CHECK constraint, so a row may hold a value this
+ * UI has never seen. Those render as active rather than disappearing:
+ * a project the user created should not vanish from their own list
+ * over a label.
+ */
+function statusOf(value: string | null): ProjectStatus {
+  return KNOWN_STATUSES.includes(value as ProjectStatus)
+    ? (value as ProjectStatus)
+    : "active";
+}
 
 const filters: Array<{
   label: string;
@@ -131,12 +105,75 @@ const filters: Array<{
   { label: "Archived", value: "archived" },
 ];
 
+function formatUpdated(value: string | null): string {
+  if (!value) return "";
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "";
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(parsed);
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                    PAGE                                    */
+/* -------------------------------------------------------------------------- */
+
 export default function ProjectsPage() {
+  const [projects, setProjects] = useState<ProjectRow[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState<
     ProjectStatus | "all"
   >("all");
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
+
+  const load = useCallback(async () => {
+    setIsLoading(true);
+    setLoadError(null);
+
+    try {
+      const response = await fetch("/api/projects", {
+        cache: "no-store",
+      });
+
+      if (response.status === 401) {
+        setProjects([]);
+        return;
+      }
+
+      if (!response.ok) throw new Error("failed");
+
+      const payload = (await response.json().catch(() => null)) as {
+        data?: ProjectRow[];
+      } | null;
+
+      setProjects(payload?.data ?? []);
+    } catch {
+      setLoadError("Your projects could not be loaded.");
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void Promise.resolve().then(() => {
+      if (cancelled) return undefined;
+
+      return load();
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [load]);
 
   const filteredProjects = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -144,39 +181,33 @@ export default function ProjectsPage() {
     return projects.filter((project) => {
       const matchesFilter =
         activeFilter === "all" ||
-        project.status === activeFilter;
+        statusOf(project.status) === activeFilter;
 
       const matchesSearch =
         !query ||
         project.name.toLowerCase().includes(query) ||
-        project.description.toLowerCase().includes(query) ||
-        project.workspace.toLowerCase().includes(query);
+        (project.description ?? "").toLowerCase().includes(query);
 
       return matchesFilter && matchesSearch;
     });
-  }, [searchQuery, activeFilter]);
+  }, [projects, searchQuery, activeFilter]);
 
-  const activeProjects = projects.filter(
-    (project) => project.status === "active"
-  ).length;
-
-  const planningProjects = projects.filter(
-    (project) => project.status === "planning"
-  ).length;
-
-  const totalMembers = projects.reduce(
-    (total, project) => total + project.members,
-    0
+  /*
+    Two counts, both of real rows. Two further tiles used to sit beside
+    these: "Team members", totalled from an invented per-project count,
+    and "Task completion", a percentage over two invented fields that
+    would divide by zero the moment the data was real.
+  */
+  const activeProjects = useMemo(
+    () =>
+      projects.filter((p) => statusOf(p.status) === "active").length,
+    [projects],
   );
 
-  const totalTasks = projects.reduce(
-    (total, project) => total + project.totalTasks,
-    0
-  );
-
-  const completedTasks = projects.reduce(
-    (total, project) => total + project.tasksCompleted,
-    0
+  const planningProjects = useMemo(
+    () =>
+      projects.filter((p) => statusOf(p.status) === "planning").length,
+    [projects],
   );
 
   return (
@@ -199,8 +230,7 @@ export default function ProjectsPage() {
             </h1>
 
             <p className="mt-4 max-w-2xl text-base leading-7 text-muted-foreground">
-              Organize your work, intelligence, AI workflows and team
-              execution in one connected project ecosystem.
+              Your work, organised.
             </p>
           </div>
 
@@ -214,35 +244,22 @@ export default function ProjectsPage() {
         </section>
 
         {/* Statistics */}
-        <section className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <section className="mt-8 grid gap-4 sm:grid-cols-2">
           <StatCard
             icon={<FolderKanban className="h-5 w-5" />}
             label="Total projects"
-            value={projects.length.toString()}
-            description="Across all workspaces"
+            value={isLoading ? "—" : projects.length.toString()}
           />
 
           <StatCard
             icon={<Activity className="h-5 w-5" />}
             label="Active projects"
-            value={activeProjects.toString()}
-            description={`${planningProjects} currently in planning`}
-          />
-
-          <StatCard
-            icon={<Users className="h-5 w-5" />}
-            label="Team members"
-            value={totalMembers.toString()}
-            description="Connected across projects"
-          />
-
-          <StatCard
-            icon={<CheckCircle2 className="h-5 w-5" />}
-            label="Task completion"
-            value={`${Math.round(
-              (completedTasks / totalTasks) * 100
-            )}%`}
-            description={`${completedTasks} of ${totalTasks} tasks`}
+            value={isLoading ? "—" : activeProjects.toString()}
+            description={
+              isLoading
+                ? undefined
+                : `${planningProjects} in planning`
+            }
           />
         </section>
 
@@ -254,10 +271,9 @@ export default function ProjectsPage() {
             <input
               type="search"
               value={searchQuery}
-              onChange={(event) =>
-                setSearchQuery(event.target.value)
-              }
+              onChange={(event) => setSearchQuery(event.target.value)}
               placeholder="Search projects..."
+              aria-label="Search projects"
               className="h-12 w-full rounded-xl border border-border bg-card py-2 pl-11 pr-4 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-primary/10"
             />
           </div>
@@ -268,6 +284,7 @@ export default function ProjectsPage() {
                 type="button"
                 onClick={() => setViewMode("grid")}
                 aria-label="Grid view"
+                aria-pressed={viewMode === "grid"}
                 className={`flex h-9 w-9 items-center justify-center rounded-lg transition-colors ${
                   viewMode === "grid"
                     ? "bg-muted text-foreground"
@@ -281,6 +298,7 @@ export default function ProjectsPage() {
                 type="button"
                 onClick={() => setViewMode("list")}
                 aria-label="List view"
+                aria-pressed={viewMode === "list"}
                 className={`flex h-9 w-9 items-center justify-center rounded-lg transition-colors ${
                   viewMode === "list"
                     ? "bg-muted text-foreground"
@@ -300,10 +318,11 @@ export default function ProjectsPage() {
               key={filter.value}
               type="button"
               onClick={() => setActiveFilter(filter.value)}
-              className={`whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-medium transition-colors ${
+              aria-pressed={activeFilter === filter.value}
+              className={`shrink-0 rounded-xl border px-4 py-2 text-sm transition-colors ${
                 activeFilter === filter.value
-                  ? "bg-primary text-primary-foreground"
-                  : "border border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground"
+                  ? "border-primary bg-primary/10 text-primary"
+                  : "border-border text-muted-foreground hover:bg-muted"
               }`}
             >
               {filter.label}
@@ -311,88 +330,80 @@ export default function ProjectsPage() {
           ))}
         </section>
 
-        {/* Results */}
-        <section className="mt-8">
-          <div className="mb-5 flex items-center justify-between gap-4">
-            <div>
-              <h2 className="text-lg font-semibold text-foreground">
-                Your projects
-              </h2>
+        {loadError ? (
+          <div
+            role="alert"
+            className="mt-6 rounded-2xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive"
+          >
+            {loadError}
 
-              <p className="mt-1 text-sm text-muted-foreground">
-                {filteredProjects.length}{" "}
-                {filteredProjects.length === 1
-                  ? "project"
-                  : "projects"}{" "}
-                found
-              </p>
-            </div>
-          </div>
-
-          {filteredProjects.length === 0 ? (
-            <EmptyState
-              onReset={() => {
-                setSearchQuery("");
-                setActiveFilter("all");
-              }}
-            />
-          ) : viewMode === "grid" ? (
-            <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-              {filteredProjects.map((project) => (
-                <ProjectCard
-                  key={project.id}
-                  project={project}
-                />
-              ))}
-            </div>
-          ) : (
-            <div className="overflow-hidden rounded-2xl border border-border bg-card">
-              {filteredProjects.map((project, index) => (
-                <ProjectListItem
-                  key={project.id}
-                  project={project}
-                  showBorder={
-                    index !== filteredProjects.length - 1
-                  }
-                />
-              ))}
-            </div>
-          )}
-        </section>
-
-        {/* AI insight */}
-        <section className="mt-10 overflow-hidden rounded-3xl border border-primary/15 bg-primary/[0.04]">
-          <div className="grid gap-8 p-6 sm:p-8 lg:grid-cols-[1fr_auto] lg:items-center">
-            <div>
-              <div className="flex items-center gap-2 text-sm font-semibold text-primary">
-                <Sparkles className="h-4 w-4" />
-                SYRAVEN Intelligence
-              </div>
-
-              <h2 className="mt-3 text-2xl font-semibold tracking-tight text-foreground">
-                Turn project data into strategic intelligence
-              </h2>
-
-              <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
-                Connect tasks, knowledge, conversations and AI agents to
-                continuously understand progress, detect risks and identify
-                the next highest-impact actions.
-              </p>
-            </div>
-
-            <Link
-              href="/projects/new"
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-primary/20 bg-background px-5 text-sm font-semibold text-foreground transition-colors hover:bg-muted"
+            <button
+              type="button"
+              onClick={() => void load()}
+              className="ml-3 font-medium underline"
             >
-              Explore project intelligence
-              <ArrowUpRight className="h-4 w-4" />
-            </Link>
+              Try again
+            </button>
           </div>
-        </section>
+        ) : null}
+
+        {isLoading ? (
+          <div
+            role="status"
+            aria-live="polite"
+            className="mt-8 rounded-3xl border border-dashed border-border px-6 py-20 text-center text-sm text-muted-foreground"
+          >
+            Loading your projects...
+          </div>
+        ) : filteredProjects.length === 0 ? (
+          <div className="mt-8 rounded-3xl border border-dashed border-border px-6 py-20 text-center">
+            <h2 className="text-lg font-semibold text-foreground">
+              {projects.length === 0
+                ? "No projects yet"
+                : "No matches"}
+            </h2>
+
+            <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-muted-foreground">
+              {projects.length === 0
+                ? "Projects you create will appear here."
+                : "No project matches this search or filter."}
+            </p>
+
+            {projects.length === 0 ? (
+              <Link
+                href="/projects/new"
+                className="mt-6 inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-primary px-5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
+              >
+                <Plus className="h-4 w-4" />
+                New project
+              </Link>
+            ) : null}
+          </div>
+        ) : viewMode === "grid" ? (
+          <section className="mt-8 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+            {filteredProjects.map((project) => (
+              <ProjectCard key={project.id} project={project} />
+            ))}
+          </section>
+        ) : (
+          <section className="mt-8 overflow-hidden rounded-3xl border border-border bg-card">
+            {filteredProjects.map((project, index) => (
+              <ProjectListItem
+                key={project.id}
+                project={project}
+                showBorder={index < filteredProjects.length - 1}
+              />
+            ))}
+          </section>
+        )}
       </div>
     </div>
   );
 }
+
+/* -------------------------------------------------------------------------- */
+/*                                   PIECES                                   */
+/* -------------------------------------------------------------------------- */
 
 function StatCard({
   icon,
@@ -403,94 +414,56 @@ function StatCard({
   icon: React.ReactNode;
   label: string;
   value: string;
-  description: string;
+  description?: string;
 }) {
   return (
     <div className="rounded-2xl border border-border bg-card p-5">
-      <div className="flex items-center justify-between">
-        <span className="text-muted-foreground">{icon}</span>
+      <span className="text-muted-foreground">{icon}</span>
 
-        <span className="text-xs font-medium text-muted-foreground">
-          Live overview
-        </span>
-      </div>
-
-      <p className="mt-5 text-sm text-muted-foreground">
-        {label}
-      </p>
+      <p className="mt-5 text-sm text-muted-foreground">{label}</p>
 
       <p className="mt-1 text-3xl font-semibold tracking-tight text-foreground">
         {value}
       </p>
 
-      <p className="mt-2 text-xs text-muted-foreground">
-        {description}
-      </p>
+      {description ? (
+        <p className="mt-2 text-xs text-muted-foreground">
+          {description}
+        </p>
+      ) : null}
     </div>
   );
 }
 
-function ProjectCard({
-  project,
-}: {
-  project: Project;
-}) {
+function ProjectCard({ project }: { project: ProjectRow }) {
+  const updated = formatUpdated(project.updated_at);
+
   return (
     <Link
       href={`/projects/${project.id}`}
-      className="group relative overflow-hidden rounded-3xl border border-border bg-card p-6 transition-all hover:-translate-y-1 hover:border-primary/30 hover:shadow-xl"
+      className="group rounded-3xl border border-border bg-card p-6 transition-all hover:-translate-y-1 hover:border-primary/30 hover:shadow-xl"
     >
-      <div
-        className={`pointer-events-none absolute inset-x-0 top-0 h-32 bg-gradient-to-b ${project.accent}`}
-      />
+      <div className="flex items-start justify-between gap-4">
+        <StatusBadge status={statusOf(project.status)} />
 
-      <div className="relative">
-        <div className="flex items-start justify-between gap-4">
-          <StatusBadge status={project.status} />
+        <ArrowUpRight className="h-5 w-5 text-muted-foreground transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-foreground" />
+      </div>
 
-          <ArrowUpRight className="h-5 w-5 text-muted-foreground transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-foreground" />
-        </div>
+      <h3 className="mt-6 text-xl font-semibold text-foreground">
+        {project.name}
+      </h3>
 
-        <h3 className="mt-6 text-xl font-semibold text-foreground">
-          {project.name}
-        </h3>
-
+      {project.description ? (
         <p className="mt-3 line-clamp-3 text-sm leading-6 text-muted-foreground">
           {project.description}
         </p>
+      ) : null}
 
-        <div className="mt-6">
-          <div className="flex items-center justify-between text-xs">
-            <span className="font-medium text-muted-foreground">
-              Progress
-            </span>
-
-            <span className="font-semibold text-foreground">
-              {project.progress}%
-            </span>
-          </div>
-
-          <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">
-            <div
-              className="h-full rounded-full bg-primary transition-all"
-              style={{
-                width: `${project.progress}%`,
-              }}
-            />
-          </div>
-        </div>
-
-        <div className="mt-6 flex items-center justify-between border-t border-border pt-5">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Users className="h-4 w-4" />
-            {project.members} members
-          </div>
-
-          <div className="text-xs text-muted-foreground">
-            {project.tasksCompleted}/{project.totalTasks} tasks
-          </div>
-        </div>
-      </div>
+      {updated ? (
+        <p className="mt-6 border-t border-border pt-5 text-xs text-muted-foreground">
+          Updated {updated}
+        </p>
+      ) : null}
     </Link>
   );
 }
@@ -499,9 +472,11 @@ function ProjectListItem({
   project,
   showBorder,
 }: {
-  project: Project;
+  project: ProjectRow;
   showBorder: boolean;
 }) {
+  const updated = formatUpdated(project.updated_at);
+
   return (
     <Link
       href={`/projects/${project.id}`}
@@ -515,44 +490,22 @@ function ProjectListItem({
             {project.name}
           </h3>
 
-          <StatusBadge status={project.status} />
+          <StatusBadge status={statusOf(project.status)} />
         </div>
 
-        <p className="mt-2 max-w-2xl truncate text-sm text-muted-foreground">
-          {project.description}
-        </p>
+        {project.description ? (
+          <p className="mt-2 max-w-2xl truncate text-sm text-muted-foreground">
+            {project.description}
+          </p>
+        ) : null}
       </div>
 
-      <div className="grid grid-cols-2 gap-x-8 gap-y-4 sm:flex sm:items-center lg:gap-10">
-        <div>
-          <p className="text-xs text-muted-foreground">
-            Progress
-          </p>
-
-          <p className="mt-1 text-sm font-semibold text-foreground">
-            {project.progress}%
-          </p>
-        </div>
-
-        <div>
-          <p className="text-xs text-muted-foreground">
-            Tasks
-          </p>
-
-          <p className="mt-1 text-sm font-semibold text-foreground">
-            {project.tasksCompleted}/{project.totalTasks}
-          </p>
-        </div>
-
-        <div>
-          <p className="text-xs text-muted-foreground">
-            Members
-          </p>
-
-          <p className="mt-1 text-sm font-semibold text-foreground">
-            {project.members}
-          </p>
-        </div>
+      <div className="flex items-center gap-6">
+        {updated ? (
+          <span className="text-xs text-muted-foreground">
+            Updated {updated}
+          </span>
+        ) : null}
 
         <ArrowUpRight className="hidden h-5 w-5 text-muted-foreground transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 lg:block" />
       </div>
@@ -560,11 +513,7 @@ function ProjectListItem({
   );
 }
 
-function StatusBadge({
-  status,
-}: {
-  status: ProjectStatus;
-}) {
+function StatusBadge({ status }: { status: ProjectStatus }) {
   const config = {
     active: {
       label: "Active",
@@ -573,57 +522,23 @@ function StatusBadge({
     },
     planning: {
       label: "Planning",
-      className:
-        "bg-amber-500/10 text-amber-600 dark:text-amber-400",
+      className: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
     },
     completed: {
       label: "Completed",
-      className:
-        "bg-blue-500/10 text-blue-600 dark:text-blue-400",
+      className: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
     },
     archived: {
       label: "Archived",
-      className:
-        "bg-muted text-muted-foreground",
+      className: "bg-muted text-muted-foreground",
     },
   }[status];
 
   return (
     <span
-      className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${config.className}`}
+      className={`rounded-full px-3 py-1 text-xs font-medium ${config.className}`}
     >
       {config.label}
     </span>
-  );
-}
-
-function EmptyState({
-  onReset,
-}: {
-  onReset: () => void;
-}) {
-  return (
-    <div className="flex min-h-[360px] flex-col items-center justify-center rounded-3xl border border-dashed border-border bg-card px-6 text-center">
-      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
-        <Search className="h-6 w-6" />
-      </div>
-
-      <h3 className="mt-5 text-lg font-semibold text-foreground">
-        No projects found
-      </h3>
-
-      <p className="mt-2 max-w-sm text-sm leading-6 text-muted-foreground">
-        Try changing your search or filters to find the project you are
-        looking for.
-      </p>
-
-      <button
-        type="button"
-        onClick={onReset}
-        className="mt-5 rounded-xl border border-border px-4 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-muted"
-      >
-        Reset filters
-      </button>
-    </div>
   );
 }
