@@ -267,6 +267,76 @@ void describe("A team roster is never invented", () => {
       "A locally mutated roster is an invitation nobody received.",
     );
   });
+
+  /*
+    THE ROSTER WAS NOT THE WHOLE DEFECT.
+
+    The two assertions above passed while the page still ran on a
+    module-scope array of three invented teams. Emptying `members` left
+    everything around it standing: eighteen invented projects, a 94%
+    collaboration score, a "Healthy" status, three invented initiative
+    names, and an activity feed of events that never happened with
+    timestamps like "12 minutes ago".
+
+    It was broken as a route too — the lookup matched a real team's UUID
+    against invented slugs, so only the fictions could ever render.
+
+    A guard that checks how a roster is mutated, but not whether the
+    surrounding page is real, is the narrow kind that lets this survive.
+  */
+
+  void test("the team itself is not an invented constant", () => {
+    assert.ok(
+      !/const\s+teams\s*:\s*Team\[\]\s*=\s*\[/.test(TEAM),
+      "A module-scope team array is three fictions with a lookup.",
+    );
+
+    for (const invention of [
+      /@syraven\.ai/,
+      /SYRAVEN Core/,
+      /Global Growth/,
+    ]) {
+      assert.ok(
+        !invention.test(TEAM),
+        `/teams/[id] carries invented data (${String(invention)}).`,
+      );
+    }
+  });
+
+  void test("no metric is asserted without a column behind it", () => {
+    /*
+      public.projects has no team_id — only knowledge does — so a team's
+      project count cannot be derived at all. Collaboration and health
+      were never columns anywhere. Rendering zero would still assert the
+      metric exists, so these are absent rather than empty.
+    */
+    for (const metric of [
+      /Collaboration/,
+      /\b94%/,
+      /Active projects/,
+      /Active initiatives/,
+    ]) {
+      assert.ok(
+        !metric.test(TEAM),
+        `/teams/[id] reports ${String(metric)}, which no column supplies.`,
+      );
+    }
+  });
+
+  void test("no activity feed is invented", () => {
+    assert.ok(
+      !/\bactivities\b/.test(TEAM),
+      "Nothing records team events, so a feed here would be fabricated.",
+    );
+  });
+
+  void test("the team is loaded from the route that owns it", () => {
+    assert.match(
+      TEAM,
+      /fetch\(\s*`\/api\/teams\?id=/,
+      "The team must come from /api/teams, on the caller's session.",
+    );
+  });
 });
 
 void describe("Canvases are stored, never invented", () => {

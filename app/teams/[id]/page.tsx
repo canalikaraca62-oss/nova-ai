@@ -2,207 +2,124 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
-type TeamRole = "Owner" | "Admin" | "Member" | "Viewer";
+/*
+  SYRAVEN — Team detail
 
-type TeamMember = {
+  WHAT THIS PAGE SHOWS
+
+  A team, from public.teams, through GET /api/teams?id=<uuid> on the
+  caller's own session. The route selects id, owner_id, workspace_id,
+  name, description, created_at, updated_at, and the table's RLS is
+  owner-scoped, so a team that is not yours simply is not returned.
+
+  WHAT IT USED TO SHOW
+
+  A module-scope array of three invented teams. "SYRAVEN Core" with
+  eighteen projects, staffed by Alex Morgan, Sarah Chen, Marcus Reed and
+  Emma Wilson at @syraven.ai addresses; "AI Research" with twelve;
+  "Global Growth" with nine. A previous pass emptied the roster and
+  disabled the invitation, but left everything around it standing, so
+  the page still reported:
+
+    Active projects   18          (no such column exists anywhere)
+    Collaboration     94%         (a number with no source at all)
+    Status            Healthy     (invented health)
+    Active initiatives            three invented project names
+    Team activity                 invented events, invented timestamps
+    Team composition              percentage bars over an empty roster
+
+  It was also broken as a route. The lookup compared a real team's UUID
+  against invented slugs like "syraven-core", so every genuine team fell
+  through to "Team not found" and only the three fictions could render.
+
+  WHAT IS DELIBERATELY ABSENT NOW
+
+  A project count. public.projects has no team_id — only knowledge does
+  — so there is no honest way to count a team's projects. Showing zero
+  would still assert the metric exists, so the metric is gone.
+
+  A member roster. There is no team_members table. An invitation is not
+  an array entry either: it is an email to somebody who may not hold an
+  account, with a token, an expiry and an acceptance step.
+  organization_invites already models that at the organisation level, so
+  the roster is absent rather than rebuilt in a weaker form.
+
+  Activity. Nothing records team events.
+
+  WHAT IS REAL AND WIRED
+
+  Renaming and deleting, through PATCH and DELETE on the same route,
+  both owner-scoped. They are the only two mutations this team supports,
+  and they genuinely persist.
+*/
+
+/* -------------------------------------------------------------------------- */
+/*                                  CONTRACT                                  */
+/* -------------------------------------------------------------------------- */
+
+/** A team row exactly as /api/teams returns it. */
+interface TeamRow {
   id: string;
   name: string;
-  email: string;
-  role: TeamRole;
-  initials: string;
-  status: "active" | "invited";
-};
+  description: string | null;
+  created_at: string;
+  workspace_id: string | null;
+}
 
-type Activity = {
-  id: string;
-  title: string;
-  description: string;
-  time: string;
-  type: "member" | "project" | "system" | "invite";
-};
+const TEAM_COLORS = [
+  "from-violet-500 to-indigo-600",
+  "from-cyan-500 to-blue-600",
+  "from-emerald-500 to-teal-600",
+  "from-amber-500 to-orange-600",
+  "from-rose-500 to-pink-600",
+] as const;
 
-type Team = {
-  id: string;
-  name: string;
-  description: string;
-  initials: string;
-  gradient: string;
-  projects: number;
-  createdAt: string;
-  members: TeamMember[];
-  activities: Activity[];
-};
+/**
+ * A stable colour per team, derived from its id.
+ *
+ * Teams have no colour column. Choosing at random per render would make
+ * the same team change colour between loads, so this hashes the id —
+ * the same function /teams uses, so a team looks the same in both
+ * places.
+ */
+function colorForTeam(id: string): string {
+  let hash = 0;
 
-const teams: Team[] = [
-  {
-    id: "syraven-core",
-    name: "SYRAVEN Core",
-    description:
-      "Core platform architecture, artificial intelligence infrastructure and global product strategy.",
-    initials: "NC",
-    gradient: "from-violet-500 to-indigo-600",
-    projects: 18,
-    createdAt: "January 12, 2025",
-    members: [
-      {
-        id: "alex-morgan",
-        name: "Alex Morgan",
-        email: "alex@syraven.ai",
-        role: "Owner",
-        initials: "AM",
-        status: "active",
-      },
-      {
-        id: "sarah-chen",
-        name: "Sarah Chen",
-        email: "sarah@syraven.ai",
-        role: "Admin",
-        initials: "SC",
-        status: "active",
-      },
-      {
-        id: "marcus-reed",
-        name: "Marcus Reed",
-        email: "marcus@syraven.ai",
-        role: "Member",
-        initials: "MR",
-        status: "active",
-      },
-      {
-        id: "emma-wilson",
-        name: "Emma Wilson",
-        email: "emma@syraven.ai",
-        role: "Member",
-        initials: "EW",
-        status: "active",
-      },
-    ],
-    activities: [
-      {
-        id: "activity-1",
-        title: "Project updated",
-        description: "Global Intelligence Infrastructure was updated.",
-        time: "12 minutes ago",
-        type: "project",
-      },
-      {
-        id: "activity-2",
-        title: "New member joined",
-        description: "Emma Wilson joined the SYRAVEN Core team.",
-        time: "2 hours ago",
-        type: "member",
-      },
-      {
-        id: "activity-3",
-        title: "Infrastructure deployment",
-        description: "Production deployment completed successfully.",
-        time: "Yesterday",
-        type: "system",
-      },
-    ],
-  },
-  {
-    id: "ai-research",
-    name: "AI Research",
-    description:
-      "Advanced agents, reasoning systems, multimodal intelligence and autonomous workflows.",
-    initials: "AR",
-    gradient: "from-cyan-500 to-blue-600",
-    projects: 12,
-    createdAt: "February 8, 2025",
-    members: [
-      {
-        id: "elena-rossi",
-        name: "Elena Rossi",
-        email: "elena@syraven.ai",
-        role: "Admin",
-        initials: "ER",
-        status: "active",
-      },
-      {
-        id: "david-kim",
-        name: "David Kim",
-        email: "david@syraven.ai",
-        role: "Member",
-        initials: "DK",
-        status: "active",
-      },
-    ],
-    activities: [
-      {
-        id: "activity-1",
-        title: "Research milestone completed",
-        description: "Autonomous reasoning benchmark reached a new milestone.",
-        time: "1 hour ago",
-        type: "project",
-      },
-      {
-        id: "activity-2",
-        title: "Knowledge base synchronized",
-        description: "Research documents were synchronized successfully.",
-        time: "Yesterday",
-        type: "system",
-      },
-    ],
-  },
-  {
-    id: "global-growth",
-    name: "Global Growth",
-    description:
-      "Marketplace expansion, partnerships, enterprise adoption and international growth.",
-    initials: "GG",
-    gradient: "from-emerald-500 to-teal-600",
-    projects: 9,
-    createdAt: "March 21, 2025",
-    members: [
-      {
-        id: "olivia-bennett",
-        name: "Olivia Bennett",
-        email: "olivia@syraven.ai",
-        role: "Admin",
-        initials: "OB",
-        status: "active",
-      },
-      {
-        id: "james-wilson",
-        name: "James Wilson",
-        email: "james@syraven.ai",
-        role: "Viewer",
-        initials: "JW",
-        status: "invited",
-      },
-    ],
-    activities: [
-      {
-        id: "activity-1",
-        title: "Partnership pipeline updated",
-        description: "Three new enterprise opportunities were added.",
-        time: "3 hours ago",
-        type: "project",
-      },
-      {
-        id: "activity-2",
-        title: "Invitation sent",
-        description: "James Wilson was invited to the team.",
-        time: "1 day ago",
-        type: "invite",
-      },
-    ],
-  },
-];
+  for (let index = 0; index < id.length; index += 1) {
+    hash = (hash * 31 + id.charCodeAt(index)) >>> 0;
+  }
 
-const roleClasses: Record<TeamRole, string> = {
-  Owner:
-    "border-violet-500/20 bg-violet-500/10 text-violet-300",
-  Admin:
-    "border-blue-500/20 bg-blue-500/10 text-blue-300",
-  Member:
-    "border-emerald-500/20 bg-emerald-500/10 text-emerald-300",
-  Viewer:
-    "border-slate-500/20 bg-slate-500/10 text-slate-300",
-};
+  return TEAM_COLORS[hash % TEAM_COLORS.length]!;
+}
+
+function initialsFor(name: string): string {
+  const initials = name
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((word) => word[0]?.toUpperCase() ?? "")
+    .join("");
+
+  return initials || "T";
+}
+
+function formatDate(value: string): string {
+  const parsed = new Date(value);
+
+  if (Number.isNaN(parsed.getTime())) return "";
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  }).format(parsed);
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                    PAGE                                    */
+/* -------------------------------------------------------------------------- */
 
 export default function TeamDetailPage() {
   const params = useParams<{ id: string }>();
@@ -210,54 +127,210 @@ export default function TeamDetailPage() {
 
   const teamId = Array.isArray(params.id) ? params.id[0] : params.id;
 
-  const [activeTab, setActiveTab] = useState<
-    "overview" | "members" | "activity"
-  >("overview");
+  const [team, setTeam] = useState<TeamRow | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  /*
-    MEMBERSHIP IS NOT STORED.
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [draftName, setDraftName] = useState("");
+  const [draftDescription, setDraftDescription] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
-    This seeded from the same invented roster /teams carried — people
-    with @syraven.ai addresses who never existed. Inviting minted an id
-    from Date.now() and pushed to local state; removing filtered it out.
-    Both vanished on reload, and no invitation was ever sent.
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
-    There is no team_members table. An invitation is not an array entry
-    either: it is an email to someone who may not hold an account, with
-    a token, an expiry and an acceptance step. organization_invites
-    models exactly that at the organisation level, so the roster is gone
-    rather than reconstructed in a weaker form.
-  */
-  const members: TeamMember[] = [];
+  const load = useCallback(async () => {
+    if (!teamId) {
+      setIsLoading(false);
+      return;
+    }
 
-  const [inviteOpen, setInviteOpen] = useState(false);
-  const [inviteName, setInviteName] = useState("");
-  const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState<TeamRole>("Member");
+    setIsLoading(true);
+    setLoadError(null);
 
-  const team = useMemo(() => {
-    return teams.find((item) => item.id === teamId) ?? null;
+    try {
+      const response = await fetch(
+        `/api/teams?id=${encodeURIComponent(teamId)}`,
+        { cache: "no-store" },
+      );
+
+      if (response.status === 401) {
+        setTeam(null);
+        return;
+      }
+
+      if (!response.ok) throw new Error("failed");
+
+      const payload = (await response.json().catch(() => null)) as {
+        data?: TeamRow[];
+      } | null;
+
+      /*
+        The route answers with a filtered list rather than a single
+        object, and returns an empty one for a malformed id, a team that
+        does not exist, and a team belonging to somebody else alike —
+        so those three cases are indistinguishable here, which is the
+        point. Telling them apart would leak whether an id exists.
+      */
+      setTeam(payload?.data?.[0] ?? null);
+    } catch {
+      setLoadError("This team could not be loaded.");
+    } finally {
+      setIsLoading(false);
+    }
   }, [teamId]);
 
-  if (!team) {
+  useEffect(() => {
+    let cancelled = false;
+
+    void Promise.resolve().then(() => {
+      if (cancelled) return undefined;
+
+      return load();
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [load]);
+
+  const presentation = useMemo(() => {
+    if (!team) return null;
+
+    return {
+      initials: initialsFor(team.name),
+      color: colorForTeam(team.id),
+      created: formatDate(team.created_at),
+    };
+  }, [team]);
+
+  const beginRename = useCallback(() => {
+    if (!team) return;
+
+    setDraftName(team.name);
+    setDraftDescription(team.description ?? "");
+    setSaveError(null);
+    setIsRenaming(true);
+  }, [team]);
+
+  const saveRename = useCallback(async () => {
+    if (!team) return;
+
+    const name = draftName.trim();
+
+    if (name.length === 0) {
+      setSaveError("A team name cannot be empty.");
+      return;
+    }
+
+    setIsSaving(true);
+    setSaveError(null);
+
+    try {
+      const response = await fetch("/api/teams", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: team.id,
+          name,
+          description: draftDescription.trim() || null,
+        }),
+      });
+
+      if (!response.ok) throw new Error("failed");
+
+      const payload = (await response.json().catch(() => null)) as {
+        data?: TeamRow;
+      } | null;
+
+      /* Adopt the server's row, not the draft: it is the record. */
+      if (payload?.data) setTeam(payload.data);
+
+      setIsRenaming(false);
+    } catch {
+      setSaveError("Those changes could not be saved.");
+    } finally {
+      setIsSaving(false);
+    }
+  }, [team, draftName, draftDescription]);
+
+  const deleteTeam = useCallback(async () => {
+    if (!team) return;
+
+    setIsDeleting(true);
+
+    try {
+      const response = await fetch(
+        `/api/teams?id=${encodeURIComponent(team.id)}`,
+        { method: "DELETE" },
+      );
+
+      if (!response.ok) throw new Error("failed");
+
+      router.push("/teams");
+    } catch {
+      setSaveError("This team could not be removed.");
+      setIsDeleting(false);
+      setConfirmDelete(false);
+    }
+  }, [team, router]);
+
+  /* ------------------------------------------------------------------ */
+  /*                               STATES                               */
+  /* ------------------------------------------------------------------ */
+
+  if (isLoading) {
+    return (
+      <div className="bg-background px-4 py-10 text-foreground sm:px-6 lg:px-8">
+        <div
+          role="status"
+          aria-live="polite"
+          className="mx-auto flex min-h-[60vh] max-w-3xl items-center justify-center text-sm text-foreground/50"
+        >
+          Loading this team...
+        </div>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="bg-background px-4 py-10 text-foreground sm:px-6 lg:px-8">
+        <div className="mx-auto flex min-h-[60vh] max-w-3xl flex-col items-center justify-center text-center">
+          <p role="alert" className="text-sm text-destructive">
+            {loadError}
+          </p>
+
+          <button
+            type="button"
+            onClick={() => void load()}
+            className="mt-5 rounded-xl border border-border px-4 py-2.5 text-sm font-medium transition-colors hover:bg-muted"
+          >
+            Try again
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!team || !presentation) {
     return (
       <div className="bg-background px-4 py-10 text-foreground sm:px-6 lg:px-8">
         <div className="mx-auto flex min-h-[70vh] max-w-3xl flex-col items-center justify-center text-center">
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-2xl">
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-border bg-card text-2xl">
             ?
           </div>
 
-          <h1 className="mt-6 text-3xl font-semibold">
-            Team not found
-          </h1>
+          <h1 className="mt-6 text-3xl font-semibold">Team not found</h1>
 
           <p className="mt-3 max-w-md text-sm leading-6 text-foreground/45">
-            The team you are looking for does not exist or may have been removed.
+            This team does not exist, or it is not yours to view.
           </p>
 
           <Link
             href="/teams"
-            className="mt-6 rounded-xl bg-white px-5 py-3 text-sm font-semibold text-black transition hover:bg-white/90"
+            className="mt-6 rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
           >
             Back to teams
           </Link>
@@ -266,564 +339,227 @@ export default function TeamDetailPage() {
     );
   }
 
-  /*
-    Invitation is not implemented. It used to mint an id from Date.now()
-    and append to local state under an "invited" badge — an invitation
-    nobody was ever sent.
-  */
-
-    /*
-    Removal is not implemented either, for the same reason.
-  */
+  /* ------------------------------------------------------------------ */
+  /*                                TEAM                                */
+  /* ------------------------------------------------------------------ */
 
   return (
     <div className="bg-background text-foreground">
-      <div className="mx-auto w-full max-w-[1500px] px-4 py-6 sm:px-6 lg:px-8">
-        {/* Breadcrumb */}
-        <div className="mb-6 flex flex-wrap items-center gap-2 text-sm text-foreground/40">
-          <Link
-            href="/workspace"
-            className="transition hover:text-foreground"
-          >
-            Workspace
-          </Link>
-
-          <span>/</span>
-
-          <Link
-            href="/teams"
-            className="transition hover:text-foreground"
-          >
+      <div className="mx-auto w-full max-w-4xl px-4 py-6 sm:px-6 lg:px-8">
+        <nav
+          aria-label="Breadcrumb"
+          className="mb-6 flex flex-wrap items-center gap-2 text-sm text-foreground/40"
+        >
+          <Link href="/teams" className="transition-colors hover:text-foreground">
             Teams
           </Link>
 
-          <span>/</span>
+          <span aria-hidden="true">/</span>
 
           <span className="text-foreground/80">{team.name}</span>
-        </div>
+        </nav>
 
-        {/* Hero */}
-        <section className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.025]">
-          <div className="p-6 sm:p-8 lg:p-10">
-            <div className="flex flex-col gap-8 lg:flex-row lg:items-start lg:justify-between">
+        <section className="overflow-hidden rounded-3xl border border-border bg-card">
+          <div className="p-6 sm:p-8">
+            <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
               <div className="flex gap-5">
                 <div
-                  className={`flex h-20 w-20 shrink-0 items-center justify-center rounded-3xl bg-gradient-to-br ${team.gradient} text-2xl font-bold shadow-xl`}
+                  aria-hidden="true"
+                  className={`flex h-20 w-20 shrink-0 items-center justify-center rounded-3xl bg-gradient-to-br ${presentation.color} text-2xl font-bold text-white shadow-lg`}
                 >
-                  {team.initials}
+                  {presentation.initials}
                 </div>
 
-                <div>
-                  <div className="flex flex-wrap items-center gap-3">
-                    <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
-                      {team.name}
-                    </h1>
+                <div className="min-w-0">
+                  <h1 className="text-3xl font-semibold tracking-tight">
+                    {team.name}
+                  </h1>
 
-                    <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-300">
-                      Active
-                    </span>
-                  </div>
-
-                  <p className="mt-4 max-w-3xl text-sm leading-7 text-foreground/50 sm:text-base">
-                    {team.description}
+                  <p className="mt-3 max-w-2xl text-sm leading-6 text-foreground/50">
+                    {team.description ?? "No description yet."}
                   </p>
 
-                  <p className="mt-4 text-sm text-foreground/30">
-                    Created {team.createdAt}
-                  </p>
+                  {presentation.created ? (
+                    <p className="mt-4 text-sm text-foreground/35">
+                      Created {presentation.created}
+                    </p>
+                  ) : null}
                 </div>
               </div>
 
-              <div className="flex flex-wrap gap-3">
+              <div className="flex shrink-0 flex-wrap gap-3">
                 <button
                   type="button"
-                  onClick={() => setInviteOpen(true)}
-                  className="rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-black transition hover:bg-white/90"
+                  onClick={beginRename}
+                  className="rounded-xl border border-border px-4 py-2.5 text-sm font-medium transition-colors hover:bg-muted"
                 >
-                  Invite member
+                  Edit details
                 </button>
 
                 <button
                   type="button"
-                  onClick={() => router.push("/teams")}
-                  className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm font-medium text-foreground/70 transition hover:bg-white/[0.08] hover:text-foreground"
+                  onClick={() => setConfirmDelete(true)}
+                  className="rounded-xl border border-destructive/30 px-4 py-2.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10"
                 >
-                  All teams
+                  Delete
                 </button>
-              </div>
-            </div>
-
-            {/* Stats */}
-            <div className="mt-10 grid gap-4 border-t border-white/10 pt-7 sm:grid-cols-2 lg:grid-cols-4">
-              <div>
-                <p className="text-xs uppercase tracking-[0.15em] text-foreground/35">
-                  Team members
-                </p>
-
-                <p className="mt-3 text-3xl font-semibold">
-                  {members.length}
-                </p>
-              </div>
-
-              <div>
-                <p className="text-xs uppercase tracking-[0.15em] text-foreground/35">
-                  Active projects
-                </p>
-
-                <p className="mt-3 text-3xl font-semibold">
-                  {team.projects}
-                </p>
-              </div>
-
-              <div>
-                <p className="text-xs uppercase tracking-[0.15em] text-foreground/35">
-                  Collaboration
-                </p>
-
-                <p className="mt-3 text-3xl font-semibold">94%</p>
-              </div>
-
-              <div>
-                <p className="text-xs uppercase tracking-[0.15em] text-foreground/35">
-                  Status
-                </p>
-
-                <div className="mt-4 flex items-center gap-2">
-                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
-                  <span className="font-medium text-emerald-300">
-                    Healthy
-                  </span>
-                </div>
               </div>
             </div>
           </div>
         </section>
 
-        {/* Tabs */}
-        <section className="mt-8">
-          <div className="flex gap-2 overflow-x-auto border-b border-white/10">
-            {[
-              ["overview", "Overview"],
-              ["members", `Members (${members.length})`],
-              ["activity", "Activity"],
-            ].map(([id, label]) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() =>
-                  setActiveTab(
-                    id as "overview" | "members" | "activity"
-                  )
-                }
-                className={[
-                  "relative whitespace-nowrap px-4 py-4 text-sm transition",
-                  activeTab === id
-                    ? "text-white"
-                    : "text-white/40 hover:text-white/70",
-                ].join(" ")}
-              >
-                {label}
+        {saveError ? (
+          <p role="alert" className="mt-4 text-sm text-destructive">
+            {saveError}
+          </p>
+        ) : null}
 
-                {activeTab === id && (
-                  <span className="absolute inset-x-0 bottom-0 h-0.5 bg-white" />
-                )}
-              </button>
-            ))}
-          </div>
+        {/*
+          What a team is, and is not, in this product. Said plainly
+          rather than implied by empty sections: a page with a "Members"
+          tab that never lists anyone reads as broken, whereas this
+          reads as honest.
+        */}
+        <section className="mt-8 rounded-2xl border border-border bg-card p-6">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground/50">
+            Membership
+          </h2>
+
+          <p className="mt-3 max-w-2xl text-sm leading-6 text-foreground/50">
+            Teams do not carry their own member list yet. People and
+            their roles are managed for the organisation, and a team is
+            currently a name and a description you own.
+          </p>
+
+          <Link
+            href="/settings"
+            className="mt-4 inline-block text-sm font-medium text-primary hover:underline"
+          >
+            Organisation settings
+          </Link>
         </section>
-
-        {/* Overview */}
-        {activeTab === "overview" && (
-          <section className="mt-8 grid gap-6 xl:grid-cols-[1.4fr_0.8fr]">
-            <div className="space-y-6">
-              <div className="rounded-2xl border border-white/10 bg-white/[0.025] p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h2 className="text-lg font-semibold">
-                      Team performance
-                    </h2>
-
-                    <p className="mt-1 text-sm text-foreground/40">
-                      Current collaboration and execution metrics.
-                    </p>
-                  </div>
-
-                  <span className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-foreground/50">
-                    Last 30 days
-                  </span>
-                </div>
-
-                <div className="mt-8 grid gap-4 sm:grid-cols-2">
-                  <div className="rounded-xl border border-white/8 bg-black/20 p-5">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-foreground/45">
-                        Project velocity
-                      </span>
-
-                      <span className="text-xs text-emerald-300">
-                        +18.4%
-                      </span>
-                    </div>
-
-                    <p className="mt-4 text-3xl font-semibold">
-                      {team.projects}
-                    </p>
-
-                    <div className="mt-5 h-2 overflow-hidden rounded-full bg-white/10">
-                      <div className="h-full w-[82%] rounded-full bg-white" />
-                    </div>
-                  </div>
-
-                  <div className="rounded-xl border border-white/8 bg-black/20 p-5">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-foreground/45">
-                        Participation
-                      </span>
-
-                      <span className="text-xs text-emerald-300">
-                        Excellent
-                      </span>
-                    </div>
-
-                    <p className="mt-4 text-3xl font-semibold">
-                      94%
-                    </p>
-
-                    <div className="mt-5 h-2 overflow-hidden rounded-full bg-white/10">
-                      <div className="h-full w-[94%] rounded-full bg-white" />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-white/10 bg-white/[0.025] p-6">
-                <h2 className="text-lg font-semibold">
-                  Active initiatives
-                </h2>
-
-                <p className="mt-1 text-sm text-foreground/40">
-                  Key projects currently owned by this team.
-                </p>
-
-                <div className="mt-6 space-y-3">
-                  {[
-                    "Global Intelligence Infrastructure",
-                    "Autonomous Agent Platform",
-                    "Enterprise Operating System",
-                  ].map((project, index) => (
-                    <div
-                      key={project}
-                      className="flex items-center justify-between rounded-xl border border-white/8 bg-black/20 p-4"
-                    >
-                      <div>
-                        <p className="font-medium">{project}</p>
-
-                        <p className="mt-1 text-xs text-foreground/35">
-                          Priority {index === 0 ? "Critical" : "High"}
-                        </p>
-                      </div>
-
-                      <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-xs text-emerald-300">
-                        Active
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-6">
-              <div className="rounded-2xl border border-white/10 bg-white/[0.025] p-6">
-                <h2 className="font-semibold">Team composition</h2>
-
-                <div className="mt-6 space-y-4">
-                  {(["Owner", "Admin", "Member", "Viewer"] as TeamRole[]).map(
-                    (role) => {
-                      const count = members.filter(
-                        (member) => member.role === role
-                      ).length;
-
-                      const percentage =
-                        members.length > 0
-                          ? Math.round((count / members.length) * 100)
-                          : 0;
-
-                      return (
-                        <div key={role}>
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="text-foreground/60">{role}</span>
-
-                            <span className="text-foreground/40">
-                              {count}
-                            </span>
-                          </div>
-
-                          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10">
-                            <div
-                              className="h-full rounded-full bg-white/70"
-                              style={{ width: `${percentage}%` }}
-                            />
-                          </div>
-                        </div>
-                      );
-                    }
-                  )}
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-white/10 bg-white/[0.025] p-6">
-                <h2 className="font-semibold">Quick actions</h2>
-
-                <div className="mt-5 space-y-3">
-                  <button
-                    type="button"
-                    onClick={() => setInviteOpen(true)}
-                    className="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-left text-sm transition hover:bg-white/[0.08]"
-                  >
-                    Invite new member
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab("members")}
-                    className="w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-left text-sm transition hover:bg-white/[0.08]"
-                  >
-                    Manage members
-                  </button>
-
-                  <Link
-                    href="/projects"
-                    className="block w-full rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm transition hover:bg-white/[0.08]"
-                  >
-                    View projects
-                  </Link>
-                </div>
-              </div>
-            </div>
-          </section>
-        )}
-
-        {/* Members */}
-        {activeTab === "members" && (
-          <section className="mt-8 rounded-2xl border border-white/10 bg-white/[0.025]">
-            <div className="flex flex-col gap-4 border-b border-white/10 p-6 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h2 className="text-lg font-semibold">
-                  Team members
-                </h2>
-
-                <p className="mt-1 text-sm text-foreground/40">
-                  Control access and responsibilities.
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setInviteOpen(true)}
-                className="rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-black transition hover:bg-white/90"
-              >
-                Invite member
-              </button>
-            </div>
-
-            <div className="divide-y divide-white/8">
-              {members.map((member) => (
-                <div
-                  key={member.id}
-                  className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between"
-                >
-                  <div className="flex min-w-0 items-center gap-4">
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.06] text-sm font-semibold">
-                      {member.initials}
-                    </div>
-
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="font-medium">{member.name}</p>
-
-                        {member.status === "invited" && (
-                          <span className="rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-[10px] uppercase tracking-wide text-amber-300">
-                            Invited
-                          </span>
-                        )}
-                      </div>
-
-                      <p className="mt-1 truncate text-sm text-foreground/40">
-                        {member.email}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-3">
-                    <span
-                      className={`rounded-full border px-3 py-1 text-xs font-medium ${roleClasses[member.role]}`}
-                    >
-                      {member.role}
-                    </span>
-
-
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* Activity */}
-        {activeTab === "activity" && (
-          <section className="mt-8 rounded-2xl border border-white/10 bg-white/[0.025]">
-            <div className="border-b border-white/10 p-6">
-              <h2 className="text-lg font-semibold">
-                Team activity
-              </h2>
-
-              <p className="mt-1 text-sm text-foreground/40">
-                Recent events and collaboration history.
-              </p>
-            </div>
-
-            <div className="divide-y divide-white/8">
-              {team.activities.map((activity) => (
-                <div
-                  key={activity.id}
-                  className="flex gap-4 p-6"
-                >
-                  <div className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/[0.05]">
-                    {activity.type === "member"
-                      ? "👤"
-                      : activity.type === "project"
-                        ? "◈"
-                        : activity.type === "invite"
-                          ? "✉"
-                          : "✓"}
-                  </div>
-
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                      <p className="font-medium">
-                        {activity.title}
-                      </p>
-
-                      <span className="text-xs text-foreground/30">
-                        {activity.time}
-                      </span>
-                    </div>
-
-                    <p className="mt-2 text-sm leading-6 text-foreground/45">
-                      {activity.description}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
       </div>
 
-      {/* Invite modal */}
-      {inviteOpen && (
+      {/* ---------------------------- RENAME ---------------------------- */}
+
+      {isRenaming ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-card shadow-2xl">
-            <div className="flex items-center justify-between border-b border-white/10 px-6 py-5">
-              <div>
-                <h2 className="text-lg font-semibold">
-                  Invite team member
-                </h2>
-
-                <p className="mt-1 text-sm text-foreground/40">
-                  Add a new collaborator to {team.name}.
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setInviteOpen(false)}
-                className="rounded-lg px-3 py-2 text-foreground/40 transition hover:bg-white/5 hover:text-foreground"
-              >
-                ✕
-              </button>
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="team-edit-title"
+            className="w-full max-w-lg rounded-2xl border border-border bg-card shadow-2xl"
+          >
+            <div className="border-b border-border px-6 py-5">
+              <h2 id="team-edit-title" className="text-lg font-semibold">
+                Edit team
+              </h2>
             </div>
 
             <div className="space-y-5 p-6">
               <div>
-                <label className="mb-2 block text-sm font-medium">
-                  Full name
-                </label>
-
-                <input
-                  value={inviteName}
-                  onChange={(event) =>
-                    setInviteName(event.target.value)
-                  }
-                  placeholder="Enter full name"
-                  className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm outline-none placeholder:text-foreground/25 focus:border-white/25"
-                />
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-medium">
-                  Email address
-                </label>
-
-                <input
-                  type="email"
-                  value={inviteEmail}
-                  onChange={(event) =>
-                    setInviteEmail(event.target.value)
-                  }
-                  placeholder="name@company.com"
-                  className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm outline-none placeholder:text-foreground/25 focus:border-white/25"
-                />
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-medium">
-                  Role
-                </label>
-
-                <select
-                  value={inviteRole}
-                  onChange={(event) =>
-                    setInviteRole(event.target.value as TeamRole)
-                  }
-                  className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm outline-none focus:border-white/25"
+                <label
+                  htmlFor="team-name"
+                  className="mb-2 block text-sm font-medium"
                 >
-                  <option value="Admin">Admin</option>
-                  <option value="Member">Member</option>
-                  <option value="Viewer">Viewer</option>
-                </select>
+                  Name
+                </label>
+
+                <input
+                  id="team-name"
+                  value={draftName}
+                  onChange={(event) => setDraftName(event.target.value)}
+                  className="w-full rounded-xl border border-border bg-background px-4 py-3 text-sm outline-none focus:border-primary"
+                />
               </div>
+
+              <div>
+                <label
+                  htmlFor="team-description"
+                  className="mb-2 block text-sm font-medium"
+                >
+                  Description
+                </label>
+
+                <textarea
+                  id="team-description"
+                  rows={3}
+                  value={draftDescription}
+                  onChange={(event) =>
+                    setDraftDescription(event.target.value)
+                  }
+                  className="w-full rounded-xl border border-border bg-background px-4 py-3 text-sm outline-none focus:border-primary"
+                />
+              </div>
+
+              {saveError ? (
+                <p role="alert" className="text-sm text-destructive">
+                  {saveError}
+                </p>
+              ) : null}
 
               <div className="flex justify-end gap-3 pt-2">
-                <p
-                  id="team-invite-availability"
-                  className="mr-auto text-xs leading-5 text-foreground/40"
-                >
-                  Team invitations are not available yet. Membership is
-                  managed for the organisation.
-                </p>
-
                 <button
                   type="button"
-                  onClick={() => setInviteOpen(false)}
-                  className="rounded-xl px-4 py-2.5 text-sm text-foreground/50 transition hover:bg-white/5 hover:text-foreground"
+                  onClick={() => setIsRenaming(false)}
+                  className="rounded-xl px-4 py-2.5 text-sm text-foreground/60 transition-colors hover:bg-muted"
                 >
                   Cancel
                 </button>
 
                 <button
                   type="button"
-                  disabled
-                  aria-describedby="team-invite-availability"
-                  className="cursor-not-allowed rounded-xl bg-white px-5 py-2.5 text-sm font-semibold text-black opacity-60"
+                  onClick={() => void saveRename()}
+                  disabled={isSaving}
+                  className="rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-60"
                 >
-                  Send invitation
+                  {isSaving ? "Saving..." : "Save changes"}
                 </button>
               </div>
             </div>
           </div>
         </div>
-      )}
+      ) : null}
+
+      {/* ---------------------------- DELETE ---------------------------- */}
+
+      {confirmDelete ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="team-delete-title"
+            className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-2xl"
+          >
+            <h2 id="team-delete-title" className="text-lg font-semibold">
+              Delete this team?
+            </h2>
+
+            <p className="mt-3 text-sm leading-6 text-foreground/50">
+              {team.name} will be removed. This cannot be undone.
+            </p>
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setConfirmDelete(false)}
+                className="rounded-xl px-4 py-2.5 text-sm text-foreground/60 transition-colors hover:bg-muted"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={() => void deleteTeam()}
+                disabled={isDeleting}
+                className="rounded-xl bg-destructive px-5 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+              >
+                {isDeleting ? "Deleting..." : "Delete team"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
