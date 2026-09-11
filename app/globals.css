@@ -40,6 +40,43 @@
   --radius-lg: 0.875rem;
   --radius-xl: 1rem;
   --radius-2xl: 1.5rem;
+
+  /* =======================================================
+     MOTION
+
+     Four durations and three easings, because a motion system
+     that offers twenty of each is a set of unrelated decisions
+     wearing a system's clothes.
+
+       instant  a state flip the eye should not perceive as
+                travel: colour, opacity on hover.
+       quick    a control acknowledging a press or a focus.
+       settle   something arriving or leaving: a panel, a
+                dialog, a row entering after its data loaded.
+       consider the largest move the product makes. Rare.
+
+     The easings carry the intent rather than the curve:
+     `enter` decelerates so arriving feels caught rather than
+     thrown; `exit` accelerates so leaving does not linger;
+     `move` is symmetric for something travelling between two
+     places it already occupied.
+
+     These are the vocabulary. The 400-odd Tailwind
+     `transition-*` usages across the product are not wrong and
+     are not being rewritten -- they resolve to comparable
+     values. What did not exist was a named scale to reach for
+     when something genuinely needs to move, and six keyframes
+     sat here with one consumer between them because of it.
+     ======================================================= */
+
+  --duration-instant: 90ms;
+  --duration-quick: 150ms;
+  --duration-settle: 240ms;
+  --duration-consider: 420ms;
+
+  --ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-exit: cubic-bezier(0.4, 0, 1, 1);
+  --ease-move: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* =========================================================
@@ -421,6 +458,95 @@ select:-webkit-autofill:focus {
   );
   background-size: 200% 100%;
   animation: syraven-shimmer 2s linear infinite;
+}
+
+/* =========================================================
+   MOTION UTILITIES
+
+   Built on the duration and easing tokens rather than on
+   literals, so a change to the scale reaches everything at
+   once.
+
+   WHEN TO USE THESE
+
+   `enter` is for something that genuinely arrived: a dialog
+   opening, a panel expanding, rows appearing once their data
+   finished loading. It is NOT for a list that re-renders while
+   somebody types in a filter box -- replaying an entrance on
+   every keystroke reads as activity, and nothing happened.
+
+   There is deliberately no "thinking" or "working" animation
+   here. Those exist in AiActivity, driven by a real open
+   request, and a decorative one would be fabricated progress.
+
+   REDUCED MOTION
+
+   The block further down zeroes animation and transition
+   durations for everyone who asks, with !important, across
+   every element and pseudo-element. These utilities are
+   ordinary animations, so that rule reaches them: the end state
+   is what remains, which is the correct outcome -- the content
+   is present, it simply does not travel.
+   ========================================================= */
+
+.motion-enter {
+  animation: syraven-fade-in var(--duration-settle) var(--ease-enter)
+    both;
+}
+
+.motion-rise {
+  animation: syraven-slide-up var(--duration-settle) var(--ease-enter)
+    both;
+}
+
+.motion-pop {
+  animation: syraven-scale-in var(--duration-quick) var(--ease-enter)
+    both;
+}
+
+/*
+  A dialog arriving.
+
+  Scale and fade together, from slightly under full size, so the
+  panel reads as coming toward the reader rather than being
+  swapped in. The backdrop fades on its own timing below.
+*/
+@keyframes syraven-dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.motion-dialog {
+  animation: syraven-dialog-in var(--duration-settle)
+    var(--ease-enter) both;
+}
+
+.motion-backdrop {
+  animation: syraven-fade-in var(--duration-quick) var(--ease-enter)
+    both;
+}
+
+/*
+  Press feedback.
+
+  A control that moves under the finger confirms the press
+  landed before any network answer arrives. Kept to a scale
+  nobody consciously notices; anything larger reads as the
+  button breaking.
+*/
+.motion-press {
+  transition: transform var(--duration-instant) var(--ease-move);
+}
+
+.motion-press:active {
+  transform: scale(0.97);
 }
 
 /* =========================================================

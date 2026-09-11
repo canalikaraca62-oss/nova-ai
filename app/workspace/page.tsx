@@ -1,7 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+
+import { useDialogBehaviour } from "@/app/components/ui/useDialogBehaviour";
 
 type WorkspaceStatus = "active" | "archived";
 
@@ -148,7 +156,15 @@ export default function WorkspacePage() {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [showArchived, setShowArchived] = useState(false);
+  const createPanelRef = useRef<HTMLDivElement | null>(null);
+
   const [showCreateModal, setShowCreateModal] = useState(false);
+
+  useDialogBehaviour({
+    open: showCreateModal,
+    onClose: () => setShowCreateModal(false),
+    panelRef: createPanelRef,
+  });
   /*
    * Fixed for now: nothing on this page edits them, and a setter that
    * is never called reads as an editor that was lost rather than one
@@ -564,11 +580,20 @@ export default function WorkspacePage() {
 
       {/* Create project modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-3xl border border-white/10 bg-card p-6 shadow-2xl">
+        <div className="motion-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm">
+          <div
+            ref={createPanelRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="workspace-create-title"
+            className="motion-dialog w-full max-w-lg rounded-3xl border border-white/10 bg-card p-6 shadow-2xl"
+          >
             <div className="flex items-start justify-between gap-6">
               <div>
-                <h2 className="text-xl font-semibold">
+                <h2
+                  id="workspace-create-title"
+                  className="text-xl font-semibold"
+                >
                   Create new project
                 </h2>
 

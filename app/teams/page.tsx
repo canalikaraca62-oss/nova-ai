@@ -6,9 +6,12 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type FormEvent,
 } from "react";
+
+import { useDialogBehaviour } from "@/app/components/ui/useDialogBehaviour";
 
 
 type Team = {
@@ -161,7 +164,15 @@ export default function TeamsPage() {
     };
   }, [loadTeams]);
   const [searchQuery, setSearchQuery] = useState("");
+  const createPanelRef = useRef<HTMLDivElement | null>(null);
+
   const [showCreateModal, setShowCreateModal] = useState(false);
+
+  useDialogBehaviour({
+    open: showCreateModal,
+    onClose: () => setShowCreateModal(false),
+    panelRef: createPanelRef,
+  });
 
   const [newTeamName, setNewTeamName] = useState("");
   const [newTeamDescription, setNewTeamDescription] = useState("");
@@ -532,11 +543,19 @@ export default function TeamsPage() {
 
       {/* Create Team Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-card shadow-2xl">
+        <div className="motion-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+          <div
+            ref={createPanelRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="team-create-title"
+            className="motion-dialog w-full max-w-lg rounded-2xl border border-white/10 bg-card shadow-2xl"
+          >
             <div className="flex items-center justify-between border-b border-white/10 px-6 py-5">
               <div>
-                <h2 className="text-lg font-semibold">Create a new team</h2>
+                <h2 id="team-create-title" className="text-lg font-semibold">
+                  Create a new team
+                </h2>
                 <p className="mt-1 text-sm text-foreground/40">
                   Build a dedicated workspace for your collaborators.
                 </p>

@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+
+import { useDialogBehaviour } from "@/app/components/ui/useDialogBehaviour";
 
 type ActivityCategory =
   | "all"
@@ -857,26 +859,32 @@ function ActivityDetailModal({
   const category = categoryConfig[activity.category];
   const status = statusConfig[activity.status];
 
-  useEffect(() => {
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        onClose();
-      }
-    };
+  const panelRef = useRef<HTMLDivElement | null>(null);
 
-    window.addEventListener("keydown", handleEscape);
-
-    return () =>
-      window.removeEventListener("keydown", handleEscape);
-  }, [onClose]);
+  /*
+    This modal had Escape and nothing else: no role, so a screen
+    reader announced nothing had opened; no accessible name; and no
+    focus trap, so Tab walked out of the panel into the page it was
+    covering. The hook replaces the hand-rolled Escape listener and
+    adds the rest.
+  */
+  useDialogBehaviour({
+    open: true,
+    onClose,
+    panelRef,
+  });
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-0 backdrop-blur-md sm:items-center sm:p-6"
+      className="motion-backdrop fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-0 backdrop-blur-md sm:items-center sm:p-6"
       onMouseDown={onClose}
     >
       <div
-        className="w-full max-w-2xl rounded-t-[32px] border border-white/[0.1] bg-card p-6 shadow-2xl sm:rounded-[32px] sm:p-8"
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="activity-detail-title"
+        className="motion-dialog w-full max-w-2xl rounded-t-[32px] border border-white/[0.1] bg-card p-6 shadow-2xl sm:rounded-[32px] sm:p-8"
         onMouseDown={(event) => event.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-6">
@@ -913,7 +921,10 @@ function ActivityDetailModal({
             </span>
           </div>
 
-          <h2 className="mt-5 text-2xl font-semibold tracking-tight text-foreground">
+          <h2
+            id="activity-detail-title"
+            className="mt-5 text-2xl font-semibold tracking-tight text-foreground"
+          >
             {activity.title}
           </h2>
 

@@ -1,7 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+
+import { useDialogBehaviour } from "@/app/components/ui/useDialogBehaviour";
 import {
   ArrowRight,
   Calendar,
@@ -253,6 +261,8 @@ export default function TasksPage() {
   const [selectedPriority, setSelectedPriority] =
     useState<"all" | TaskPriority>("all");
 
+  const createPanelRef = useRef<HTMLDivElement | null>(null);
+
   const [isCreateModalOpen, setIsCreateModalOpen] =
     useState(false);
 
@@ -389,6 +399,12 @@ export default function TasksPage() {
     resetCreateForm();
     setIsCreateModalOpen(false);
   };
+
+  useDialogBehaviour({
+    open: isCreateModalOpen,
+    onClose: closeCreateModal,
+    panelRef: createPanelRef,
+  });
 
   const [isCreating, setIsCreating] = useState(false);
 
@@ -844,11 +860,17 @@ export default function TasksPage() {
         {/* CREATE TASK MODAL */}
 
         {isCreateModalOpen ? (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
-            <div className="w-full max-w-lg rounded-2xl border border-border bg-card p-6 shadow-2xl">
+          <div className="motion-backdrop fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
+            <div
+              ref={createPanelRef}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="task-create-title"
+              className="motion-dialog w-full max-w-lg rounded-2xl border border-border bg-card p-6 shadow-2xl"
+            >
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <h2 className="text-xl font-bold">
+                  <h2 id="task-create-title" className="text-xl font-bold">
                     Create New Task
                   </h2>
 

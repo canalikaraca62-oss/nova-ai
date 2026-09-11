@@ -4,9 +4,12 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type FormEvent,
 } from "react";
+
+import { useDialogBehaviour } from "@/app/components/ui/useDialogBehaviour";
 
 import {
   Brain,
@@ -220,8 +223,16 @@ export default function MemoryPage() {
   const [selectedCategory, setSelectedCategory] =
     useState<MemoryCategory>("All");
 
+  const createPanelRef = useRef<HTMLDivElement | null>(null);
+
   const [showCreateModal, setShowCreateModal] =
     useState(false);
+
+  useDialogBehaviour({
+    open: showCreateModal,
+    onClose: () => setShowCreateModal(false),
+    panelRef: createPanelRef,
+  });
 
   const [isCreating, setIsCreating] =
     useState(false);
@@ -797,11 +808,20 @@ export default function MemoryPage() {
       </div>
 
       {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 px-4 py-6 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-3xl border border-border bg-card shadow-2xl">
+        <div className="motion-backdrop fixed inset-0 z-50 flex items-center justify-center bg-background/80 px-4 py-6 backdrop-blur-sm">
+          <div
+            ref={createPanelRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="memory-create-title"
+            className="motion-dialog w-full max-w-lg rounded-3xl border border-border bg-card shadow-2xl"
+          >
             <div className="flex items-center justify-between border-b border-border px-6 py-5">
               <div>
-                <h2 className="text-lg font-semibold text-foreground">
+                <h2
+                  id="memory-create-title"
+                  className="text-lg font-semibold text-foreground"
+                >
                   Add memory
                 </h2>
 
