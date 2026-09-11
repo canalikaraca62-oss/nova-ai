@@ -106,7 +106,7 @@ const TURKISH_DIACRITIC = /[şğıçöüŞĞİÇÖÜ]/;
  * "conveyance".
  */
 const TURKISH_ASCII =
-  /\b(?:bulundu|ara|arama|ifadenizi|kategori|ekle|eklendi|belirle|uyumlu|ekip|sistemi|gelecekte|istiyorsun|yapmak|ile|veya|icin|aktivitelerde|yukleniyor|kaydet|duzenle|secim|secin|gorunum|baslat|durdur|iptal)\b/i;
+  /\b(?:bulundu|ara|arama|ifadenizi|kategori|ekle|eklendi|belirle|uyumlu|ekip|sistemi|gelecekte|istiyorsun|yapmak|ile|veya|icin|aktivitelerde|yukleniyor|kaydet|duzenle|secim|secin|gorunum|baslat|durdur|iptal|kapat|aktivite|ayarlar|gonder|yukle|guncelle|olustur|goruntule|yonet|listele|detay|bilgi|hesap|uye|oturum|cikis|giris)\b/i;
 
 /**
  * Either spelling of Turkish, diacritic or ASCII.

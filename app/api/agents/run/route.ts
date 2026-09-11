@@ -23,8 +23,15 @@
  *
  * A body field named `approved`, `risk`, `userId`, or `plan` has no
  * effect anywhere in this path. Approvals are read from server-side
- * storage; there is currently no storage backing them, so high-risk
- * steps always stop for approval. See the note at `loadApprovals`.
+ * storage — `public.agent_approvals`, through
+ * lib/orchestration/approvalStore.ts, on the caller's own RLS client.
+ *
+ * An earlier version of this note said there was no storage behind
+ * them and that high-risk steps therefore always stopped. That was
+ * wrong: it named `public.agent_runs`, which is a different table with
+ * a select-only policy. The approvals table was migrated for exactly
+ * this purpose the whole time, so the control was failing closed for a
+ * reason that did not hold, with no way for anyone to grant a step.
  */
 
 import { NextResponse } from "next/server";
@@ -35,8 +42,14 @@ import {
   requireOptionalProjectAccess,
   requireOptionalWorkspaceAccess,
 } from "@/lib/api/tenantGuard";
-import type { ApprovalRecord } from "@/lib/orchestration/execution";
+import { deriveExecutionKey } from "@/lib/orchestration/execution";
 import { runOrchestration } from "@/lib/orchestration/orchestrator";
+import {
+  consumeApproval,
+  loadApprovals,
+  requestApprovals,
+} from "@/lib/orchestration/approvalStore";
+import { getTool, type RiskLevel } from "@/lib/orchestration/registry";
 
 /* -------------------------------------------------------------------------- */
 /*                                  HELPERS                                   */
@@ -74,21 +87,17 @@ function readOptionalId(value: unknown): string | null {
 }
 
 /**
- * Loads server-held approval records for this execution.
+ * Describes what a step will do, for the person being asked to allow it.
  *
- * There is no persistence for approvals yet: `public.agent_runs` has a
- * NOT NULL foreign key to `public.agents` and a select-only RLS policy,
- * so it cannot hold orchestration state without a migration, and this
- * phase was instructed not to create one.
- *
- * The consequence is stated rather than worked around: with no store,
- * every high-risk step stops at `awaiting_approval`. That is the correct
- * failing direction. The alternative — accepting an approval flag from
- * the request body — would defeat the entire control, so this returns an
- * empty map until a real store exists.
+ * Taken from the tool registry, which is the server's own description —
+ * never from the model's plan or the request. A caller cannot influence
+ * the sentence shown above the Approve button.
  */
-async function loadApprovals(): Promise<ReadonlyMap<string, ApprovalRecord>> {
-  return new Map();
+function effectForTool(toolId: string): string {
+  return (
+    getTool(toolId)?.description ??
+    `Run ${toolId}. This step changes something outside SYRAVEN.`
+  );
 }
 
 /* -------------------------------------------------------------------------- */
@@ -174,6 +183,21 @@ export const POST = withAuth(async (request, session) => {
   /* 3. Orchestrate                                                      */
   /* ------------------------------------------------------------------ */
 
+  /*
+    Derived here with the same inputs the orchestrator uses, so the key
+    that loads approvals is the key the plan is checked against. It
+    hashes the RAW agentId rather than a resolved one — matching the
+    orchestrator exactly — so no validation is duplicated in a second
+    place where it could drift.
+  */
+  const executionKey = deriveExecutionKey({
+    userId: session.userId,
+    agentId: typeof body.agentId === "string" ? body.agentId : "",
+    goal,
+    workspaceId: requestedWorkspaceId,
+    projectId: requestedProjectId,
+  });
+
   try {
     const result = await runOrchestration({
       session,
@@ -188,7 +212,13 @@ export const POST = withAuth(async (request, session) => {
       goal,
       workspaceId: requestedWorkspaceId,
       projectId: requestedProjectId,
-      approvals: await loadApprovals(),
+      /*
+        Loaded from `public.agent_approvals` on the caller's own RLS
+        client, keyed by the SAME execution key the orchestrator
+        derives. Never from the request body: a field named `approved`
+        has no effect anywhere on this path.
+      */
+      approvals: await loadApprovals(session, executionKey),
     });
 
     if (result.error === "UNKNOWN_AGENT") {
@@ -218,6 +248,34 @@ export const POST = withAuth(async (request, session) => {
     }
 
     if (result.state === "awaiting_approval") {
+      /*
+        Record what is waiting, so the user has something to decide.
+
+        Until this existed the run stopped correctly and then vanished:
+        no row, no endpoint, no UI, and every high-risk plan was a dead
+        end. The rows are written as 'pending' with no decider, which
+        is the only shape the insert policy accepts.
+      */
+      const riskByTool = new Map<string, RiskLevel>();
+      const effectByTool = new Map<string, string>();
+
+      for (const step of result.steps) {
+        if (step.status !== "awaiting_approval") continue;
+
+        riskByTool.set(step.tool, step.risk as RiskLevel);
+        effectByTool.set(step.tool, effectForTool(step.tool));
+      }
+
+      await requestApprovals(session, {
+        executionKey: result.executionKey,
+        agentId: result.agentId ?? "",
+        toolIds: result.pendingApprovals,
+        riskByTool,
+        effectByTool,
+        workspaceId: requestedWorkspaceId,
+        projectId: requestedProjectId,
+      });
+
       return json({
         success: false,
         status: "awaiting_approval",
@@ -228,6 +286,21 @@ export const POST = withAuth(async (request, session) => {
           steps: result.steps,
           pendingApprovals: result.pendingApprovals,
         },
+      });
+    }
+
+    /*
+      Spend the grants that were actually used.
+
+      An approval left at 'approved' after its step has run is still
+      live — verifyApproval accepts any approved, unexpired record, and
+      the same goal derives the same execution key. A refresh would find
+      the grant waiting and run the step again without asking.
+    */
+    for (const toolId of result.consumedApprovals) {
+      await consumeApproval(session, {
+        executionKey: result.executionKey,
+        toolId,
       });
     }
 

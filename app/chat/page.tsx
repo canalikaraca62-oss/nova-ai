@@ -709,7 +709,7 @@ export default function ChatPage() {
                   }
                   className="text-xs text-red-200/60 transition hover:text-red-100"
                 >
-                  Kapat
+                  Close
                 </button>
               </div>
             )}

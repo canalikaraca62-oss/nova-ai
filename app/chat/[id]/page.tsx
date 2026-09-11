@@ -896,7 +896,7 @@ export default function ChatConversationPage() {
                     }
                     className="text-xs text-red-200/60 transition hover:text-red-100"
                   >
-                    Kapat
+                    Close
                   </button>
                 </div>
               </div>

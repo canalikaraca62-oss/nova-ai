@@ -301,6 +301,30 @@ export default function AgentDetailPage() {
     "approval" | "failed" | "done" | null
   >(null);
 
+  /*
+    WHAT IS WAITING ON A PERSON.
+
+    A high-risk step stops at awaiting_approval and the server records a
+    pending row. Until this existed the run stopped correctly and then
+    vanished: there was no endpoint and no surface, so every high-risk
+    plan was a dead end that no amount of retrying could clear.
+
+    Loaded from the server, never assumed: the list is what
+    /api/agents/approvals returns for this caller, and an empty list
+    means nothing is outstanding.
+  */
+  const [pendingApprovals, setPendingApprovals] = useState<
+    Array<{
+      id: string;
+      toolId: string;
+      risk: string;
+      effect: string;
+      expiresAt: string;
+    }>
+  >([]);
+
+  const [decidingId, setDecidingId] = useState<string | null>(null);
+
   const status = isRunning ? STATUS_CONFIG.running : STATUS_CONFIG[agent.status];
 
   const handleRun = useCallback(async () => {
@@ -363,6 +387,44 @@ export default function AgentDetailPage() {
 
       if (payload?.status === "awaiting_approval") {
         setRunState("approval");
+
+        /*
+          Fetch what is actually waiting rather than deriving it from
+          the run response. The run tells us WHICH TOOLS stopped; the
+          approvals endpoint returns the rows the server wrote, with
+          the id needed to decide one and the effect sentence the
+          registry supplies. Only the latter can be acted on.
+        */
+        try {
+          const waitingResponse = await fetch("/api/agents/approvals", {
+            cache: "no-store",
+          });
+
+          if (waitingResponse.ok) {
+            const waitingPayload = (await waitingResponse
+              .json()
+              .catch(() => null)) as {
+              data?: {
+                approvals?: Array<{
+                  id: string;
+                  toolId: string;
+                  risk: string;
+                  effect: string;
+                  expiresAt: string;
+                }>;
+              };
+            } | null;
+
+            setPendingApprovals(waitingPayload?.data?.approvals ?? []);
+          }
+        } catch {
+          /*
+            The run already reported that approval is needed, which is
+            the load-bearing part. Failing to list the rows leaves the
+            user without buttons, not with a false grant.
+          */
+          setPendingApprovals([]);
+        }
         /*
           Not a failure. The plan is sound and one of its steps needs a
           person to agree to it — which is the safeguard working, and
@@ -408,6 +470,55 @@ export default function AgentDetailPage() {
     }
   }, [agentId, task]);
 
+  /**
+   * Records a decision, then re-runs when the answer was yes.
+   *
+   * Re-running is not a second, separate request as far as the server
+   * is concerned: the same goal and agent derive the same execution
+   * key, so the grant just written is the one the orchestrator finds.
+   * That is why approving here is enough to make the step proceed.
+   *
+   * Declared after handleRun so it can depend on it rather than
+   * duplicating the run path.
+   */
+  const decideApprovalRequest = useCallback(
+    async (approvalId: string, decision: "approved" | "rejected") => {
+      setDecidingId(approvalId);
+
+      try {
+        const response = await fetch("/api/agents/approvals", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ approvalId, decision }),
+        });
+
+        if (!response.ok) {
+          setRunMessage(
+            "That decision could not be recorded. It may have expired.",
+          );
+          return;
+        }
+
+        setPendingApprovals((current) =>
+          current.filter((approval) => approval.id !== approvalId),
+        );
+
+        if (decision === "rejected") {
+          setRunState("failed");
+          setRunMessage("You declined this step. Nothing was run.");
+          return;
+        }
+
+        await handleRun();
+      } catch {
+        setRunMessage("That decision could not be recorded.");
+      } finally {
+        setDecidingId(null);
+      }
+    },
+    [handleRun],
+  );
+
   /*
     PERMISSIONS ARE NOT EDITABLE HERE.
 
@@ -428,10 +539,10 @@ export default function AgentDetailPage() {
 
   const tabs: { id: AgentTab; label: string }[] = [
     { id: "overview", label: "Overview" },
-    { id: "activity", label: "Aktivite" },
+    { id: "activity", label: "Activity" },
     { id: "knowledge", label: "Knowledge" },
     { id: "permissions", label: "Permissions" },
-    { id: "settings", label: "Ayarlar" },
+    { id: "settings", label: "Settings" },
   ];
 
   return (
@@ -610,6 +721,71 @@ export default function AgentDetailPage() {
                     <div className="whitespace-pre-line rounded-2xl border border-white/[0.08] bg-white/[0.025] px-4 py-3 text-sm text-zinc-300">
                       {runMessage}
                     </div>
+                  )}
+
+                  {/*
+                    The decision itself.
+
+                    Each row is a server-held approval: the effect
+                    sentence comes from the tool registry, not from the
+                    model's plan, so a goal cannot influence what the
+                    user is asked to allow.
+                  */}
+                  {pendingApprovals.length > 0 && (
+                    <ul className="flex flex-col gap-3">
+                      {pendingApprovals.map((approval) => (
+                        <li
+                          key={approval.id}
+                          className="rounded-2xl border border-amber-400/20 bg-amber-400/[0.06] px-4 py-4"
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="rounded-full border border-amber-400/30 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-200">
+                              {approval.risk} risk
+                            </span>
+
+                            <span className="font-mono text-xs text-zinc-400">
+                              {approval.toolId}
+                            </span>
+                          </div>
+
+                          <p className="mt-3 text-sm leading-6 text-zinc-200">
+                            {approval.effect}
+                          </p>
+
+                          <div className="mt-4 flex flex-wrap gap-3">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                void decideApprovalRequest(
+                                  approval.id,
+                                  "approved",
+                                )
+                              }
+                              disabled={decidingId === approval.id}
+                              className="inline-flex h-10 items-center justify-center rounded-xl bg-white px-4 text-sm font-semibold text-black transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              {decidingId === approval.id
+                                ? "Working..."
+                                : "Approve and run"}
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                void decideApprovalRequest(
+                                  approval.id,
+                                  "rejected",
+                                )
+                              }
+                              disabled={decidingId === approval.id}
+                              className="inline-flex h-10 items-center justify-center rounded-xl border border-white/[0.12] px-4 text-sm font-medium text-zinc-300 transition hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              Decline
+                            </button>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
                   )}
                 </div>
               )}

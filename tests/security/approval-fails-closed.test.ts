@@ -61,6 +61,10 @@ const RUN_ROUTE = executable(
   read("app", "api", "agents", "run", "route.ts"),
 );
 
+const STORE = executable(
+  read("lib", "orchestration", "approvalStore.ts"),
+);
+
 const EXECUTION = executable(
   read("lib", "orchestration", "execution.ts"),
 );
@@ -103,18 +107,24 @@ void describe("An approval is never taken from the caller", () => {
 
   void test("loadApprovals takes no argument from the request", () => {
     /*
-     * Signature, not body: a store-backed implementation will take a
+     * Signature, not body: the store-backed implementation takes a
      * session and an execution key. What it must never take is the
      * parsed request, because that is how a caller-supplied record
      * would arrive.
+     *
+     * This originally read the run route, where loadApprovals was a
+     * stub returning an empty map. It now lives in approvalStore.ts and
+     * the route imports it, so the anchor moved with the function. The
+     * rule did not move: whatever its parameters are, none of them may
+     * be the request.
      */
-    const signature = /async function loadApprovals\(([^)]*)\)/.exec(
-      RUN_ROUTE,
-    );
+    const signature =
+      /export async function loadApprovals\(([\s\S]*?)\)\s*:/.exec(STORE);
 
     assert.ok(
       signature,
-      "loadApprovals must exist — it is the approval boundary.",
+      "loadApprovals must exist in the store — it is the approval " +
+        "boundary.",
     );
 
     const parameters = signature?.[1] ?? "";
@@ -123,6 +133,23 @@ void describe("An approval is never taken from the caller", () => {
       !/\brequest\b|\bbody\b|\bpayload\b/i.test(parameters),
       `loadApprovals accepts "${parameters.trim()}". An approval that ` +
         `arrives with the request is not an approval.`,
+    );
+
+    /*
+     * And the route must pass the key it derived server-side, not one
+     * the caller supplied. A body-provided execution key would let a
+     * caller point the lookup at an approval they had obtained for a
+     * different, gentler goal.
+     */
+    assert.match(
+      RUN_ROUTE,
+      /loadApprovals\(session,\s*executionKey\)/,
+      "The route must load approvals for the key it derived itself.",
+    );
+
+    assert.ok(
+      !/body(?:\s*\??\.|\[["'])\s*executionKey\b/i.test(RUN_ROUTE),
+      "The execution key must never be taken from the request body.",
     );
   });
 });

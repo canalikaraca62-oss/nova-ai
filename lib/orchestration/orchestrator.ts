@@ -21,11 +21,20 @@
  *
  * WHAT THIS DOES NOT DO
  *
- * It does not persist execution state. `public.agent_runs` requires a
- * row in `public.agents` (NOT NULL FK) and carries a select-only RLS
- * policy, so it cannot hold orchestration state without a migration.
+ * It does not persist RUN state. `public.agent_runs` requires a row in
+ * `public.agents` (NOT NULL FK) and carries a select-only RLS policy,
+ * so it cannot hold orchestration state without a migration.
  * Executions are therefore request-scoped and reported in the response;
  * the state machine still governs transitions within one request.
+ *
+ * APPROVALS ARE A DIFFERENT TABLE, AND THEY DO PERSIST.
+ *
+ * An earlier version of this note was read as covering approvals too,
+ * and `loadApprovals()` in the run route carried the same claim. It was
+ * wrong: `public.agent_approvals` was migrated for exactly this, is
+ * present in the generated types, and its policies permit an owner to
+ * insert a pending row and decide it. Approvals are loaded and written
+ * by the route through lib/orchestration/approvalStore.ts.
  *
  * Replay safety does not depend on that persistence — see
  * `deriveExecutionKey` and the note on idempotency below.
@@ -102,6 +111,19 @@ export interface OrchestrationResult {
   readonly error: string | null;
   /** Tools that stopped for approval, so a route can request it. */
   readonly pendingApprovals: readonly string[];
+  /**
+   * High-risk tools whose approval was VERIFIED and then actually run.
+   *
+   * An approval that stays 'approved' after the step it authorized has
+   * executed is still live: `verifyApproval()` accepts any approved,
+   * unexpired record, and the same goal produces the same execution
+   * key. A refresh or a retry would find the grant waiting and run the
+   * step a second time.
+   *
+   * Returned rather than written here so this module stays pure over
+   * its inputs -- the route owns every database write on this path.
+   */
+  readonly consumedApprovals: readonly string[];
 }
 
 /* -------------------------------------------------------------------------- */
@@ -211,6 +233,7 @@ export async function runOrchestration(
       steps: [],
       error: "UNKNOWN_AGENT",
       pendingApprovals: [],
+      consumedApprovals: [],
     };
   }
 
@@ -250,6 +273,7 @@ export async function runOrchestration(
       steps: [],
       error: "AI_UNAVAILABLE",
       pendingApprovals: [],
+      consumedApprovals: [],
     };
   }
 
@@ -286,6 +310,7 @@ export async function runOrchestration(
       /* Normalised by the provider adapter — no provider internals. */
       error: completion.error.kind,
       pendingApprovals: [],
+      consumedApprovals: [],
     };
   }
 
@@ -325,6 +350,7 @@ export async function runOrchestration(
       steps: [],
       error: `PLAN_REJECTED:${validation.reason}`,
       pendingApprovals: [],
+      consumedApprovals: [],
     };
   }
 
@@ -342,6 +368,17 @@ export async function runOrchestration(
 
   const results: StepResult[] = [];
   const pendingApprovals: string[] = [];
+
+  /*
+    Grants that were verified AND then actually spent.
+
+    Recorded after executeTool returns, never at the moment the check
+    passes: a step that is stopped by the budget, or that throws before
+    running, has not consumed anything, and burning the grant there
+    would make the user re-issue an approval for work that never
+    happened.
+  */
+  const consumedApprovals: string[] = [];
 
   const approvals = request.approvals ?? new Map();
 
@@ -403,6 +440,16 @@ export async function runOrchestration(
 
     const outcome = await executeTool(step.tool, step.args, toolContext);
 
+    /*
+      The step ran, so if it stood behind an approval that approval is
+      now spent. Recorded whether the tool succeeded or failed: the
+      grant authorized the ATTEMPT, and a failed attempt at a
+      destructive action is not a licence to try it again unasked.
+    */
+    if (requiresHumanApproval(step.risk)) {
+      consumedApprovals.push(step.tool.id);
+    }
+
     results.push({
       index: step.index,
       tool: step.tool.id,
@@ -436,6 +483,11 @@ export async function runOrchestration(
       steps: results,
       error: null,
       pendingApprovals,
+      /*
+        Empty by construction: a run that stopped for approval executed
+        no step, so it spent no grant.
+      */
+      consumedApprovals: [],
     };
   }
 
@@ -460,5 +512,6 @@ export async function runOrchestration(
     steps: results,
     error: anyFailed ? "STEP_FAILED" : null,
     pendingApprovals,
+    consumedApprovals,
   };
 }
