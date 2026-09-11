@@ -498,13 +498,11 @@ export default function FeatureComparison({
           </div>
 
           <h2 className="text-2xl font-bold tracking-tight text-zinc-950 dark:text-foreground sm:text-3xl">
-            Tüm özellikleri karşılaştır
+            Compare every feature
           </h2>
 
           <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-600 dark:text-zinc-400">
-            SYRAVEN planlarını özellik, kullanım kapasitesi, agent gücü,
-            knowledge altyapısı ve kurumsal yetenekler açısından detaylı
-            şekilde karşılaştır.
+            Compare SYRAVEN plans in detail: features, usage capacity, agent capability, knowledge infrastructure and enterprise controls.
           </p>
         </div>
 
@@ -519,7 +517,7 @@ export default function FeatureComparison({
           />
 
           <span className="font-medium text-zinc-700 dark:text-zinc-300">
-            Sadece farklılıkları göster
+            Show differences only
           </span>
         </label>
       </div>
@@ -665,12 +663,11 @@ export default function FeatureComparison({
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h3 className="font-semibold text-zinc-950 dark:text-foreground">
-              Daha büyük bir çözüm mü gerekiyor?
+              Need something larger?
             </h3>
 
             <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-              Enterprise plan ile özel limitler, gelişmiş güvenlik, SLA,
-              özel entegrasyonlar ve kurumsal destek elde edin.
+              Enterprise adds custom limits, advanced security, an SLA, bespoke integrations and dedicated support.
             </p>
           </div>
 
@@ -679,7 +676,7 @@ export default function FeatureComparison({
             onClick={() => handleSelectPlan("enterprise")}
             className="inline-flex shrink-0 items-center justify-center rounded-xl bg-zinc-950 px-5 py-3 text-sm font-semibold text-white transition hover:scale-[1.02] hover:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-zinc-400 focus:ring-offset-2 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200 dark:focus:ring-zinc-600 dark:focus:ring-offset-zinc-950"
           >
-            Enterprise ile konuş
+            Talk to us about Enterprise
           </button>
         </div>
       </div>

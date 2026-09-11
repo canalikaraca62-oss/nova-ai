@@ -319,8 +319,8 @@ export const POST = withAuth(async (
       process.env.OPENAI_API_KEY;
 
     /*
-      API key yoksa uygulama hata vermez.
-      Canvas temel fallback ile çalışır.
+      A missing API key is not an error here.
+      Canvas falls back to a basic document.
     */
 
     if (!apiKey) {

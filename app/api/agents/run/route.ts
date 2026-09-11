@@ -139,7 +139,7 @@ export const POST = withAuth(async (request, session) => {
       {
         success: false,
         status: "rejected",
-        message: `Hedef metni 1-${MAX_GOAL_CHARS} karakter arasında olmalıdır.`,
+        message: `The goal must be between 1 and ${MAX_GOAL_CHARS} characters.`,
       },
       400,
     );

@@ -84,8 +84,15 @@ const SOURCES = [
  */
 const TURKISH_ONLY = /[şğıçöüŞĞİÇÖÜ]/;
 
-/** A quoted string literal, single or double. */
-const QUOTED = /"[^"\n]*"|'[^'\n]*'/g;
+/**
+ * A string literal: single, double, or template.
+ *
+ * Backticks were missing, and that was not academic.
+ * app/components/activity/ActivityFeed.tsx builds its relative
+ * timestamps as `${minutes} dk önce` — text rendered on every activity
+ * row, invisible to a pattern that only knew about " and '.
+ */
+const QUOTED = /"[^"\n]*"|'[^'\n]*'|`[^`\n]{0,400}`/g;
 
 /**
  * JSX text content — the words rendered between tags.
@@ -98,7 +105,24 @@ const QUOTED = /"[^"\n]*"|'[^'\n]*'/g;
  * Matches a run between `>` and `<` containing at least one letter, so
  * punctuation and whitespace between tags are ignored.
  */
-const JSX_TEXT = />([^<>{}\n]*\p{L}[^<>{}\n]*)</gu;
+const JSX_TEXT = />([^<>{}]*\p{L}[^<>{}]*)</gu;
+
+/*
+ * SCOPE: what a user reads, not what an engineer reads.
+ *
+ * Code comments are deliberately NOT policed. Eight files under app/api
+ * carry Turkish engineering notes — "Kullanıcının kendi agentları",
+ * "Güvenlik:", explanations of a TypeScript narrowing — and none of it
+ * reaches a screen. Translating those would be tidiness; leaving a
+ * Turkish error message in a billing route was a defect.
+ *
+ * This is recorded because the difference is not obvious from a grep: a
+ * repository-wide search for Turkish characters still returns those
+ * files, and this suite passing is the correct answer rather than a
+ * blind spot. The blind spots that did exist — quoted literals only,
+ * then no template literals, then single-line JSX text only — are each
+ * fixed above.
+ */
 
 /* -------------------------------------------------------------------------- */
 /*                                 THE RULE                                   */

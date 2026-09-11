@@ -374,7 +374,7 @@ function formatRelativeTime(
     );
 
   if (minutes < 60) {
-    return `${minutes} dk önce`;
+    return `${minutes} min ago`;
   }
 
   const hours =
@@ -383,7 +383,7 @@ function formatRelativeTime(
     );
 
   if (hours < 24) {
-    return `${hours} sa önce`;
+    return `${hours} h ago`;
   }
 
   const days =
@@ -392,7 +392,7 @@ function formatRelativeTime(
     );
 
   if (days < 7) {
-    return `${days} gün önce`;
+    return `${days} d ago`;
   }
 
   try {
@@ -664,7 +664,7 @@ export default function ActivityFeed({
                   }
                   className="hidden rounded-lg px-2.5 py-2 text-[11px] text-foreground/40 transition hover:bg-white/[0.05] hover:text-foreground/75 sm:inline-flex"
                 >
-                  Tümünü okundu yap
+                  Mark all as read
                 </button>
               )}
 
@@ -751,7 +751,7 @@ export default function ActivityFeed({
                         : "border-white/[0.08] bg-white/[0.025] text-white/40 hover:bg-white/[0.06] hover:text-white/70"
                     }`}
                   >
-                    Tümü
+                    All
                   </button>
 
                   {activityOrder.map(
