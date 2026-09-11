@@ -191,7 +191,6 @@ Every file under `services/` is unreferenced except `action-types.ts` (types onl
 | `lib/untils.ts` (521 lines) | typo for `utils.ts`; imported by nothing. `AGENTS.md` documents `lib/utils.ts`, which does not exist |
 | `app/components/ui/Loanding.tsx` | typo for `Loading.tsx`; imported by nothing |
 | `app/components/chat/─ ConversationSearch.tsx` | box-drawing char in filename; unused |
-| `all-errors.txt`, `structure.txt`, `tailwind-test.css` (121 KB) | build/debug artifacts committed to git |
 | `tsconfig.tsbuildinfo` (1.1 MB) | build cache on disk |
 
 **Do not delete any of the above during Phase 0.** §33 of the operating protocol requires import-graph verification first; several orphaned modules are *intended* architecture (see §26 — they are assets, not merely waste).
@@ -381,7 +380,10 @@ There is currently **no enforced workspace isolation** in the running applicatio
 
 - No `loading.tsx` / `error.tsx` / `not-found.tsx` files exist anywhere in `app/` — no streaming boundaries, no App-Router error isolation.
 - Heavy client-side composition: 78 components, nearly all `"use client"`; minimal use of React Server Components despite Next.js 16.
-- `tailwind-test.css` (121 KB) committed; `app/globals.css` should be verified as the only stylesheet in the bundle.
+- `app/globals.css` is now the only stylesheet in the repository. The
+  121 KB `tailwind-test.css` beside it has been removed: it was minified
+  Tailwind **v3** output committed in the initial commit, while the
+  project builds on Tailwind v4, and nothing imported it.
 - `public/` contains only the 5 stock Next.js SVGs — **no favicon set, no OG image, no manifest** (`app/favicon.ico` exists).
 - Pagination exists in list routes (`limit`/`offset`) — good.
 - Provider calls carry a 120s timeout (`app/api/chat/route.ts:444`) — good.
@@ -465,7 +467,9 @@ Weaknesses: no shared middleware, auth or validation; six duplicated local auth 
 - **The database cannot be provisioned from the repository** (§9.1) — the most severe deployment risk.
 - No deployment configuration (`vercel.json` or equivalent), no documented target.
 - No health-check endpoint for load balancers.
-- Build artifacts (`all-errors.txt`, `structure.txt`, `tailwind-test.css`) committed.
+- Build artifacts (`all-errors.txt`, `structure.txt`, `tailwind-test.css`)
+  were committed; all three are now removed and `.gitignore` covers the
+  patterns that let them in.
 
 ---
 

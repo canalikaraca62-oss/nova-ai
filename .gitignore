@@ -193,3 +193,19 @@ blob-report/
 # Throwaway verification scripts (never committed).
 *.tmp.cjs
 *.tmp.json
+
+# =============================================================================
+# BUILD / DEBUG DUMPS
+# =============================================================================
+# Three of these were committed in the initial commit and survived until
+# they were found by a survey: a 121 KB minified Tailwind v3 stylesheet
+# in a Tailwind v4 project, a captured error log, and a directory
+# listing. Nothing imported any of them. The instance is fixed by
+# deleting them; the cause is fixed here.
+
+/tailwind-test.css
+/all-errors.txt
+/structure.txt
+/*errors*.txt
+/structure*.txt
+/build_*.log
