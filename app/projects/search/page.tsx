@@ -7,10 +7,8 @@ import {
   CheckCircle2,
   Clock3,
   Command,
-  FileText,
   FolderKanban,
   Hash,
-  Loader2,
   Search,
   Sparkles,
   Users,
@@ -159,7 +157,6 @@ export default function ProjectSearchPage() {
   const [status, setStatus] = useState<ProjectStatus | "all">(
     "all"
   );
-  const [isSearching, setIsSearching] = useState(false);
 
   const results = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -189,25 +186,21 @@ export default function ProjectSearchPage() {
     });
   }, [query, status]);
 
+  /*
+    NO SEARCHING STATE, BECAUSE NOTHING IS SEARCHED.
+
+    This set isSearching true and cleared it 250ms later behind a
+    spinner. `results` is a synchronous useMemo filtering an in-memory
+    array -- there is no fetch on this page at all -- so the delay was
+    the only thing making an instant local filter look like work.
+  */
   function handleSearch(value: string) {
     setQuery(value);
-
-    if (!value.trim()) {
-      setIsSearching(false);
-      return;
-    }
-
-    setIsSearching(true);
-
-    window.setTimeout(() => {
-      setIsSearching(false);
-    }, 250);
   }
 
   function clearSearch() {
     setQuery("");
     setStatus("all");
-    setIsSearching(false);
   }
 
   return (
@@ -321,13 +314,9 @@ export default function ProjectSearchPage() {
               </h2>
 
               <p className="mt-1 text-sm text-muted-foreground">
-                {isSearching
-                  ? "Searching project intelligence..."
-                  : `${results.length} ${
-                      results.length === 1
-                        ? "project"
-                        : "projects"
-                    } found`}
+                {`${results.length} ${
+                  results.length === 1 ? "project" : "projects"
+                } found`}
               </p>
             </div>
 
@@ -342,19 +331,8 @@ export default function ProjectSearchPage() {
             )}
           </div>
 
-          {/* Loading */}
-          {isSearching && (
-            <div className="flex min-h-[280px] flex-col items-center justify-center">
-              <Loader2 className="h-7 w-7 animate-spin text-primary" />
-
-              <p className="mt-4 text-sm text-muted-foreground">
-                Searching SYRAVEN intelligence...
-              </p>
-            </div>
-          )}
-
           {/* Empty state */}
-          {!isSearching && results.length === 0 && (
+          {results.length === 0 && (
             <div className="flex min-h-[360px] flex-col items-center justify-center rounded-3xl border border-dashed border-border bg-card px-6 text-center">
               <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted">
                 <Search className="h-7 w-7 text-muted-foreground" />
@@ -380,7 +358,7 @@ export default function ProjectSearchPage() {
           )}
 
           {/* Results */}
-          {!isSearching && results.length > 0 && (
+          {results.length > 0 && (
             <div className="mt-6 grid gap-4">
               {results.map((project) => (
                 <SearchResultCard

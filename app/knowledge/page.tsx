@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  useCallback,
   useMemo,
   useState,
 } from "react";
@@ -13,7 +12,6 @@ import {
   Brain,
   FileText,
   FolderPlus,
-  Loader2,
   Plus,
   Search,
   Sparkles,
@@ -109,9 +107,6 @@ export default function KnowledgePage() {
       "all"
     );
 
-  const [isCreating, setIsCreating] =
-    useState(false);
-
   const filteredItems = useMemo(() => {
     const normalizedQuery =
       query.trim().toLowerCase();
@@ -145,18 +140,19 @@ export default function KnowledgePage() {
     );
   }, [query, selectedType]);
 
-  const handleCreateKnowledge =
-    useCallback(async () => {
-      setIsCreating(true);
+  /*
+    CREATING IS NOT WIRED, AND NO LONGER PRETENDS TO BE.
 
-      try {
-        await new Promise((resolve) =>
-          setTimeout(resolve, 500)
-        );
-      } finally {
-        setIsCreating(false);
-      }
-    }, []);
+    This awaited a 500ms timer and then resolved, having created
+    nothing. The spinner ran, the button settled, and the list was
+    unchanged -- a save that never happened, which is the defect this
+    codebase has removed from a dozen other surfaces.
+
+    POST /api/knowledge is real and requires a title. This page has no
+    title field: its only input is the search box. So the button is
+    disabled and says why, rather than submitting a title it would have
+    had to invent.
+  */
 
   return (
     /*
@@ -184,22 +180,25 @@ export default function KnowledgePage() {
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={() => {
-              void handleCreateKnowledge();
-            }}
-            disabled={isCreating}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isCreating ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
+          <div className="flex flex-col items-start gap-2 sm:items-end">
+            <button
+              type="button"
+              disabled
+              aria-describedby="knowledge-create-availability"
+              className="inline-flex cursor-not-allowed items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground opacity-60"
+            >
               <Plus className="h-4 w-4" />
-            )}
 
-            Create knowledge
-          </button>
+              Create knowledge
+            </button>
+
+            <p
+              id="knowledge-create-availability"
+              className="max-w-xs text-xs leading-5 text-muted-foreground sm:text-right"
+            >
+              Creating from this page is not available yet.
+            </p>
+          </div>
         </section>
 
         <section className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">

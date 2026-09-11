@@ -10,7 +10,6 @@ import {
   KeyRound,
   Laptop,
   Loader2,
-  Lock,
   Mail,
   Moon,
   Palette,
@@ -153,6 +152,38 @@ export default function SettingsPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
 
+  /*
+    Success is a flag, not a substring.
+
+    The banner used to pick its colour by testing whether the message
+    contained the word "successfully", so rewording the copy silently
+    turned a successful save red. The outcome is recorded explicitly
+    instead.
+  */
+  const [saveOk, setSaveOk] = useState(false);
+
+  /*
+    THIS EFFECT STAYS, AND THE LINT ERROR WITH IT.
+
+    react-hooks/set-state-in-effect flags the two setState calls below,
+    and the usual fix -- read localStorage in a lazy useState
+    initialiser -- is wrong here.
+
+    /settings is a statically prerendered route: the build emits
+    .next/server/app/settings.html. A lazy initialiser runs during
+    render, so the server would produce markup from DEFAULT_SETTINGS
+    while the client produced markup from stored values, and React
+    would hydrate over a mismatch. Reading after mount is precisely
+    what avoids that.
+
+    Three other set-state-in-effect errors were fixed this session --
+    two billing loaders deferred through a microtask, one URL read
+    moved to a lazy initialiser. None of those routes renders different
+    markup on the server than on the client. This one does.
+
+    So the cascade is deliberate: one extra render, in exchange for
+    markup that matches what was prerendered.
+  */
   useEffect(() => {
     try {
       const storedSettings = window.localStorage.getItem(
@@ -204,18 +235,32 @@ export default function SettingsPage() {
     setSaveMessage("");
 
     try {
-      await new Promise((resolve) =>
-        window.setTimeout(resolve, 500)
-      );
+      /*
+        NO ARTIFICIAL DELAY.
 
+        A 500ms timer used to be awaited here before the write, which
+        dressed a synchronous localStorage.setItem as a round trip to a
+        server. There is no settings API -- no /api/settings, /api/user
+        or /api/profile exists -- so the spinner was implying a save
+        that was never travelling anywhere.
+
+        The same file already makes this argument at the 2FA toggle:
+        writing a boolean to localStorage tells someone their account is
+        protected when it is not. This is the same defect, milder, and
+        it is removed rather than kept for the feel of it.
+      */
       window.localStorage.setItem(
         SETTINGS_STORAGE_KEY,
         JSON.stringify(settings)
       );
 
       setSavedSettings(settings);
-      setSaveMessage("Settings saved successfully.");
+      setSaveOk(true);
+      setSaveMessage(
+        "Saved in this browser. These preferences are not yet stored on your account."
+      );
     } catch {
+      setSaveOk(false);
       setSaveMessage(
         "Unable to save your settings. Please try again."
       );
@@ -227,6 +272,7 @@ export default function SettingsPage() {
   function handleReset() {
     setSettings(savedSettings);
     setSaveMessage("");
+    setSaveOk(false);
   }
 
   if (isLoading) {
@@ -309,13 +355,15 @@ export default function SettingsPage() {
 
         {saveMessage && (
           <div
+            role="status"
+            aria-live="polite"
             className={`mt-6 flex items-center gap-3 rounded-xl border px-4 py-3 text-sm ${
-              saveMessage.includes("successfully")
+              saveOk
                 ? "border-primary/20 bg-primary/[0.06] text-primary"
                 : "border-destructive/20 bg-destructive/[0.06] text-destructive"
             }`}
           >
-            <Check className="h-4 w-4" />
+            {saveOk ? <Check className="h-4 w-4" /> : null}
             {saveMessage}
           </div>
         )}
@@ -1059,7 +1107,7 @@ function BillingSettings() {
             </h3>
 
             <p className="mt-2 max-w-lg text-sm leading-6 text-muted-foreground">
-              Upgrade your workspace when you're ready for more
+              Upgrade your workspace when you&apos;re ready for more
               intelligence, collaboration and automation capacity.
             </p>
           </div>
