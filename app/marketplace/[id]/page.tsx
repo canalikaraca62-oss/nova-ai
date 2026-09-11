@@ -18,8 +18,6 @@ import {
   SearchX,
   ShieldCheck,
   Sparkles,
-  Star,
-  Users,
   Zap,
 } from "lucide-react";
 
@@ -45,9 +43,11 @@ interface MarketplaceItem {
   category: MarketplaceCategory;
   author: string;
   version: string;
-  rating: number;
-  reviews: number;
-  installs: string;
+  /*
+    NO RATINGS, REVIEWS OR INSTALL COUNTS. See the list page for the
+    full reasoning: the catalogue copy is real, the social proof was
+    invented, and there is no table behind any of it.
+  */
   verified: boolean;
   featured: boolean;
   icon: IconType;
@@ -67,9 +67,6 @@ const MARKETPLACE_ITEMS: MarketplaceItem[] = [
     category: "AI Agents",
     author: "SYRAVEN Intelligence",
     version: "1.0.0",
-    rating: 4.9,
-    reviews: 248,
-    installs: "12.4k",
     verified: true,
     featured: true,
     icon: "bot",
@@ -97,9 +94,6 @@ const MARKETPLACE_ITEMS: MarketplaceItem[] = [
     category: "Development",
     author: "SYRAVEN Engineering",
     version: "1.2.0",
-    rating: 4.8,
-    reviews: 193,
-    installs: "9.8k",
     verified: true,
     featured: true,
     icon: "code",
@@ -127,9 +121,6 @@ const MARKETPLACE_ITEMS: MarketplaceItem[] = [
     category: "Data",
     author: "SYRAVEN Data",
     version: "1.1.0",
-    rating: 4.7,
-    reviews: 156,
-    installs: "7.2k",
     verified: true,
     featured: false,
     icon: "database",
@@ -156,9 +147,6 @@ const MARKETPLACE_ITEMS: MarketplaceItem[] = [
     category: "Productivity",
     author: "Automation Labs",
     version: "2.0.0",
-    rating: 4.8,
-    reviews: 121,
-    installs: "6.5k",
     verified: true,
     featured: false,
     icon: "zap",
@@ -185,9 +173,6 @@ const MARKETPLACE_ITEMS: MarketplaceItem[] = [
     category: "Research",
     author: "Insight Systems",
     version: "1.0.0",
-    rating: 4.6,
-    reviews: 89,
-    installs: "4.3k",
     verified: true,
     featured: false,
     icon: "globe",
@@ -214,9 +199,6 @@ const MARKETPLACE_ITEMS: MarketplaceItem[] = [
     category: "Development",
     author: "SYRAVEN Labs",
     version: "1.3.0",
-    rating: 4.9,
-    reviews: 207,
-    installs: "10.1k",
     verified: true,
     featured: true,
     icon: "code",
@@ -243,9 +225,6 @@ const MARKETPLACE_ITEMS: MarketplaceItem[] = [
     category: "AI Agents",
     author: "Knowledge Systems",
     version: "1.0.0",
-    rating: 4.7,
-    reviews: 114,
-    installs: "5.9k",
     verified: false,
     featured: false,
     icon: "bot",
@@ -272,9 +251,6 @@ const MARKETPLACE_ITEMS: MarketplaceItem[] = [
     category: "Productivity",
     author: "Workspace Labs",
     version: "1.0.0",
-    rating: 4.5,
-    reviews: 76,
-    installs: "3.7k",
     verified: true,
     featured: false,
     icon: "globe",
@@ -430,23 +406,6 @@ export default function MarketplaceDetailPage() {
                   </p>
 
                   <div className="mt-6 flex flex-wrap items-center gap-5 text-sm">
-                    <div className="flex items-center gap-1.5">
-                      <Star className="h-4 w-4 fill-current text-primary" />
-
-                      <span className="font-semibold text-foreground">
-                        {item.rating}
-                      </span>
-
-                      <span className="text-muted-foreground">
-                        {item.reviews} reviews
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-1.5 text-muted-foreground">
-                      <Users className="h-4 w-4" />
-                      {item.installs} installs
-                    </div>
-
                     <div className="text-muted-foreground">
                       Version {item.version}
                     </div>
@@ -588,15 +547,6 @@ export default function MarketplaceDetailPage() {
                   </span>
                 </div>
 
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">
-                    Installs
-                  </span>
-
-                  <span className="font-medium text-foreground">
-                    {item.installs}
-                  </span>
-                </div>
               </div>
 
               <Link

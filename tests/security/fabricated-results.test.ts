@@ -339,6 +339,101 @@ void describe("A team roster is never invented", () => {
   });
 });
 
+void describe("Social proof is never manufactured", () => {
+  const LIST = stripComments(read("app", "marketplace", "page.tsx"));
+
+  const DETAIL = stripComments(
+    read("app", "marketplace", "[id]", "page.tsx"),
+  );
+
+  /*
+    The catalogue copy here is real: it describes what SYRAVEN does,
+    and it is worth showing. The numbers beside it were not.
+
+    Every item carried rating: 4.9, reviews: 248, installs: "12.4k",
+    rendered as stars, a review count and an install figure. Nobody
+    rated these. There is no /api/marketplace, no ratings table, no
+    installs table, and nothing has ever been installed.
+
+    This is a worse class than an invented canvas. A fabricated
+    document misrepresents the user's own data to the user; fabricated
+    social proof is aimed at a decision they are about to make.
+  */
+
+  for (const [name, source] of [
+    ["/marketplace", LIST],
+    ["/marketplace/[id]", DETAIL],
+  ] as const) {
+    void test(`${name} claims no rating, review or install count`, () => {
+      for (const metric of [
+        /\brating\s*:/,
+        /\breviews\s*:/,
+        /\binstalls\s*:/,
+        /\bitem\.rating\b/,
+        /\bitem\.reviews\b/,
+        /\bitem\.installs\b/,
+      ]) {
+        assert.ok(
+          !metric.test(source),
+          `${name} reports ${String(metric)}, which nothing measures.`,
+        );
+      }
+    });
+  }
+});
+
+void describe("Knowledge is loaded, never invented", () => {
+  const KNOWLEDGE = stripComments(read("app", "knowledge", "page.tsx"));
+
+  void test("the list is not seeded from a module-scope array", () => {
+    /*
+      Six invented items opened this page as though they were the
+      user's own knowledge base -- "AI Strategy & Architecture",
+      "Product Research" -- each stamped "Recently updated" and tagged.
+      The search box filtered fiction and the counters counted it.
+    */
+    assert.ok(
+      !/const KNOWLEDGE_ITEMS\s*:\s*KnowledgeItem\[\]\s*=\s*\[/.test(
+        KNOWLEDGE,
+      ),
+      "/knowledge is seeded with invented items.",
+    );
+  });
+
+  void test("it loads from the route that owns the rows", () => {
+    assert.match(
+      KNOWLEDGE,
+      /fetch\("\/api\/knowledge/,
+      "Knowledge must come from /api/knowledge, on the caller's session.",
+    );
+  });
+
+  void test("no timestamp is invented", () => {
+    for (const invention of [
+      /"Recently updated"/,
+      /"Updated today"/,
+    ]) {
+      assert.ok(
+        !invention.test(KNOWLEDGE),
+        `/knowledge stamps rows with ${String(invention)}, which is not ` +
+          `a timestamp.`,
+      );
+    }
+  });
+
+  void test("creating does not fake a save", () => {
+    /*
+      The create button awaited a 500ms timer and resolved, having
+      created nothing. POST /api/knowledge requires a title and this
+      page has no title field, so the control says so instead.
+    */
+    assert.ok(
+      !/setTimeout/.test(KNOWLEDGE),
+      "A timer on this page can only be simulating work.",
+    );
+  });
+});
+
 void describe("Canvases are stored, never invented", () => {
   const CANVAS = stripComments(read("app", "canvas", "page.tsx"));
 

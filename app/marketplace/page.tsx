@@ -8,7 +8,6 @@ import {
   Database,
   Search,
   Sparkles,
-  Star,
   Users,
   Zap,
   Globe2,
@@ -45,9 +44,20 @@ interface MarketplaceItem {
     "All"
   >;
   author: string;
-  rating: number;
-  reviews: number;
-  installs: string;
+  /*
+    NO RATINGS, REVIEWS OR INSTALL COUNTS.
+
+    Each item carried rating: 4.9, reviews: 248, installs: "12.4k" and
+    the card rendered them as stars, a review count and an install
+    figure. Nobody rated these. There is no /api/marketplace, no
+    ratings table, no installs table, and nothing has ever been
+    installed.
+
+    The catalogue text itself is a real curated description of what
+    SYRAVEN does and is worth showing. Invented social proof is a
+    different thing: it is manufactured credibility, aimed at a
+    decision the reader is about to make.
+  */
   verified: boolean;
   featured: boolean;
   icon: IconType;
@@ -61,9 +71,6 @@ const MARKETPLACE_ITEMS: MarketplaceItem[] = [
       "Autonomous research agent for deep analysis, source discovery and structured intelligence.",
     category: "AI Agents",
     author: "SYRAVEN Intelligence",
-    rating: 4.9,
-    reviews: 248,
-    installs: "12.4k",
     verified: true,
     featured: true,
     icon: "bot",
@@ -75,9 +82,6 @@ const MARKETPLACE_ITEMS: MarketplaceItem[] = [
       "Analyze codebases, generate architecture insights and accelerate complex engineering workflows.",
     category: "Development",
     author: "SYRAVEN Engineering",
-    rating: 4.8,
-    reviews: 193,
-    installs: "9.8k",
     verified: true,
     featured: true,
     icon: "code",
@@ -89,9 +93,6 @@ const MARKETPLACE_ITEMS: MarketplaceItem[] = [
       "Transform raw datasets into structured insights, reports and intelligent recommendations.",
     category: "Data",
     author: "SYRAVEN Data",
-    rating: 4.7,
-    reviews: 156,
-    installs: "7.2k",
     verified: true,
     featured: false,
     icon: "database",
@@ -103,9 +104,6 @@ const MARKETPLACE_ITEMS: MarketplaceItem[] = [
       "Build intelligent workflows that automate repetitive tasks across your workspace.",
     category: "Productivity",
     author: "Automation Labs",
-    rating: 4.8,
-    reviews: 121,
-    installs: "6.5k",
     verified: true,
     featured: false,
     icon: "zap",
@@ -117,9 +115,6 @@ const MARKETPLACE_ITEMS: MarketplaceItem[] = [
       "Discover market opportunities, competitive signals and emerging industry trends.",
     category: "Research",
     author: "Insight Systems",
-    rating: 4.6,
-    reviews: 89,
-    installs: "4.3k",
     verified: true,
     featured: false,
     icon: "globe",
@@ -131,9 +126,6 @@ const MARKETPLACE_ITEMS: MarketplaceItem[] = [
       "An AI-powered development assistant for planning, building and improving software products.",
     category: "Development",
     author: "SYRAVEN Labs",
-    rating: 4.9,
-    reviews: 207,
-    installs: "10.1k",
     verified: true,
     featured: true,
     icon: "code",
@@ -145,9 +137,6 @@ const MARKETPLACE_ITEMS: MarketplaceItem[] = [
       "Extract valuable insights from documents, knowledge bases and unstructured information.",
     category: "AI Agents",
     author: "Knowledge Systems",
-    rating: 4.7,
-    reviews: 114,
-    installs: "5.9k",
     verified: false,
     featured: false,
     icon: "bot",
@@ -159,9 +148,6 @@ const MARKETPLACE_ITEMS: MarketplaceItem[] = [
       "Understand team activity, project momentum and organizational knowledge patterns.",
     category: "Productivity",
     author: "Workspace Labs",
-    rating: 4.5,
-    reviews: 76,
-    installs: "3.7k",
     verified: true,
     featured: false,
     icon: "users",
@@ -332,23 +318,6 @@ export default function MarketplacePage() {
                   </p>
                 </div>
 
-                <div className="mt-6 flex items-center justify-between border-t border-border pt-5">
-                  <div className="flex items-center gap-1.5 text-sm">
-                    <Star className="h-4 w-4 fill-current text-primary" />
-
-                    <span className="font-medium text-foreground">
-                      {item.rating}
-                    </span>
-
-                    <span className="text-muted-foreground">
-                      ({item.reviews})
-                    </span>
-                  </div>
-
-                  <span className="text-xs text-muted-foreground">
-                    {item.installs} installs
-                  </span>
-                </div>
               </Link>
             ))}
           </div>
@@ -448,24 +417,6 @@ export default function MarketplacePage() {
                   <p className="mt-4 text-xs text-muted-foreground">
                     By {item.author}
                   </p>
-                </div>
-
-                <div className="mt-5 flex items-center justify-between border-t border-border pt-4">
-                  <div className="flex items-center gap-1.5 text-sm">
-                    <Star className="h-4 w-4 fill-current text-primary" />
-
-                    <span className="font-medium text-foreground">
-                      {item.rating}
-                    </span>
-
-                    <span className="text-muted-foreground">
-                      {item.reviews}
-                    </span>
-                  </div>
-
-                  <span className="text-xs text-muted-foreground">
-                    {item.installs}
-                  </span>
                 </div>
 
                 <Link
