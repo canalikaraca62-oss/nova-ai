@@ -12,6 +12,7 @@ import {
   ChevronDown,
   ChevronRight,
   Command,
+  CreditCard,
   FolderKanban,
   Grid2X2,
   Home,
@@ -22,6 +23,7 @@ import {
   Search,
   Share2,
   Settings,
+  ShieldCheck,
   Sparkles,
   Workflow,
 } from "lucide-react";
@@ -186,6 +188,21 @@ const DEFAULT_SECTIONS: SidebarSection[] = [
         ),
       },
       {
+        /*
+          The human control plane.
+
+          /api/agents/approvals has had GET and POST since the approval
+          store was built, but no page rendered them -- so the control
+          that decides whether an agent may act was reachable only by
+          an HTTP client. A pending approval had nowhere to be seen.
+        */
+        label: "Approvals",
+        href: "/approvals",
+        icon: (
+          <ShieldCheck className="h-4 w-4" />
+        ),
+      },
+      {
         label: "Work graph",
         href: "/graph",
         icon: (
@@ -218,6 +235,25 @@ const DEFAULT_SECTIONS: SidebarSection[] = [
         href: "/notifications",
         icon: (
           <Bell className="h-4 w-4" />
+        ),
+      },
+      {
+        /*
+          /billing was linked from nowhere.
+
+          2,075 lines, three live endpoints (/api/billing, checkout,
+          portal) and sixteen guards -- and no path to it. Not in this
+          sidebar, not in the mobile nav, not in the command palette,
+          and not from any other page: the only account link anywhere in
+          the chrome was Settings, and TopBar has no user menu.
+
+          A customer could not reach their own plan, invoices or payment
+          method except by typing the URL.
+        */
+        label: "Billing",
+        href: "/billing",
+        icon: (
+          <CreditCard className="h-4 w-4" />
         ),
       },
       {

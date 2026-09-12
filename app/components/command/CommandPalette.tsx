@@ -5,6 +5,7 @@ import {
   Bot,
   Check,
   Command,
+  CreditCard,
   FileText,
   FolderKanban,
   Keyboard,
@@ -16,6 +17,7 @@ import {
   Plus,
   Search,
   Settings,
+  ShieldCheck,
   Sparkles,
   X,
 } from "lucide-react";
@@ -227,6 +229,44 @@ function createDefaultCommands(): CommandPaletteItem[] {
       href: "/canvas",
       icon: (
         <PanelLeft className="h-4 w-4" />
+      ),
+    },
+    {
+      id: "billing",
+      title: "Billing",
+      description:
+        "Your plan, invoices and payment method",
+      group: "Navigate",
+      keywords: [
+        "billing",
+        "plan",
+        "invoice",
+        "payment",
+        "subscription",
+        "upgrade",
+      ],
+      href: "/billing",
+      icon: (
+        <CreditCard className="h-4 w-4" />
+      ),
+    },
+    {
+      id: "approvals",
+      title: "Approvals",
+      description:
+        "Decide the agent steps waiting on you",
+      group: "Workspace",
+      keywords: [
+        "approvals",
+        "approve",
+        "reject",
+        "pending",
+        "agent",
+        "risk",
+      ],
+      href: "/approvals",
+      icon: (
+        <ShieldCheck className="h-4 w-4" />
       ),
     },
     {

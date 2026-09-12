@@ -25,9 +25,7 @@ type AppItem = {
   color: string;
   tags: string[];
   featured?: boolean;
-  new?: boolean;
-  usage?: string;
-};
+  new?: boolean;};
 
 const categories: AppCategory[] = [
   "All",
@@ -51,9 +49,7 @@ const apps: AppItem[] = [
     icon: "✦",
     color: "from-violet-500 to-fuchsia-500",
     tags: ["Agents", "Automation", "Reasoning"],
-    featured: true,
-    usage: "12.4k runs",
-  },
+    featured: true,  },
   {
     id: "chat",
     name: "Syraven Chat",
@@ -65,9 +61,7 @@ const apps: AppItem[] = [
     icon: "◈",
     color: "from-cyan-500 to-blue-500",
     tags: ["Chat", "Models", "Workspace"],
-    featured: true,
-    usage: "8.7k messages",
-  },
+    featured: true,  },
   {
     id: "canvas",
     name: "Infinite Canvas",
@@ -78,9 +72,7 @@ const apps: AppItem[] = [
     href: "/canvas",
     icon: "◇",
     color: "from-orange-400 to-rose-500",
-    tags: ["Visual", "Ideas", "Planning"],
-    usage: "3.2k boards",
-  },
+    tags: ["Visual", "Ideas", "Planning"],  },
   {
     id: "knowledge",
     name: "Knowledge Hub",
@@ -92,9 +84,7 @@ const apps: AppItem[] = [
     icon: "◉",
     color: "from-emerald-400 to-teal-500",
     tags: ["Search", "Documents", "RAG"],
-    featured: true,
-    usage: "24.1k sources",
-  },
+    featured: true,  },
   {
     id: "workspace",
     name: "AI Workspace",
@@ -105,9 +95,7 @@ const apps: AppItem[] = [
     href: "/workspace",
     icon: "▦",
     color: "from-indigo-500 to-purple-500",
-    tags: ["Projects", "Files", "Focus"],
-    usage: "1.8k workspaces",
-  },
+    tags: ["Projects", "Files", "Focus"],  },
   {
     id: "studio",
     name: "Creative Studio",
@@ -131,9 +119,7 @@ const apps: AppItem[] = [
     href: "/projects",
     icon: "▣",
     color: "from-blue-500 to-indigo-600",
-    tags: ["Planning", "Teams", "Execution"],
-    usage: "642 active",
-  },
+    tags: ["Planning", "Teams", "Execution"],  },
   {
     id: "tasks",
     name: "Task Engine",
@@ -144,9 +130,7 @@ const apps: AppItem[] = [
     href: "/tasks",
     icon: "✓",
     color: "from-lime-400 to-green-500",
-    tags: ["Tasks", "Automation", "Schedule"],
-    usage: "9.1k completed",
-  },
+    tags: ["Tasks", "Automation", "Schedule"],  },
   {
     id: "code",
     name: "Developer Lab",
@@ -577,11 +561,17 @@ export default function AppsPage() {
                         ))}
                       </div>
 
-                      {app.usage && (
-                        <span className="text-[11px] text-foreground/30">
-                          {app.usage}
-                        </span>
-                      )}
+                      {/*
+                        A usage figure used to sit here: "12.4k runs",
+                        "8.7k messages", "24.1k sources". None of it was
+                        measured. This page has no data source at all --
+                        it is a static launcher for surfaces that exist
+                        -- so those numbers described nobody's activity
+                        while reading as this workspace's own.
+
+                        The launcher is real and stays. The counters are
+                        gone.
+                      */}
                     </div>
 
                     {/*

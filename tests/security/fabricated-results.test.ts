@@ -81,6 +81,22 @@ const SURFACES: ReadonlyArray<{
   },
   {
     /*
+     * /apps is a static launcher for surfaces that exist -- names,
+     * descriptions and hrefs into /agents, /chat, /canvas. That part is
+     * true and worth showing.
+     *
+     * Each card also carried a usage figure: "12.4k runs", "8.7k
+     * messages", "24.1k sources", "1.8k workspaces". The page has no
+     * data source of any kind, so those counters measured nothing while
+     * reading as this workspace's own activity -- on a page linked from
+     * the sidebar, which made them among the first numbers a new user
+     * saw.
+     */
+    name: "/apps",
+    source: stripComments(read("app", "apps", "page.tsx")),
+  },
+  {
+    /*
      * The catalogue here is a real curated description of what SYRAVEN
      * does, which is worth showing. "Install" was not: it animated for
      * 700ms and settled on a green Installed tick having installed
@@ -233,6 +249,55 @@ void describe("A security log is never invented", () => {
       PRIVACY,
       /useState<PrivacyActivity\[\]>\(\[\]\)/,
       "The log must be empty until real events are recorded.",
+    );
+  });
+});
+
+void describe("A launcher does not report activity it cannot measure", () => {
+  /*
+   * Read through stripComments, so the note left in the page recording
+   * what the figures used to say cannot satisfy -- or trip -- this.
+   */
+  const APPS = stripComments(read("app", "apps", "page.tsx"));
+
+  void test("no card carries a usage count", () => {
+    /*
+     * "12.4k runs", "8.7k messages", "24.1k sources", "1.8k
+     * workspaces", "642 active", "9.1k completed". None was measured:
+     * /apps issues no request of any kind. They read as this
+     * workspace's own activity on a page linked from the sidebar.
+     */
+    const counted =
+      /"\s*\d+(\.\d+)?k?\s+(runs|messages|sources|boards|workspaces|active|completed|users|items)\s*"/i.exec(
+        APPS,
+      );
+
+    assert.equal(
+      counted,
+      null,
+      `/apps reports ${counted?.[0]} without measuring anything.`,
+    );
+  });
+
+  void test("the catalogue declares no usage field", () => {
+    assert.ok(
+      !/^\s*usage\??:\s*string/m.test(APPS),
+      "A usage field on the item type invites a number back onto a " +
+        "page that has no data source to produce one.",
+    );
+  });
+
+  void test("it still issues no request, so no figure could be real", () => {
+    /*
+     * The honest position for this page. If /apps ever gains a data
+     * source, a usage figure becomes possible -- and this assertion is
+     * what forces that to be a deliberate change rather than a
+     * hardcoded string reappearing.
+     */
+    assert.ok(
+      !/fetch\(/.test(APPS),
+      "/apps now fetches. Any per-app figure must come from that " +
+        "response, and these assertions must be revisited deliberately.",
     );
   });
 });

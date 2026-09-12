@@ -13,6 +13,7 @@ import {
   Brain,
   ChevronDown,
   ChevronRight,
+  CreditCard,
   FolderKanban,
   Grid2X2,
   Home,
@@ -23,6 +24,7 @@ import {
   Search,
   Share2,
   Settings,
+  ShieldCheck,
   Sparkles,
   Workflow,
 } from "lucide-react";
@@ -161,6 +163,13 @@ const DEFAULT_SECTIONS: MobileNavSection[] = [
         ),
       },
       {
+        label: "Approvals",
+        href: "/approvals",
+        icon: (
+          <ShieldCheck className="h-5 w-5" />
+        ),
+      },
+      {
         label: "Work graph",
         href: "/graph",
         icon: (
@@ -193,6 +202,14 @@ const DEFAULT_SECTIONS: MobileNavSection[] = [
         href: "/notifications",
         icon: (
           <Bell className="h-5 w-5" />
+        ),
+      },
+      {
+        /* See the note in DesktopSidebar: /billing was unreachable. */
+        label: "Billing",
+        href: "/billing",
+        icon: (
+          <CreditCard className="h-5 w-5" />
         ),
       },
       {
