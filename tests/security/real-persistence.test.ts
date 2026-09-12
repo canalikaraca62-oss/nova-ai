@@ -45,7 +45,6 @@ function stripComments(source: string): string {
 
 const TASKS = stripComments(read("app", "tasks", "page.tsx"));
 const NOTIFICATIONS = stripComments(read("app", "notifications", "page.tsx"));
-const MEMORY = stripComments(read("app", "memory", "page.tsx"));
 const WORKSPACE = stripComments(read("app", "workspace", "page.tsx"));
 const CANVAS = stripComments(read("app", "canvas", "page.tsx"));
 
@@ -68,18 +67,17 @@ const WIRED: ReadonlyArray<{
     endpoint: "/api/notifications",
     methods: ["PATCH", "DELETE"],
   },
-  {
-    /*
-     * /memory opened on four invented memories and "saved" a new one by
-     * sleeping 400ms and minting an id from Date.now(). It is backed by
-     * public.knowledge — the products real memory store — so no new
-     * table was invented for this screen.
-     */
-    name: "/memory",
-    source: MEMORY,
-    endpoint: "/api/knowledge",
-    methods: ["POST", "PATCH", "DELETE"],
-  },
+  /*
+   * /memory used to sit here. It opened on four invented memories and
+   * "saved" a new one by sleeping 400ms and minting an id from
+   * Date.now(); that was fixed, and the page then persisted properly
+   * through /api/knowledge.
+   *
+   * The page is gone now for a different reason: it was a second,
+   * unreachable front-end over the same endpoint as /knowledge, which
+   * is what every nav surface links to. A defect cannot regress on a
+   * route that no longer exists, and /knowledge is covered below.
+   */
   {
     /*
      * /workspace invented four projects and linked every card to
@@ -223,7 +221,6 @@ void describe("Ids come from the server", () => {
     source: string;
     handler: string;
   }> = [
-    { name: "/memory", source: MEMORY, handler: "handleCreateMemory" },
     {
       name: "/workspace",
       source: WORKSPACE,
