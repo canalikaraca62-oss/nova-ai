@@ -496,8 +496,10 @@ function GeneralSettings({
         <FieldGroup
           label="Workspace name"
           description="This name appears across your projects and workspace."
+          fieldId="settings-workspace-name"
         >
           <input
+            id="settings-workspace-name"
             value={settings.workspaceName}
             onChange={(event) =>
               updateSetting(
@@ -514,8 +516,10 @@ function GeneralSettings({
           <FieldGroup
             label="Language"
             description="Choose your preferred interface language."
+            fieldId="settings-language"
           >
             <select
+              id="settings-language"
               value={settings.language}
               onChange={(event) =>
                 updateSetting(
@@ -536,8 +540,10 @@ function GeneralSettings({
           <FieldGroup
             label="Timezone"
             description="Used for projects, activity and schedules."
+            fieldId="settings-timezone"
           >
             <select
+              id="settings-timezone"
               value={settings.timezone}
               onChange={(event) =>
                 updateSetting(
@@ -625,8 +631,10 @@ function ProfileSettings({
         <FieldGroup
           label="Display name"
           description="This is how other workspace members see you."
+          fieldId="settings-display-name"
         >
           <input
+            id="settings-display-name"
             value={settings.displayName}
             onChange={(event) =>
               updateSetting(
@@ -642,11 +650,13 @@ function ProfileSettings({
         <FieldGroup
           label="Email address"
           description="Your primary email for account access and security."
+          fieldId="settings-email"
         >
           <div className="relative">
             <Mail className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
 
             <input
+              id="settings-email"
               type="email"
               value={settings.email}
               onChange={(event) =>
@@ -1183,15 +1193,32 @@ function SettingsPanel({
 function FieldGroup({
   label,
   description,
+  fieldId,
   children,
 }: {
   label: string;
   description: string;
+  /*
+    The id of the control this label names.
+
+    Without it the label below is a bare <label> sitting as a SIBLING
+    of the field -- visually attached, programmatically unattached. A
+    screen reader announced all five settings fields as unlabelled
+    while every one of them looked labelled on screen.
+
+    Required rather than optional: an optional association is one
+    forgotten prop away from silently reverting to the defect, and
+    nothing in the type system would say so.
+  */
+  fieldId: string;
   children: React.ReactNode;
 }) {
   return (
     <div>
-      <label className="block text-sm font-medium text-foreground">
+      <label
+        htmlFor={fieldId}
+        className="block text-sm font-medium text-foreground"
+      >
         {label}
       </label>
 

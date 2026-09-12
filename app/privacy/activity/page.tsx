@@ -303,6 +303,7 @@ export default function PrivacyActivityPage() {
 
             <input
               type="search"
+              aria-label="Search activity"
               value={searchQuery}
               onChange={(event) =>
                 setSearchQuery(event.target.value)

@@ -349,6 +349,7 @@ export default function MarketplacePage() {
 
               <input
                 type="search"
+                aria-label="Search the marketplace"
                 value={searchQuery}
                 onChange={(event) =>
                   setSearchQuery(

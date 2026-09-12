@@ -427,6 +427,7 @@ export default function StudioPage() {
 
             <input
               type="text"
+              aria-label="Search studio tools"
               value={searchQuery}
               onChange={(event) =>
                 setSearchQuery(event.target.value)
