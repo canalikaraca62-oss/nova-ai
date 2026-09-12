@@ -1024,11 +1024,26 @@ void describe("Source invariants — orchestrator", () => {
 
   void test("an unknown agent returns before the model is called", () => {
     const agentCheck = ORCHESTRATOR_CODE.indexOf("if (!agent)");
-    const completion = ORCHESTRATOR_CODE.indexOf("chatCompletion(");
+
+    /*
+     * Matches chatCompletion( and chatCompletionWithFailover(.
+     *
+     * The literal "chatCompletion(" stopped matching when the
+     * orchestrator moved to failover, and indexOf returned -1 --
+     * which failed this assertion closed, correctly. Its twin below
+     * failed OPEN on the same rename, so both are anchored on the
+     * family now rather than on one spelling.
+     */
+    const completion = /chatCompletion\w*\(/.exec(ORCHESTRATOR_CODE);
 
     assert.ok(agentCheck > 0, "unknown agent must be handled");
     assert.ok(
-      agentCheck < completion,
+      completion !== null,
+      "the orchestrator must call a provider somewhere, or this " +
+        "assertion is comparing against nothing",
+    );
+    assert.ok(
+      agentCheck < (completion?.index ?? Number.MAX_SAFE_INTEGER),
       "unknown agent must fail before spending a provider call",
     );
   });
@@ -1143,10 +1158,29 @@ void describe("Source invariants — route", () => {
 
     /* An unknown agent returns before the provider is ever called. */
     const agentCheck = ORCHESTRATOR_CODE.indexOf('error: "UNKNOWN_AGENT"');
-    const before = ORCHESTRATOR_CODE.slice(0, agentCheck);
 
     assert.ok(
-      !before.includes("chatCompletion("),
+      agentCheck > 0,
+      "the UNKNOWN_AGENT return is gone; this assertion would slice " +
+        "from -1 and pass on nothing",
+    );
+
+    const before = ORCHESTRATOR_CODE.slice(0, agentCheck);
+
+    /*
+     * THIS ONE FAILED OPEN.
+     *
+     * It asserted the absence of the literal "chatCompletion(" before
+     * the unknown-agent return. When the orchestrator moved to
+     * chatCompletionWithFailover, that substring stopped existing
+     * anywhere -- so the assertion passed whatever the code did, and
+     * would have kept passing with a provider call sitting directly
+     * above the return.
+     *
+     * An absence check is only as good as the thing it looks for.
+     */
+    assert.ok(
+      !/chatCompletion\w*\(/.test(before),
       "unknown agent must return before any provider call",
     );
   });

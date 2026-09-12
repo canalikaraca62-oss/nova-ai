@@ -47,7 +47,7 @@ import {
   type Entitlement,
   clampMaxTokens,
 } from "@/lib/usage/entitlements";
-import { chatCompletion } from "@/lib/ai/provider";
+import { chatCompletionWithFailover } from "@/lib/ai/failover";
 import { selectModel } from "@/lib/ai/registry";
 import { sanitizeUntrusted } from "@/lib/memory/contextBudget";
 import {
@@ -277,8 +277,23 @@ export async function runOrchestration(
     };
   }
 
-  const completion = await chatCompletion({
+  /*
+    Failover, not retry.
+
+    provider.ts already retries once inside a single provider. This
+    tries a DIFFERENT provider when the first one is rate-limited,
+    timing out, erroring, or unconfigured -- and refuses to when the
+    request itself was rejected, because a malformed request is
+    malformed everywhere.
+
+    The caller's real plan goes through, so every candidate is
+    re-checked against their entitlement: failover is not a side door
+    around the model a plan permits.
+  */
+  const completion = await chatCompletionWithFailover({
     model: model.model,
+    capability: "chat",
+    plan: request.entitlement.effectivePlan,
     messages: [
       {
         role: "system",
@@ -303,7 +318,14 @@ export async function runOrchestration(
     return {
       executionKey,
       usage: null,
-      modelId: model.model.id,
+      /*
+        The model that actually failed last, not the one originally
+        selected. After failover those differ, and naming the primary
+        would record a failure against a provider that may never have
+        been called.
+      */
+      modelId:
+        completion.attempts.at(-1)?.modelId ?? model.model.id,
       state,
       agentId: agent.id,
       steps: [],
