@@ -45,9 +45,25 @@ runs.
    **not** create users: registration writes an `auth.users` row and
    provisions an organization, and a cleanup bug would then delete real
    data.
-3. **The suite writes nothing.** Specs navigate, assert what renders,
-   and read. They do not create projects, send chat messages, or trigger
-   agent runs — the last would also spend money on every run.
+3. **The suite writes only rows it created, and deletes them back.**
+   Most specs navigate and read. `seeded-journey.spec.ts` additionally
+   creates a project and a task through the product's own authorized
+   routes, asserts they reach the pages that list them, and removes them
+   in teardown. It never sends chat messages or triggers agent runs —
+   those would spend money on every run.
+
+   Four things make that safe:
+
+   - `playwright.config.ts` **refuses to start** against the production
+     project, so seeded rows cannot land there.
+   - Writes go through the API as an ordinary signed-in user. There is
+     no service-role key in the E2E environment, so RLS applies exactly
+     as it does in production.
+   - `DELETE` scopes by `id` **and** `user_id` server-side, so teardown
+     cannot reach a row it did not create.
+   - Every seeded row carries a per-run tag (`e2e-<id>`) in its name,
+     and teardown **asserts** each deletion. Anything a crash leaves
+     behind is identifiable by that tag rather than anonymous.
 
 ## What these tests cover
 
@@ -64,7 +80,9 @@ Things only a browser can verify:
 
 - **Semantic search** — not wired to any route (Step 5).
 - **AI/chat flows** — every run would spend money.
-- **Create/edit/delete flows** — would leave data behind.
+- **Edit flows** — `PATCH` is not exercised yet.
+- **Anything outside projects and tasks** — create/delete is seeded for
+  those two only. Other write paths remain unverified by a browser.
 - **Cross-browser** — Chromium only. Firefox and WebKit triple download
   and CI time, and the defects above are not engine-specific. Worth
   adding once the suite is green in CI.

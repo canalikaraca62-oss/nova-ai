@@ -47,6 +47,81 @@ void describe("The E2E production guard reads what the app will read", () => {
     );
   });
 
+  /**
+   * The precedence array itself, not the whole file.
+   *
+   * Both assertions below originally searched CONFIG for the string
+   * ".env.e2e.local" -- which also appears in the `E2E_ENV_FILE`
+   * declaration and in prose. Removing the file from the ARRAY left
+   * those occurrences untouched, so the mutation survived and the
+   * guard passed while the suite silently went back to production.
+   * That is the third failed-open guard in this codebase; anchoring on
+   * the lookup list is what makes it able to fail.
+   */
+  const PRECEDENCE = /for \(const file of \[([^\]]*)\]/.exec(CONFIG)?.[1] ?? "";
+
+  void test("the lookup list is findable", () => {
+    assert.ok(
+      PRECEDENCE.length > 0,
+      "The env-file precedence array could not be located, so the two " +
+        "assertions that depend on it would pass vacuously.",
+    );
+  });
+
+  void test("it reads the file that dedicates a run to the test project", () => {
+    /*
+     * `.env.local` is the development configuration and points at
+     * production. Without a file of its own at higher precedence, the
+     * guard resolved the production ref and aborted EVERY run -- while
+     * E2E_TEST_EMAIL stayed unset, so any run that did get through
+     * skipped all authenticated specs. A skip reports as "not failed",
+     * which is how a suite that had never once executed looked green.
+     */
+    assert.match(
+      PRECEDENCE,
+      /E2E_ENV_FILE|["']\.env\.e2e\.local["']/,
+      "The lookup list must consult .env.e2e.local, or the suite runs " +
+        "against whatever .env.local points at -- which is production.",
+    );
+  });
+
+  void test("the E2E file outranks the development configuration", () => {
+    const e2eAt = PRECEDENCE.search(/E2E_ENV_FILE|["']\.env\.e2e\.local["']/);
+    const localAt = PRECEDENCE.indexOf('".env.local"');
+
+    assert.ok(e2eAt >= 0, "The E2E env file must appear in the lookup list.");
+    assert.ok(localAt >= 0, ".env.local must appear in the lookup list.");
+    assert.ok(
+      e2eAt < localAt,
+      ".env.e2e.local must be checked BEFORE .env.local. Reversed, the " +
+        "development configuration wins and the guard aborts on the " +
+        "production ref again.",
+    );
+  });
+
+  void test("the credentials reach the run, not just the guard", () => {
+    /*
+     * Resolving the URL for the guard is half the job. `next start` is
+     * spawned as a child process and reads .env.local, NOT
+     * .env.e2e.local -- so without exporting into process.env the guard
+     * would check one database while the application under test used
+     * another, and E2E_TEST_EMAIL would remain unset.
+     */
+    assert.match(
+      CONFIG,
+      /process\.env\[key\]\s*=\s*value/,
+      "The E2E configuration must be exported into process.env so the " +
+        "spawned server and the credential fixtures both see it.",
+    );
+
+    for (const key of ["E2E_TEST_EMAIL", "E2E_TEST_PASSWORD"]) {
+      assert.ok(
+        CONFIG.includes(key),
+        `${key} must be loaded, or every authenticated spec skips.`,
+      );
+    }
+  });
+
   void test("it follows Next's precedence order", () => {
     const order = [
       ".env.production.local",

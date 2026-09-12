@@ -50,6 +50,67 @@ import { readFileSync, existsSync } from "node:fs";
 const PRODUCTION_PROJECT_REF = "wpmbumtpcuahyqmdeqgf";
 
 /**
+ * The env file that dedicates a run to the test project.
+ *
+ * `.env.local` is the DEVELOPMENT configuration and points at
+ * production -- correctly, because that is what `npm run dev` should
+ * talk to. E2E must not, so it gets its own file at higher precedence.
+ * Gitignored by the `.env.*` rule, like every other env file here.
+ */
+const E2E_ENV_FILE = ".env.e2e.local";
+
+/**
+ * Every key `.env.e2e.local` is allowed to redirect.
+ *
+ * Deliberately a list rather than "load the whole file": this loader
+ * runs before the guard below, so a typo'd or over-broad file must not
+ * be able to smuggle in configuration the guard never inspects.
+ */
+const E2E_ENV_KEYS = [
+  "NEXT_PUBLIC_SUPABASE_URL",
+  "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+  "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
+  "E2E_TEST_EMAIL",
+  "E2E_TEST_PASSWORD",
+] as const;
+
+/** Reads one key out of an env file, without a dotenv dependency. */
+function readEnvValue(file: string, key: string): string | undefined {
+  if (!existsSync(file)) return undefined;
+
+  const match = readFileSync(file, "utf8").match(
+    new RegExp(`^\\s*${key}\\s*=\\s*["']?([^"'\\r\\n]+)`, "m"),
+  );
+
+  return match?.[1]?.trim();
+}
+
+/**
+ * Loads `.env.e2e.local` into this process AND into the server it spawns.
+ *
+ * Without this the suite was inoperable in both directions at once:
+ * `next start` inherited `.env.local` and pointed at production, so the
+ * guard below aborted every run; and `E2E_TEST_EMAIL` was never set, so
+ * had the guard let a run through, every authenticated spec would have
+ * SKIPPED. A skip is reported as "not failed", which is why a suite that
+ * has never once executed still looked green.
+ *
+ * Values already present in the real environment win, so CI can override
+ * without editing a file.
+ */
+function loadE2eEnv(): void {
+  for (const key of E2E_ENV_KEYS) {
+    if (process.env[key]) continue;
+
+    const value = readEnvValue(E2E_ENV_FILE, key);
+
+    if (value) process.env[key] = value;
+  }
+}
+
+loadE2eEnv();
+
+/**
  * Reads the Supabase URL the way the app under test will see it.
  *
  * Playwright runs this config in a bare Node process, which does NOT
@@ -58,14 +119,20 @@ const PRODUCTION_PROJECT_REF = "wpmbumtpcuahyqmdeqgf";
  * the guard below silently inert, while the server it launched pointed
  * straight at production. The guard has to read the same files Next
  * does, in the same precedence order, or it is decoration.
+ *
+ * `.env.e2e.local` sits at the head of that order. It is also exported
+ * into process.env above, so `next start` -- which would otherwise read
+ * `.env.local` and reach production -- inherits the test project too.
+ * Checking a file the spawned server does not honour would put the
+ * guard and the application under test on different databases.
  */
 function resolveSupabaseUrl(): { url: string | undefined; source: string } {
   if (process.env.NEXT_PUBLIC_SUPABASE_URL) {
     return { url: process.env.NEXT_PUBLIC_SUPABASE_URL, source: "process.env" };
   }
 
-  /* Next's precedence for `next start` (NODE_ENV=production). */
-  for (const file of [".env.production.local", ".env.local", ".env.production", ".env"]) {
+  /* E2E's own file first, then Next's precedence for `next start`. */
+  for (const file of [E2E_ENV_FILE, ".env.production.local", ".env.local", ".env.production", ".env"]) {
     if (!existsSync(file)) continue;
 
     const match = readFileSync(file, "utf8").match(
