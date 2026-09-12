@@ -4,8 +4,11 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
+
+import { useDialogBehaviour } from "@/app/components/ui/useDialogBehaviour";
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
@@ -236,6 +239,14 @@ export default function TaskDetailPage() {
   const [actionError, setActionError] = useState<string | null>(null);
 
   const [isEditing, setIsEditing] = useState(false);
+
+  const editPanelRef = useRef<HTMLDivElement | null>(null);
+
+  useDialogBehaviour({
+    open: isEditing,
+    onClose: () => setIsEditing(false),
+    panelRef: editPanelRef,
+  });
   const [isSaving, setIsSaving] = useState(false);
   const [showActions, setShowActions] = useState(false);
 
@@ -776,9 +787,10 @@ export default function TaskDetailPage() {
 
         {/* EDIT */}
         {isEditing ? (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
+          <div className="motion-backdrop fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
             <div
-              className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-border bg-card p-6 shadow-2xl"
+              ref={editPanelRef}
+              className="motion-dialog max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-border bg-card p-6 shadow-2xl"
               role="dialog"
               aria-modal="true"
               aria-labelledby="edit-task-title"

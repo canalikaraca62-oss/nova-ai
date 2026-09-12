@@ -35,7 +35,7 @@
 
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 const ROOT = process.cwd();
@@ -44,23 +44,128 @@ function read(...segments: string[]): string {
   return readFileSync(join(ROOT, ...segments), "utf8");
 }
 
-/** Every page that renders a modal overlay of its own. */
-const DIALOG_PAGES = [
-  { name: "/memory", path: ["app", "memory", "page.tsx"] },
-  { name: "/tasks", path: ["app", "tasks", "page.tsx"] },
-  { name: "/teams", path: ["app", "teams", "page.tsx"] },
-  { name: "/workspace", path: ["app", "workspace", "page.tsx"] },
-  { name: "/activity", path: ["app", "activity", "page.tsx"] },
-] as const;
+/**
+ * Source with every comment removed.
+ *
+ * Both the scan and the assertions below read this rather than the raw
+ * file, so neither a note quoting `role="dialog"` nor a commented-out
+ * aria-modal can satisfy a check about live markup.
+ */
+function executable(source: string): string {
+  return source
+    .replace(/\{\/\*[\s\S]*?\*\/\}/g, "")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .split("\n")
+    .filter((line) => !line.trim().startsWith("*"))
+    .filter((line) => !line.trim().startsWith("//"))
+    .join("\n");
+}
+
+/*
+  DISCOVERED, NOT LISTED.
+
+  This was a hardcoded list of the five overlays I happened to be
+  wiring when the guard was written. Three more reachable dialogs --
+  the edit dialog on /tasks/[id], and rename and delete on
+  /teams/[id] -- carried role="dialog" with no keyboard contract at
+  all, and the guard reported green because their files were not on
+  the list. I had written those three pages myself, earlier in the
+  same session.
+
+  A list maintained by hand covers what its author remembered. Scanning
+  for the role covers what exists, including whatever is added next.
+*/
+function pagesDeclaringDialogs(
+  dir: string,
+  found: string[] = [],
+): string[] {
+  for (const entry of readdirSync(dir)) {
+    const full = join(dir, entry);
+
+    if (statSync(full).isDirectory()) {
+      pagesDeclaringDialogs(full, found);
+      continue;
+    }
+
+    if (!entry.endsWith(".tsx")) continue;
+
+    /*
+      Stripped before testing.
+
+      A comment EXPLAINING why something is not a dialog quotes the
+      role verbatim, so scanning raw source keeps discovering the file
+      the comment was written to excuse. TopBar sat in this scan after
+      its role changed to `search`, purely because the note above it
+      mentioned the old one.
+
+      This is the third time in this session a guard matched its own
+      subject's prose. The sibling guards already strip; this one now
+      strips too.
+    */
+    if (/(?<![\w-])role="dialog"/.test(executable(readFileSync(full, "utf8")))) {
+      found.push(full);
+    }
+  }
+
+  return found;
+}
+
+/*
+  Components excused from the useDialogBehaviour requirement, each for
+  a stated reason rather than because it was inconvenient.
+
+  Dialog.tsx and Modal.tsx ARE the primitives: Modal implements the
+  same focus trap this hook extracted, and requiring a component to
+  call a hook carved out of itself is circular.
+
+  CommandPalette owns its own keyboard model -- it is opened BY a key,
+  moves selection with arrows, and manages its own focus and Escape. It
+  also names itself with aria-label rather than aria-labelledby, which
+  is equally valid and which an early version of my own browser probe
+  wrongly reported as unlabelled.
+
+  UpgradeModal, ShareChatDialog and TopBar have no importers. They are
+  excused from the behaviour requirement, not from existing: if one is
+  ever mounted, it fails this guard the same day.
+*/
+const BEHAVIOUR_EXEMPT = new Set([
+  "Dialog.tsx",
+  "Modal.tsx",
+  "CommandPalette.tsx",
+  "UpgradeModal.tsx",
+  "ShareChatDialog.tsx",
+  "TopBar.tsx",
+]);
+
+const DIALOG_PAGES = pagesDeclaringDialogs(join(ROOT, "app")).map(
+  (path) => ({
+    name: path.replace(ROOT, "").replace(/\\/g, "/"),
+    file: path,
+    exempt: BEHAVIOUR_EXEMPT.has(path.split(/[\\/]/).at(-1) ?? ""),
+  }),
+);
 
 /* -------------------------------------------------------------------------- */
 /*                         THE FOUR THINGS A DIALOG OWES                      */
 /* -------------------------------------------------------------------------- */
 
 void describe("Every overlay that looks like a dialog is one", () => {
+  void test("at least one dialog was discovered", () => {
+    /*
+     * A scan that silently finds nothing would make every test below
+     * vacuously pass -- the classic way a derived guard stops
+     * guarding.
+     */
+    assert.ok(
+      DIALOG_PAGES.length >= 5,
+      `Only ${DIALOG_PAGES.length} dialogs found. The scan is broken, ` +
+        `and every assertion below it is passing on an empty set.`,
+    );
+  });
+
   for (const page of DIALOG_PAGES) {
     void test(`${page.name} announces itself as a dialog`, () => {
-      const source = read(...page.path);
+      const source = executable(readFileSync(page.file, "utf8"));
 
       /*
        * Anchored so an attribute PREFIX cannot satisfy it.
@@ -88,16 +193,25 @@ void describe("Every overlay that looks like a dialog is one", () => {
     });
 
     void test(`${page.name} gives its dialog a name that resolves`, () => {
-      const source = read(...page.path);
+      const source = executable(readFileSync(page.file, "utf8"));
 
       const labelled = /aria-labelledby="([^"]+)"/.exec(source);
 
-      assert.ok(
-        labelled,
-        `${page.name}'s dialog has no accessible name.`,
-      );
+      /*
+       * aria-label is equally valid and is what CommandPalette uses.
+       * Only a labelledby that points nowhere is a defect.
+       */
+      if (!labelled) {
+        assert.match(
+          source,
+          /aria-label="[^"]+"/,
+          `${page.name}'s dialog has no accessible name.`,
+        );
 
-      const id = labelled?.[1] ?? "";
+        return;
+      }
+
+      const id = labelled[1] ?? "";
 
       /*
        * A dangling aria-labelledby is worse than none: the dialog
@@ -112,20 +226,43 @@ void describe("Every overlay that looks like a dialog is one", () => {
     });
 
     void test(`${page.name} implements the behaviour, not just the role`, () => {
-      const source = read(...page.path);
+      /*
+       * The primitives and the palette own their own keyboard model;
+       * the unreachable components are excused until something mounts
+       * them. Each exemption is named and reasoned at BEHAVIOUR_EXEMPT
+       * rather than being a quiet hole in the scan.
+       */
+      if (page.exempt) return;
+
+      const source = executable(readFileSync(page.file, "utf8"));
 
       /*
-       * Word-anchored for the same reason as the role attribute
-       * above: `noopUseDialogBehaviour({` contains the bare name, so
-       * an unanchored pattern would accept a stub that does nothing.
+       * COUNTED, NOT MERELY PRESENT.
+       *
+       * The first version asserted that useDialogBehaviour appeared
+       * somewhere in the file. /teams/[id] holds TWO dialogs -- rename
+       * and delete -- so unwiring either one left the other's call
+       * behind and the assertion still matched. Verified by mutation:
+       * both single-dialog mutations passed a guard that was supposed
+       * to catch exactly them.
+       *
+       * A file with N dialogs needs N calls. Word-anchored because
+       * `noopUseDialogBehaviour({` contains the bare name.
        */
-      assert.match(
-        source,
-        /(?<![\w$])useDialogBehaviour\(\{/,
-        `${page.name} declares dialog semantics without the keyboard ` +
-          `contract behind them -- no Escape, no focus trap, no focus ` +
-          `restoration. Claiming the role without the behaviour is ` +
-          `worse than the plain div it replaced.`,
+      const dialogCount = (
+        source.match(/(?<![\w-])role="dialog"/g) ?? []
+      ).length;
+
+      const wiredCount = (
+        source.match(/(?<![\w$])useDialogBehaviour\(\{/g) ?? []
+      ).length;
+
+      assert.ok(
+        wiredCount >= dialogCount,
+        `${page.name} declares ${dialogCount} dialog(s) but wires ` +
+          `${wiredCount}. A dialog with the role and no keyboard ` +
+          `contract -- no Escape, no focus trap, no focus restoration ` +
+          `-- is worse than the plain div it replaced.`,
       );
     });
   }

@@ -555,10 +555,28 @@ export default function TopBar({
           MOBILE SEARCH OVERLAY
       ========================================== */}
 
+      {/*
+        NOT A DIALOG.
+
+        This is the mobile search field revealed in place: it covers
+        the bar, not the page, and everything behind it stays
+        legitimately reachable. It carried a dialog role with no modal
+        attribute, which a guard correctly flagged -- and the fix was
+        not to add the modal attribute, because that would assert the
+        page behind is inert when it is not.
+
+        A labelled search region is what this actually is.
+
+        This comment sits ABOVE the ternary deliberately. Placed inside
+        the branch it parses as an object literal, not a comment, and
+        takes the whole file with it -- which is what happened here on
+        the first attempt, and in app/billing/page.tsx earlier in the
+        same session.
+      */}
       {searchOpen ? (
         <div
           className="absolute inset-0 z-50 flex items-center gap-2 border-b border-border/60 bg-background px-3 sm:px-4"
-          role="dialog"
+          role="search"
           aria-label="Search"
         >
           <div className="relative flex-1">

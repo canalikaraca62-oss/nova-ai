@@ -2,7 +2,15 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+
+import { useDialogBehaviour } from "@/app/components/ui/useDialogBehaviour";
 
 /*
   SYRAVEN — Team detail
@@ -132,12 +140,28 @@ export default function TeamDetailPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const [isRenaming, setIsRenaming] = useState(false);
+
+  const renamePanelRef = useRef<HTMLDivElement | null>(null);
+
+  useDialogBehaviour({
+    open: isRenaming,
+    onClose: () => setIsRenaming(false),
+    panelRef: renamePanelRef,
+  });
   const [draftName, setDraftName] = useState("");
   const [draftDescription, setDraftDescription] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const [confirmDelete, setConfirmDelete] = useState(false);
+
+  const deletePanelRef = useRef<HTMLDivElement | null>(null);
+
+  useDialogBehaviour({
+    open: confirmDelete,
+    onClose: () => setConfirmDelete(false),
+    panelRef: deletePanelRef,
+  });
   const [isDeleting, setIsDeleting] = useState(false);
 
   const load = useCallback(async () => {
@@ -443,12 +467,13 @@ export default function TeamDetailPage() {
       {/* ---------------------------- RENAME ---------------------------- */}
 
       {isRenaming ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm">
+        <div className="motion-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm">
           <div
+            ref={renamePanelRef}
             role="dialog"
             aria-modal="true"
             aria-labelledby="team-edit-title"
-            className="w-full max-w-lg rounded-2xl border border-border bg-card shadow-2xl"
+            className="motion-dialog w-full max-w-lg rounded-2xl border border-border bg-card shadow-2xl"
           >
             <div className="border-b border-border px-6 py-5">
               <h2 id="team-edit-title" className="text-lg font-semibold">
@@ -524,12 +549,13 @@ export default function TeamDetailPage() {
       {/* ---------------------------- DELETE ---------------------------- */}
 
       {confirmDelete ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm">
+        <div className="motion-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm">
           <div
+            ref={deletePanelRef}
             role="dialog"
             aria-modal="true"
             aria-labelledby="team-delete-title"
-            className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-2xl"
+            className="motion-dialog w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-2xl"
           >
             <h2 id="team-delete-title" className="text-lg font-semibold">
               Delete this team?
