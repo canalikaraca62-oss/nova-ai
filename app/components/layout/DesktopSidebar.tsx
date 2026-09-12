@@ -15,7 +15,6 @@ import {
   FolderKanban,
   Grid2X2,
   Home,
-  LayoutDashboard,
   MessageSquare,
   PanelLeft,
   Plug,
@@ -85,18 +84,28 @@ export type DesktopSidebarProps = {
 const DEFAULT_SECTIONS: SidebarSection[] = [
   {
     items: [
+      /*
+        ONE HOME.
+
+        This listed "Home -> /" above "Dashboard -> /dashboard" as
+        sibling entries. But `/` is the public marketing page -- it
+        renders a hero and a link to /pricing, outside AppChrome -- so
+        a signed-in user clicking Home in their own workspace was
+        thrown back to the landing page they had already converted
+        from.
+
+        /dashboard is the authenticated surface: it reads real
+        workspaces through WorkspaceContext and carries the empty
+        state a new account actually needs. It is Home.
+
+        `/` stays as a route, because a signed-out visitor still needs
+        a landing page. It just is not a destination inside the shell.
+      */
       {
         label: "Home",
-        href: "/",
-        icon: (
-          <Home className="h-4 w-4" />
-        ),
-      },
-      {
-        label: "Dashboard",
         href: "/dashboard",
         icon: (
-          <LayoutDashboard className="h-4 w-4" />
+          <Home className="h-4 w-4" />
         ),
       },
     ],

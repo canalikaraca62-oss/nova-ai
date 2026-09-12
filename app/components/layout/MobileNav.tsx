@@ -16,7 +16,6 @@ import {
   FolderKanban,
   Grid2X2,
   Home,
-  LayoutDashboard,
   MessageSquare,
   PanelLeft,
   Plug,
@@ -71,18 +70,17 @@ export type MobileNavProps = {
 const DEFAULT_SECTIONS: MobileNavSection[] = [
   {
     items: [
+      /*
+        ONE HOME -- see the same note in DesktopSidebar.
+
+        `/` is the public marketing page. Inside the authenticated
+        shell, Home means /dashboard, which reads real workspaces.
+      */
       {
         label: "Home",
-        href: "/",
-        icon: (
-          <Home className="h-5 w-5" />
-        ),
-      },
-      {
-        label: "Dashboard",
         href: "/dashboard",
         icon: (
-          <LayoutDashboard className="h-5 w-5" />
+          <Home className="h-5 w-5" />
         ),
       },
     ],
