@@ -193,9 +193,18 @@ const Button = forwardRef<
         getButtonVariantClasses(variant),
         getButtonSizeClasses(size),
         fullWidth ? "w-full" : "",
+        /*
+          rounded-xl, cunku urunun fiili kose yaricapi bu: uygulama
+          genelinde 450 rounded-xl'e karsilik 80 rounded-lg, ve kardes
+          primitive Card.tsx zaten rounded-xl kullaniyor. Varsayilan
+          rounded-lg iken <Button> cagrisi cevresindeki her seyden
+          farkli gorunuyordu, bu yuzden benimsenmesi her cagriya
+          className="rounded-xl" eklemeyi gerektirirdi -- yani
+          primitive'in varsayilanini ezmeyi.
+        */
         rounded
           ? "rounded-full"
-          : "rounded-lg",
+          : "rounded-xl",
         className,
       ]
         .filter(Boolean)
