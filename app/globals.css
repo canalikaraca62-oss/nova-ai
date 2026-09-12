@@ -1,6 +1,70 @@
 @import "tailwindcss";
 
 /* =========================================================
+   THEME — the block without which none of this paints
+
+   Tailwind v4 generates colour utilities from an @theme block,
+   not from :root. This project declared its palette on :root
+   alone and imported Tailwind with no theme, so every semantic
+   colour utility in the product resolved to nothing:
+
+     bg-card, bg-muted, bg-background, bg-primary
+       -> rgba(0, 0, 0, 0), measured in the browser
+
+     text-foreground, text-muted-foreground, text-primary
+       -> rgb(250, 250, 250), all identical, so "muted" text was
+          indistinguishable from primary text
+
+   That is roughly 3,500 occurrences across 118 files painting
+   either nothing or the wrong colour. It is also why so much of
+   this codebase reaches for bg-white/[0.0x] and border-white/10
+   instead: those are real Tailwind utilities and they worked.
+
+   Confirmed from two instruments before changing anything: the
+   built bundle contains .bg-white 47 times and .bg-card zero
+   times, and getComputedStyle on a live page returned
+   transparent for every semantic background.
+
+   The :root block below is kept as the single source of the
+   values. This maps those same values onto the names Tailwind
+   needs, so there is one place to change a colour and the
+   utilities follow.
+   ========================================================= */
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-destructive: var(--danger);
+  --color-info: var(--info);
+}
+
+/* =========================================================
    SYRAVEN — GLOBAL DESIGN SYSTEM
    ========================================================= */
 
@@ -489,20 +553,20 @@ select:-webkit-autofill:focus {
    is present, it simply does not travel.
    ========================================================= */
 
-.motion-enter {
-  animation: syraven-fade-in var(--duration-settle) var(--ease-enter)
-    both;
-}
+/*
+  motion-enter, motion-rise, motion-pop and motion-press are gone.
 
-.motion-rise {
-  animation: syraven-slide-up var(--duration-settle) var(--ease-enter)
-    both;
-}
+  All four were defined here and used nowhere -- the same dead-CSS
+  defect the previous vocabulary died of, reproduced within hours of
+  my removing it. A scale nobody reaches for is not a design system.
 
-.motion-pop {
-  animation: syraven-scale-in var(--duration-quick) var(--ease-enter)
-    both;
-}
+  They are deleted rather than force-adopted, because neither had an
+  honest home: every candidate list page filters on keystroke, so an
+  entrance would replay as the user types, and there were no
+  bg-primary buttons wanting press feedback. The keyframes remain, so
+  reinstating one is three lines on the day something genuinely
+  arrives.
+*/
 
 /*
   A dialog arriving.
@@ -534,21 +598,13 @@ select:-webkit-autofill:focus {
 }
 
 /*
-  Press feedback.
+  Press feedback, removed with the other three.
 
   A control that moves under the finger confirms the press
   landed before any network answer arrives. Kept to a scale
   nobody consciously notices; anything larger reads as the
   button breaking.
 */
-.motion-press {
-  transition: transform var(--duration-instant) var(--ease-move);
-}
-
-.motion-press:active {
-  transform: scale(0.97);
-}
-
 /* =========================================================
    SKELETON
    ========================================================= */

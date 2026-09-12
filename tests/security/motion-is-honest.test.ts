@@ -143,14 +143,24 @@ void describe("Motion is built from tokens, not literals", () => {
      * as a whole: a literal duration inside one utility would
      * otherwise hide behind the tokens used by its neighbours.
      */
-    const utilities = [
-      "motion-enter",
-      "motion-rise",
-      "motion-pop",
-      "motion-dialog",
-      "motion-backdrop",
-      "motion-press",
-    ];
+    /*
+     * ONLY THE UTILITIES THAT ARE ACTUALLY USED.
+     *
+     * Six were defined. Four -- enter, rise, pop and press -- had zero
+     * consumers, which is the exact dead-CSS defect this file's own
+     * header describes and which the previous vocabulary died of: a
+     * scale nobody reaches for is not a design system.
+     *
+     * They are deleted rather than force-adopted. An entrance
+     * animation is only honest where content genuinely arrives, and
+     * every candidate list page here filters on keystroke, so the
+     * entrance would replay as the user types. There were no
+     * bg-primary buttons for press feedback either.
+     *
+     * If a real entrance appears later, the keyframes are still here
+     * and the utility is three lines.
+     */
+    const utilities = ["motion-dialog", "motion-backdrop"];
 
     for (const utility of utilities) {
       const rule = new RegExp(`\\.${utility}\\s*\\{([^}]*)\\}`);
