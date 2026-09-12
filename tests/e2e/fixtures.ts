@@ -202,7 +202,7 @@ export const RUN_TAG = `e2e-${randomUUID().slice(0, 8)}`;
 
 /** Rows created by one test, newest first for dependency-safe teardown. */
 interface SeededRow {
-  readonly kind: "project" | "task";
+  readonly kind: "project" | "task" | "knowledge";
   readonly id: string;
   readonly label: string;
 }
@@ -272,6 +272,42 @@ export class Seeded {
   }
 
   /**
+   * Creates a knowledge record whose title carries this run's tag.
+   *
+   * This is the Brain: /knowledge and the semantic index both read
+   * public.knowledge, so a row seeded here is the same row the product
+   * serves. Nothing about it is special-cased for testing.
+   */
+  async knowledge(
+    suffix = "brain",
+  ): Promise<{ id: string; title: string }> {
+    const title = `${RUN_TAG} ${suffix}`;
+
+    const response = await this.page.request.post("/api/knowledge", {
+      data: {
+        title,
+        content:
+          `Seeded by ${RUN_TAG}. This record exists to prove the Brain ` +
+          `stores and retrieves real rows, and is deleted in teardown.`,
+      },
+    });
+
+    expect(
+      response.status(),
+      `seeding knowledge failed: ${await response.text()}`,
+    ).toBe(201);
+
+    const body = (await response.json()) as { data?: { id?: string } };
+    const id = body.data?.id;
+
+    expect(id, "created knowledge returned no id").toBeTruthy();
+
+    this.created.unshift({ kind: "knowledge", id: id as string, label: title });
+
+    return { id: id as string, title };
+  }
+
+  /**
    * Deletes everything this test created, and VERIFIES each deletion.
    *
    * The verification is the point. Both routes answer 404 when the row
@@ -288,7 +324,12 @@ export class Seeded {
     const failures: string[] = [];
 
     for (const row of this.created) {
-      const path = row.kind === "project" ? "/api/projects" : "/api/tasks";
+      const path =
+        row.kind === "project"
+          ? "/api/projects"
+          : row.kind === "task"
+            ? "/api/tasks"
+            : "/api/knowledge";
 
       try {
         const response = await this.page.request.delete(
