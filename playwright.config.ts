@@ -121,10 +121,16 @@ loadE2eEnv();
  * does, in the same precedence order, or it is decoration.
  *
  * `.env.e2e.local` sits at the head of that order. It is also exported
- * into process.env above, so `next start` -- which would otherwise read
- * `.env.local` and reach production -- inherits the test project too.
- * Checking a file the spawned server does not honour would put the
- * guard and the application under test on different databases.
+ * into process.env above, and that export is what actually decides the
+ * database: NEXT_PUBLIC_* values are inlined into the compiled app when
+ * `next build` runs, and an exported value beats .env.local in Next's
+ * loader (verified by behaviour, not assumed). So the webServer's
+ * `npm run build` produces a build for the test project.
+ *
+ * A server this config did NOT build -- one already listening when
+ * reuseExistingServer kicks in -- carries whatever its own build
+ * inlined, which from .env.local is production. This guard cannot see
+ * that; tests/e2e/buildTarget.ts can, and runs before any browser.
  */
 function resolveSupabaseUrl(): { url: string | undefined; source: string } {
   if (process.env.NEXT_PUBLIC_SUPABASE_URL) {

@@ -44,15 +44,19 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin";
       the identity the work will run as.
     - Nothing here SERVES user data. It moves rows between queue states.
     - public.jobs still has RLS enabled, and the accompanying migration
-      adds the update policy that keeps every non-service-role path out
-      of the lease columns.
+      narrows what an authenticated caller may update to cancelling
+      their own unfinished job.
 
   THE LEASE
 
-  A claim is a compare-and-set: the update only matches rows still in a
-  claimable state, so two runners racing for the same row produce one
-  winner and one empty result. Postgres does the arbitration; this code
-  does not hold a lock of its own.
+  A claim is a compare-and-set on BOTH the status and the lease it read.
+  Status alone is enough for a queued or retrying job, because the claim
+  moves it to running. It is not enough for an expired lease: that row
+  is already 'running', so 'running -> running' would match for every
+  runner that read it. Pinning locked_at to the value this runner saw
+  means the first claim rewrites it and every later claim compares
+  against a value that no longer exists. Postgres arbitrates; this code
+  holds no lock of its own.
 */
 
 /** Queue states, mirroring the CHECK constraint on public.jobs.status. */
@@ -69,6 +73,15 @@ export type JobStatus = (typeof JOB_STATUSES)[number];
 
 /** States a runner may pick up. */
 const CLAIMABLE: readonly JobStatus[] = ["queued", "retrying"];
+
+/**
+ * States a job can still leave.
+ *
+ * completed, failed and cancelled are final. A write that could move a
+ * job out of one of them -- most importantly out of 'cancelled' -- would
+ * make that state advisory.
+ */
+const OPEN: readonly JobStatus[] = ["queued", "retrying", "running"];
 
 /**
  * How long a lease is honoured before another runner may steal it.
@@ -93,7 +106,8 @@ export interface ClaimedJob {
  *
  * @param runnerId Identifies which runner holds the lease. Recorded in
  *                 locked_by so a stranded job can be traced to the
- *                 process that took it.
+ *                 process that took it, and so only that runner may
+ *                 complete it.
  * @param now      Injectable for tests. Never read from a request.
  */
 export async function claimNextJob(
@@ -141,18 +155,7 @@ export async function claimNextJob(
       continue;
     }
 
-    /*
-      COMPARE-AND-SET.
-
-      The eq("status", …) in this update is what makes the claim safe.
-      Two runners reading the same candidate both issue this update;
-      only the one whose status predicate still matches writes a row.
-      The loser gets an empty result and moves to the next candidate.
-
-      Dropping that predicate would let both runners believe they own
-      the job, and the work would run twice.
-    */
-    const { data: claimed, error: claimError } = await supabaseAdmin
+    let claim = supabaseAdmin
       .from("jobs")
       .update({
         status: "running",
@@ -163,7 +166,21 @@ export async function claimNextJob(
         updated_at: nowIso,
       })
       .eq("id", candidate.id)
-      .eq("status", candidate.status)
+      .eq("status", candidate.status);
+
+    /*
+      THE LEASE IS PART OF THE COMPARE.
+
+      Without this, two runners that both read an expired 'running' row
+      would both match 'status = running' and both believe they own it,
+      and the work would run twice.
+    */
+    claim =
+      candidate.locked_at === null
+        ? claim.is("locked_at", null)
+        : claim.eq("locked_at", candidate.locked_at);
+
+    const { data: claimed, error: claimError } = await claim
       .select("id, type, payload, attempts, max_attempts")
       .maybeSingle();
 
@@ -184,11 +201,16 @@ export async function claimNextJob(
 /**
  * Records a successful outcome and releases the lease.
  *
+ * Scoped to the runner that holds the lease. A runner whose lease
+ * expired and was reclaimed by another must not report an outcome for
+ * work the other runner now owns -- that is one job with two authors.
+ *
  * The lease columns are cleared deliberately: a completed job holding a
  * lock reads as work in progress to anyone inspecting the table.
  */
 export async function completeJob(
   jobId: string,
+  runnerId: string,
   result: unknown,
   now: Date = new Date(),
 ): Promise<boolean> {
@@ -207,6 +229,7 @@ export async function completeJob(
     .eq("id", jobId)
     /* Only the running job may complete: a cancelled one must stay so. */
     .eq("status", "running")
+    .eq("locked_by", runnerId)
     .select("id")
     .maybeSingle();
 
@@ -219,11 +242,20 @@ export async function completeJob(
  * Retryable failures return to "retrying" so the next scan picks them
  * up; exhausted ones become "failed" permanently. The distinction is
  * made from attempts already recorded, never from a caller's claim.
+ *
+ * Only an OPEN job can fail. Without that predicate, a job the user
+ * cancelled while it ran would be moved back to 'retrying' by its
+ * runner's failure report and then claimed again -- cancellation
+ * silently undone.
+ *
+ * @param runnerId When given, the failure is only recorded if that
+ *                 runner still holds the lease.
  */
 export async function failJob(
   jobId: string,
   error: unknown,
   now: Date = new Date(),
+  runnerId?: string,
 ): Promise<boolean> {
   const nowIso = now.toISOString();
 
@@ -237,7 +269,7 @@ export async function failJob(
 
   const exhausted = current.attempts >= current.max_attempts;
 
-  const { data, error: writeError } = await supabaseAdmin
+  let write = supabaseAdmin
     .from("jobs")
     .update({
       status: exhausted ? "failed" : "retrying",
@@ -248,8 +280,11 @@ export async function failJob(
       updated_at: nowIso,
     })
     .eq("id", jobId)
-    .select("id")
-    .maybeSingle();
+    .in("status", [...OPEN]);
+
+  if (runnerId !== undefined) write = write.eq("locked_by", runnerId);
+
+  const { data, error: writeError } = await write.select("id").maybeSingle();
 
   return !writeError && data !== null;
 }
@@ -257,23 +292,34 @@ export async function failJob(
 /**
  * Counts jobs by status.
  *
- * Reads the real table. There is no computed "health" figure here: a
- * queue depth is a fact, and anything beyond it would be an estimate
- * presented as a measurement.
+ * One exact count per status, computed by the database. Selecting the
+ * rows and counting them here would be wrong past 1,000 jobs: PostgREST
+ * caps a response at that many rows, so the totals would stop growing
+ * while reading as complete. A queue depth is a fact, and a truncated
+ * one is an estimate presented as a measurement.
  */
 export async function queueDepth(): Promise<Record<JobStatus, number> | null> {
-  const { data, error } = await supabaseAdmin.from("jobs").select("status");
+  const counts = await Promise.all(
+    JOB_STATUSES.map(async (status) => {
+      const { count, error } = await supabaseAdmin
+        .from("jobs")
+        .select("id", { count: "exact", head: true })
+        .eq("status", status);
 
-  if (error || !data) return null;
+      return error || count === null ? null : count;
+    }),
+  );
 
-  const counts = Object.fromEntries(
-    JOB_STATUSES.map((status) => [status, 0]),
-  ) as Record<JobStatus, number>;
+  const depth = {} as Record<JobStatus, number>;
 
-  for (const row of data) {
-    const status = row.status as JobStatus;
-    if (status in counts) counts[status] += 1;
+  for (const [index, status] of JOB_STATUSES.entries()) {
+    const count = counts[index];
+
+    /* One failed count makes the whole picture unknown, not zero. */
+    if (count === null || count === undefined) return null;
+
+    depth[status] = count;
   }
 
-  return counts;
+  return depth;
 }

@@ -1077,7 +1077,11 @@ void describe("Source invariants — orchestrator", () => {
     );
 
     /* The routed id is what selectModel is asked to authorise. */
-    assert.match(ORCHESTRATOR_CODE, /selectModel\(\s*routed\?\.model\.id/);
+    /*
+     * The registry KEY, not model.id -- selectModel resolves by key, and
+     * the two differ for at least one approved model.
+     */
+    assert.match(ORCHESTRATOR_CODE, /selectModel\(\s*routed\?\.registryKey/);
 
     /* Capability and complexity are fixed by the server, not requested. */
     assert.match(routing, /capability:\s*"chat"/);

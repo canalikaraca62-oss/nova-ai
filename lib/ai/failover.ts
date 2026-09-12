@@ -112,9 +112,9 @@ export function failoverCandidates(
   capability: ModelCapability,
   plan: PlanId,
 ): readonly ModelDefinition[] {
-  const alternatives = Object.values(APPROVED_MODELS)
+  const alternatives = Object.entries(APPROVED_MODELS)
     .filter(
-      (model) =>
+      ([, model]) =>
         model.capability === capability &&
         model.provider !== primary.provider &&
         model.id !== primary.id,
@@ -122,8 +122,14 @@ export function failoverCandidates(
     /*
       Re-checked against the caller's real plan. Failover is not a
       side door around the entitlement that selectModel enforces.
+
+      By REGISTRY KEY, not model.id. The two differ -- the vision entry
+      is keyed "gpt-4o-mini-vision" and sends id "gpt-4o-mini" -- and
+      selectModel looks names up by key, so asking for model.id would
+      validate a different entry than the one being offered.
     */
-    .filter((model) => selectModel(model.id, capability, plan).ok)
+    .filter(([registryKey]) => selectModel(registryKey, capability, plan).ok)
+    .map(([, model]) => model)
     .sort((a, b) => a.id.localeCompare(b.id));
 
   return [primary, ...alternatives];

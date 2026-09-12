@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto";
 
+import { assertBuildIsNotProduction } from "./buildTarget";
+
 import { test as base, expect, type Page } from "@playwright/test";
 
 /**
@@ -377,10 +379,15 @@ export class Seeded {
  * `seeded` tears down after the test body regardless of outcome, so a
  * failing assertion still removes the rows it created.
  */
-export const test = base.extend<{
-  problems: PageProblems;
-  seeded: Seeded;
-}>({
+export const test = base.extend<
+  {
+    problems: PageProblems;
+    seeded: Seeded;
+  },
+  {
+    buildTarget: void;
+  }
+>({
   problems: async ({ page }, use) => {
     const problems = watchForProblems(page);
     await use(problems);
@@ -395,6 +402,24 @@ export const test = base.extend<{
       await seeded.cleanup();
     }
   },
+
+  /*
+    The build under test is not production.
+
+    Automatic and worker-scoped: it runs once per worker, before the
+    first test in any spec touches a page, so no spec can forget it.
+    The config refuses a production URL, but NEXT_PUBLIC_* values are
+    inlined at build time and reuseExistingServer drives whatever is
+    already listening -- so the build itself has to be checked. See
+    tests/e2e/buildTarget.ts.
+  */
+  buildTarget: [
+    async ({}, use) => {
+      assertBuildIsNotProduction();
+      await use();
+    },
+    { scope: "worker", auto: true },
+  ],
 });
 
 export { expect };

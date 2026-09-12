@@ -277,7 +277,7 @@ export async function runOrchestration(
   });
 
   const model = selectModel(
-    routed?.model.id ?? null,
+    routed?.registryKey ?? null,
     "chat",
     request.entitlement.effectivePlan,
   );

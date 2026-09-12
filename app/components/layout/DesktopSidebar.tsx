@@ -139,6 +139,25 @@ const DEFAULT_SECTIONS: SidebarSection[] = [
         ),
       },
       {
+        /*
+          The human control plane, beside the agents it governs.
+
+          /api/agents/approvals has had GET and POST since the approval
+          store was built, but no page rendered them -- so the control
+          that decides whether an agent may act was reachable only by
+          an HTTP client. A pending approval had nowhere to be seen.
+
+          Placed after Agents rather than under INTELLIGENCE: an
+          approval is an execution decision about an agent's next step,
+          not something the Brain knows.
+        */
+        label: "Approvals",
+        href: "/approvals",
+        icon: (
+          <ShieldCheck className="h-4 w-4" />
+        ),
+      },
+      {
         label: "Projects",
         href: "/projects",
         icon: (
@@ -185,21 +204,6 @@ const DEFAULT_SECTIONS: SidebarSection[] = [
         href: "/search",
         icon: (
           <Search className="h-4 w-4" />
-        ),
-      },
-      {
-        /*
-          The human control plane.
-
-          /api/agents/approvals has had GET and POST since the approval
-          store was built, but no page rendered them -- so the control
-          that decides whether an agent may act was reachable only by
-          an HTTP client. A pending approval had nowhere to be seen.
-        */
-        label: "Approvals",
-        href: "/approvals",
-        icon: (
-          <ShieldCheck className="h-4 w-4" />
         ),
       },
       {

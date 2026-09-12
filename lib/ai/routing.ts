@@ -32,6 +32,16 @@ import {
   model a plan excludes, and the failover suite already proves how
   easily a second path becomes a side door.
 
+  REGISTRY KEYS, NOT MODEL IDS
+
+  selectModel looks a name up by its APPROVED_MODELS key. That key is
+  not always the id sent to the provider: the vision entry is keyed
+  "gpt-4o-mini-vision" and sends id "gpt-4o-mini", which is also the
+  chat entry's key. Validating by model.id therefore asked the authority
+  about the CHAT entry while routing a vision request, and the only
+  vision model was rejected as the wrong capability. Every lookup here
+  uses the key, and the decision carries it so callers do the same.
+
   THE DIMENSIONS, AND WHICH ONES ARE REAL
 
     capability   real. From the registry; a transcription model cannot
@@ -48,8 +58,8 @@ import {
                  deployment, and lib/billing/config.ts prices SYRAVEN's
                  own credits, not provider spend. Cost is therefore
                  approximated by tier: a "fast" model is cheaper than a
-                 "powerful" one. That ordering is true; a currency
-                 figure would be invented.
+                 "powerful" one. That ordering is true; a currency figure
+                 would be invented.
 
     latency      PARTIAL, same reasoning. Tier stands in for speed. No
                  request duration is recorded anywhere in this codebase.
@@ -84,6 +94,11 @@ export interface RoutingRequest {
 }
 
 export interface RoutingDecision {
+  /**
+   * The APPROVED_MODELS key to hand selectModel. Not always model.id --
+   * see REGISTRY KEYS above.
+   */
+  readonly registryKey: string;
   readonly model: ModelDefinition;
   /** Why this model, in terms a log reader can check. */
   readonly reason: string;
@@ -92,11 +107,14 @@ export interface RoutingDecision {
 }
 
 export interface RoutingCandidate {
+  /** The APPROVED_MODELS key -- the name selectModel resolves. */
+  readonly registryKey: string;
+  /** The id sent to the provider. */
   readonly modelId: string;
   readonly provider: string;
   readonly tier: ModelTier;
   readonly score: number;
-  /** Set when the model was excluded outright. */
+  /** Set when the model was excluded outright, with the real reason. */
   readonly rejected?: string;
 }
 
@@ -169,18 +187,25 @@ export function routeCandidates(
 
   const candidates: RoutingCandidate[] = [];
 
-  for (const model of Object.values(APPROVED_MODELS)) {
+  for (const [registryKey, model] of Object.entries(APPROVED_MODELS)) {
     if (model.capability !== request.capability) continue;
 
     const base: Omit<RoutingCandidate, "score" | "rejected"> = {
+      registryKey,
       modelId: model.id,
       provider: model.provider,
       tier: model.tier,
     };
 
     /* Entitlement, capability and existence -- the one authority. */
-    if (!selectModel(model.id, request.capability, request.plan).ok) {
-      candidates.push({ ...base, score: -1, rejected: "PLAN_NOT_PERMITTED" });
+    const selection = selectModel(
+      registryKey,
+      request.capability,
+      request.plan,
+    );
+
+    if (!selection.ok) {
+      candidates.push({ ...base, score: -1, rejected: selection.reason });
       continue;
     }
 
@@ -212,7 +237,7 @@ export function routeCandidates(
 
   return candidates.sort((a, b) => {
     if (b.score !== a.score) return b.score - a.score;
-    return a.modelId.localeCompare(b.modelId);
+    return a.registryKey.localeCompare(b.registryKey);
   });
 }
 
@@ -220,8 +245,8 @@ export function routeCandidates(
  * Recommends a model, or explains why none fits.
  *
  * The returned model is guaranteed to have passed selectModel for this
- * caller. Callers still pass it back through the policy layer -- this
- * function does not authorise anything, it proposes.
+ * caller. Callers still pass `registryKey` back through the policy
+ * layer -- this function does not authorise anything, it proposes.
  */
 export function recommendModel(
   request: RoutingRequest,
@@ -233,7 +258,7 @@ export function recommendModel(
   if (!best) return null;
 
   const selection = selectModel(
-    best.modelId,
+    best.registryKey,
     request.capability,
     request.plan,
   );
@@ -252,9 +277,10 @@ export function recommendModel(
   );
 
   return {
+    registryKey: best.registryKey,
     model: selection.model,
     reason:
-      `${best.modelId} (${best.tier}) for ${request.complexity ?? "standard"} ` +
+      `${best.registryKey} (${best.tier}) for ${request.complexity ?? "standard"} ` +
       `work wanting ${wanted}; ${considered.length} candidate(s) considered`,
     considered,
   };

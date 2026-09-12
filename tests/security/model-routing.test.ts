@@ -77,7 +77,7 @@ void describe("Routing cannot grant what a plan excludes", () => {
   void test("every candidate is validated with selectModel", () => {
     assert.match(
       ROUTING,
-      /selectModel\(model\.id, request\.capability, request\.plan\)/,
+      /selectModel\(\s*registryKey,\s*request\.capability,\s*request\.plan,?\s*\)/,
       "Candidates must go through the registry's entitlement check, or " +
         "routing becomes a side door to a model the caller's plan " +
         "excludes.",
@@ -95,7 +95,7 @@ void describe("Routing cannot grant what a plan excludes", () => {
   void test("a rejected candidate is scored out, not ranked low", () => {
     assert.match(
       ROUTING,
-      /rejected: "PLAN_NOT_PERMITTED"[\s\S]{0,80}?continue;/,
+      /rejected: selection\.reason[\s\S]{0,80}?continue;/,
       "A model the plan excludes must be removed from contention. " +
         "Ranking it low still leaves it selectable when nothing else " +
         "qualifies.",
@@ -188,9 +188,26 @@ void describe("The recommendation comes from the registry", () => {
   void test("recommendModel re-resolves through selectModel", () => {
     assert.match(
       ROUTING,
-      /const selection = selectModel\(\s*best\.modelId,/,
+      /const selection = selectModel\(\s*best\.registryKey,/,
       "The ModelDefinition handed back must come from the authority, " +
         "not from a copy held here, or the two drift.",
+    );
+  });
+
+  void test("registry keys and model ids genuinely differ", () => {
+    /*
+     * Why every lookup above is by key. selectModel resolves a name by
+     * its APPROVED_MODELS key; the vision entry is keyed
+     * "gpt-4o-mini-vision" and sends id "gpt-4o-mini" -- the chat
+     * entry's key. Asking the authority about model.id validated the
+     * CHAT entry while routing a vision request, so the only vision
+     * model was rejected as the wrong capability.
+     */
+    assert.match(
+      REGISTRY,
+      /"gpt-4o-mini-vision": \{\s*id: "gpt-4o-mini",/,
+      "If no key differs from its id any more, the key-vs-id rule is " +
+        "untested -- revisit these assertions deliberately.",
     );
   });
 
@@ -212,7 +229,7 @@ void describe("The recommendation comes from the registry", () => {
      * moved into the registry and the table deleted.
      */
     assert.ok(
-      ROUTING.includes("Object.values(APPROVED_MODELS)"),
+      ROUTING.includes("Object.entries(APPROVED_MODELS)"),
       "Candidates must be read from the registry, never redeclared.",
     );
 
@@ -245,7 +262,7 @@ void describe("The orchestrator routes rather than taking the default", () => {
   void test("the recommendation feeds selectModel", () => {
     assert.match(
       ORCHESTRATOR,
-      /routed\?\.model\.id \?\? null/,
+      /routed\?\.registryKey \?\? null/,
       "The routed model must be what selectModel is asked to authorise. " +
         "Calling recommendModel and discarding its answer would leave " +
         "the orchestrator on the registry default.",

@@ -208,6 +208,130 @@ void describe("Only a running job may complete", () => {
         "advisory rather than binding.",
     );
   });
+
+  void test("only the runner holding the lease may complete it", () => {
+    /*
+     * A runner whose lease expired and was reclaimed must not report an
+     * outcome for work another runner now owns.
+     */
+    assert.match(
+      QUEUE,
+      /\.eq\("status", "running"\)\s*\.eq\("locked_by", runnerId\)/,
+      "Completion must be scoped to the lease holder, or a stale runner " +
+        "can overwrite the outcome of the runner that took over.",
+    );
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/*                    A RECLAIM IS STILL A COMPARE-AND-SET                    */
+/* -------------------------------------------------------------------------- */
+
+void describe("Two runners cannot both reclaim an expired lease", () => {
+  void test("the claim is pinned to the lease it read", () => {
+    /*
+     * Status alone is not enough for an expired lease: the row is
+     * already 'running', so 'running -> running' matches for every
+     * runner that read it. Pinning locked_at makes the first claim the
+     * only one that can match.
+     */
+    assert.match(
+      QUEUE,
+      /claim\.eq\("locked_at", candidate\.locked_at\)/,
+      "Without the lease in the compare, an expired job is reclaimed by " +
+        "every runner that saw it, and the work runs more than once.",
+    );
+
+    assert.match(
+      QUEUE,
+      /claim\.is\("locked_at", null\)/,
+      "An unleased job must be compared as unleased, or a claim can " +
+        "match a row another runner has just leased.",
+    );
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/*                     A FINISHED JOB CANNOT BE REOPENED                      */
+/* -------------------------------------------------------------------------- */
+
+void describe("A failure report cannot undo a cancellation", () => {
+  void test("only open jobs can be failed", () => {
+    assert.match(
+      QUEUE,
+      /\.in\("status", \[\.\.\.OPEN\]\)/,
+      "Without a status predicate, a job the user cancelled is moved " +
+        "back to 'retrying' by its runner's failure and claimed again.",
+    );
+  });
+
+  void test("cancelled, completed and failed are not open", () => {
+    assert.match(
+      QUEUE,
+      /const OPEN: readonly JobStatus\[\] = \["queued", "retrying", "running"\];/,
+      "The open set must exclude every terminal state.",
+    );
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/*                         THE DEPTH IS NOT TRUNCATED                         */
+/* -------------------------------------------------------------------------- */
+
+void describe("Queue depth is counted by the database", () => {
+  void test("each status is an exact count", () => {
+    assert.match(
+      QUEUE,
+      /count: "exact", head: true/,
+      "Counts must come from the database, not from counting rows here.",
+    );
+  });
+
+  void test("rows are not fetched to be counted", () => {
+    /*
+     * PostgREST caps a response at 1,000 rows. Counting fetched rows
+     * would stop growing past that while reading as complete.
+     */
+    assert.ok(
+      !/\.from\("jobs"\)\.select\("status"\)/.test(QUEUE),
+      "Counting fetched rows silently truncates at 1,000 jobs.",
+    );
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/*                A CANCELLATION CANNOT CARRY A FABRICATED RESULT             */
+/* -------------------------------------------------------------------------- */
+
+void describe("The cancel privilege covers only what cancelling needs", () => {
+  void test("broad UPDATE is withdrawn from authenticated", () => {
+    /*
+     * A policy constrains rows and their final state, not columns. On
+     * its own, "cancel your own job" still lets the same statement write
+     * result, error or locked_by.
+     */
+    assert.match(
+      MIGRATION,
+      /revoke update on public\.jobs from authenticated;/,
+      "Without narrowing the privilege, a cancellation can also write a " +
+        "fabricated result onto the job.",
+    );
+  });
+
+  void test("only status and updated_at are granted back", () => {
+    assert.match(
+      MIGRATION,
+      /grant update \(status, updated_at\) on public\.jobs to authenticated;/,
+      "The column grant must name exactly what a cancellation writes.",
+    );
+  });
+
+  void test("the narrowing follows the policy", () => {
+    const policyAt = MIGRATION.indexOf('create policy "users can cancel own jobs"');
+    const revokeAt = MIGRATION.indexOf("revoke update on public.jobs");
+
+    assert.ok(policyAt > 0 && revokeAt > policyAt);
+  });
 });
 
 /* -------------------------------------------------------------------------- */

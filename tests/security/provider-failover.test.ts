@@ -69,9 +69,16 @@ const ORCHESTRATOR = executable(
 
 void describe("Failover cannot outrank the caller's plan", () => {
   void test("every candidate is re-validated with selectModel", () => {
+    /*
+     * By registry key. selectModel resolves names by APPROVED_MODELS
+     * key, and a key is not always the model id -- the vision entry is
+     * keyed "gpt-4o-mini-vision" with id "gpt-4o-mini", the chat
+     * entry's key. Validating by model.id checks a different entry
+     * than the one being offered.
+     */
     assert.match(
       FAILOVER,
-      /selectModel\(model\.id, capability, plan\)/,
+      /selectModel\(registryKey, capability, plan\)/,
       "Candidates must go through the same entitlement check as the " +
         "primary, or a failing primary becomes a way to reach a model " +
         "the caller's plan excludes.",

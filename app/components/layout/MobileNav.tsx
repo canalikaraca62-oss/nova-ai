@@ -114,6 +114,14 @@ const DEFAULT_SECTIONS: MobileNavSection[] = [
         ),
       },
       {
+        /* See DesktopSidebar: the control plane sits beside Agents. */
+        label: "Approvals",
+        href: "/approvals",
+        icon: (
+          <ShieldCheck className="h-5 w-5" />
+        ),
+      },
+      {
         label: "Projects",
         href: "/projects",
         icon: (
@@ -160,13 +168,6 @@ const DEFAULT_SECTIONS: MobileNavSection[] = [
         href: "/search",
         icon: (
           <Search className="h-5 w-5" />
-        ),
-      },
-      {
-        label: "Approvals",
-        href: "/approvals",
-        icon: (
-          <ShieldCheck className="h-5 w-5" />
         ),
       },
       {

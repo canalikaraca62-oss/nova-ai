@@ -65,6 +65,24 @@ runs.
      and teardown **asserts** each deletion. Anything a crash leaves
      behind is identifiable by that tag rather than anonymous.
 
+### The build under test decides the database
+
+`NEXT_PUBLIC_SUPABASE_URL` is **inlined when the app is built**, not read
+when it starts. Exporting the E2E environment into `next start` changes
+nothing about a build that was made from `.env.local` — that server talks
+to production.
+
+- Let Playwright build: its `webServer` runs `npm run build` with
+  `.env.e2e.local` exported, so the build targets the test project.
+- Do not leave a server running on the E2E port from a normal
+  `npm run build`. `reuseExistingServer` will drive it.
+- `tests/e2e/buildTarget.ts` runs automatically before every worker and
+  **refuses to start** if `.next/server` contains the production project
+  ref. It reads files on disk only; no request is made.
+
+This is not a hypothetical: a run once reused a production build and sent
+every sign-in to the live project (401, no session, nothing written).
+
 ## What these tests cover
 
 Things only a browser can verify:

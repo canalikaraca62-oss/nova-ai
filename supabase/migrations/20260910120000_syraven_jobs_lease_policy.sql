@@ -36,14 +36,11 @@
 -- Leasing is therefore reserved to trusted server code through the
 -- service-role client (lib/autopilot/queue.ts), exactly as
 -- lib/usage/meter.ts writes the metering ledger. Service role bypasses
--- RLS, so it needs no policy; what it needs is for everyone ELSE to be
--- unable to reach these columns, and that is what the absence of a
--- broad update policy already provides.
+-- RLS and holds its own privileges, so nothing here affects it.
 --
 -- What this migration adds is the one update a USER legitimately owns:
 -- cancelling their own job. A person who queued work must be able to
--- stop it. That is the only state transition a client may perform, and
--- the WITH CHECK clause pins it to exactly that.
+-- stop it. That is the only state transition a client may perform.
 --
 --
 -- WHY A CANCEL POLICY IS SAFE WHEN A GENERAL ONE IS NOT
@@ -53,14 +50,15 @@
 --   WITH CHECK restricts WHAT THEY BECOME: status must be 'cancelled'.
 --
 -- Without WITH CHECK, "update your own queued job" is "set your own job
--- to completed", which is the forgery above. With it, the only
--- reachable end state is cancellation.
+-- to completed", which is the forgery above.
 --
--- The lease columns are not mentioned because a policy cannot restrict
--- columns; that is why the transition itself is constrained instead.
--- A caller who sets status='cancelled' and also writes locked_by has
--- still only cancelled their own job, and the runner's compare-and-set
--- (.eq("status", …)) will then decline to claim it.
+-- A policy constrains rows and their final state, not COLUMNS. On its
+-- own, "cancel your own job" would still let the same statement write
+-- result, error, completed_at or locked_by -- a cancelled job carrying a
+-- fabricated result. So the UPDATE privilege for authenticated is
+-- narrowed to the two columns a cancellation needs: status and
+-- updated_at. Postgres checks column privileges before RLS, so a
+-- request touching any other column is refused outright.
 --
 --
 -- SAFETY
@@ -68,12 +66,13 @@
 -- Additive, idempotent, non-destructive:
 --   - drop policy if exists + create policy (the established pattern
 --     from 20260904122000 and 20260905120000)
---   - no create table, no column change, no index change
+--   - revoke/grant of the UPDATE privilege for authenticated only; no
+--     other role, privilege, table, column, index or existing policy
+--     is changed, and re-applying yields the same grant
 --   - no drop table, truncate, delete, or alter-drop
---   - no existing policy is modified; the two existing jobs policies
---     are left exactly as they are
 --
--- Applying to a database that already has the policy is a no-op.
+-- No application code updates public.jobs as an authenticated user, so
+-- narrowing the privilege removes nothing that is in use.
 -- =========================================================
 
 
@@ -95,3 +94,12 @@ with check (
   user_id = auth.uid()
   and status = 'cancelled'
 );
+
+
+-- =========================================================
+-- ...and a cancellation can only touch the columns it needs.
+-- =========================================================
+
+revoke update on public.jobs from authenticated;
+
+grant update (status, updated_at) on public.jobs to authenticated;
