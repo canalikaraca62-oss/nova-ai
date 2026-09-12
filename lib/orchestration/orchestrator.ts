@@ -49,6 +49,7 @@ import {
 } from "@/lib/usage/entitlements";
 import { chatCompletionWithFailover } from "@/lib/ai/failover";
 import { selectModel } from "@/lib/ai/registry";
+import { recommendModel } from "@/lib/ai/routing";
 import { sanitizeUntrusted } from "@/lib/memory/contextBudget";
 import {
   type ExecutionState,
@@ -255,8 +256,28 @@ export async function runOrchestration(
   /* 1. Ask the model for a plan                                       */
   /* ---------------------------------------------------------------- */
 
+  /*
+    Routing proposes; selectModel authorises.
+
+    Plan production is genuinely multi-step reasoning -- the model reads
+    a goal, an allowed-tool list and a fenced instruction block, then
+    emits a structured proposal -- so it asks for the "complex" tier.
+    That is a statement about the WORK, not a measurement of any model.
+
+    recommendModel returns null when nothing qualifies, which happens
+    for real reasons: no provider in this deployment has a key, or the
+    caller's plan excludes every candidate. The existing AI_UNAVAILABLE
+    path below handles that unchanged -- routing adds a preference, it
+    does not add a failure mode.
+  */
+  const routed = recommendModel({
+    capability: "chat",
+    plan: request.entitlement.effectivePlan,
+    complexity: "complex",
+  });
+
   const model = selectModel(
-    null,
+    routed?.model.id ?? null,
     "chat",
     request.entitlement.effectivePlan,
   );

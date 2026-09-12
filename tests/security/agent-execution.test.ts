@@ -1053,8 +1053,56 @@ void describe("Source invariants — orchestrator", () => {
   });
 
   void test("the model cannot choose the model or token ceiling", () => {
-    /* selectModel is called with a null request — no caller input. */
-    assert.match(ORCHESTRATOR_CODE, /selectModel\(\s*null/);
+    /*
+     * The invariant is that NO CALLER INPUT reaches model selection.
+     *
+     * It used to be spelled `selectModel(null, ...)`. Routing now
+     * proposes a model first, so the argument is the routed id rather
+     * than a literal null -- but the guarantee is unchanged, and these
+     * assertions check the guarantee rather than the old spelling.
+     *
+     * What makes it hold: every input to recommendModel is either a
+     * constant or resolved server-side from the database. Nothing is
+     * read from the request, and the router can only ever name a model
+     * already in APPROVED_MODELS.
+     */
+    const routing = /recommendModel\(\{([\s\S]*?)\}\)/.exec(
+      ORCHESTRATOR_CODE,
+    )?.[1];
+
+    assert.ok(
+      routing,
+      "The orchestrator must consult routing, or this assertion is " +
+        "comparing against nothing.",
+    );
+
+    /* The routed id is what selectModel is asked to authorise. */
+    assert.match(ORCHESTRATOR_CODE, /selectModel\(\s*routed\?\.model\.id/);
+
+    /* Capability and complexity are fixed by the server, not requested. */
+    assert.match(routing, /capability:\s*"chat"/);
+    assert.match(routing, /complexity:\s*"complex"/);
+
+    /* The plan comes from the resolved entitlement, never the request. */
+    assert.match(routing, /plan:\s*request\.entitlement\.effectivePlan/);
+
+    /*
+     * The one thing that must never appear: a model, token budget or
+     * temperature taken off the request and handed to routing.
+     */
+    for (const forbidden of [
+      "request.model",
+      "request.maxTokens",
+      "body.model",
+      "requestedModel",
+    ]) {
+      assert.ok(
+        !routing.includes(forbidden),
+        `${forbidden} must not reach model routing: the caller does not ` +
+          `choose which model an agent run spends.`,
+      );
+    }
+
     assert.match(ORCHESTRATOR_CODE, /clampMaxTokens\(/);
   });
 

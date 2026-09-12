@@ -97,7 +97,40 @@ export interface ModelDefinition {
    * is the control that was missing before Phase 7.
    */
   readonly minimumPlan: PlanId;
+
+  /**
+   * Total tokens the model can hold: prompt plus completion.
+   *
+   * Distinct from `maxOutputTokens`, which bounds only the completion.
+   * A long conversation can exceed the context window while asking for
+   * a small answer, and that request fails for a reason no token clamp
+   * would catch -- which is why routing needs this separately.
+   *
+   * Sources: the Groq figures were carried by a parallel model table
+   * that described several models this registry could not call; the
+   * usable figures were moved here and that table deleted. The OpenAI
+   * figure is gpt-4o-mini's published context window. Both are model
+   * specifications, not measurements of this deployment.
+   */
+  readonly contextWindow: number;
+
+  /**
+   * What this model is good at, relative to its siblings.
+   *
+   *   fast      cheapest and quickest; small context tasks
+   *   balanced  the default trade-off
+   *   powerful  slowest and most capable; complex reasoning
+   *
+   * A judgement about the model, deliberately coarse. There is no
+   * latency or reliability telemetry in this deployment -- `usage`
+   * records model and tokens but not duration or failure kind -- so a
+   * finer scale would be invented rather than measured.
+   */
+  readonly tier: ModelTier;
 }
+
+/** Relative capability classes. See ModelDefinition.tier. */
+export type ModelTier = "fast" | "balanced" | "powerful";
 
 /* -------------------------------------------------------------------------- */
 /*                             APPROVED MODELS                                */
@@ -123,6 +156,8 @@ export const APPROVED_MODELS: Readonly<Record<string, ModelDefinition>> = {
     capability: "chat",
     maxOutputTokens: 16_000,
     minimumPlan: "free",
+    contextWindow: 128_000,
+    tier: "balanced",
   },
 
   "llama-3.3-70b-versatile": {
@@ -131,6 +166,8 @@ export const APPROVED_MODELS: Readonly<Record<string, ModelDefinition>> = {
     capability: "chat",
     maxOutputTokens: 32_000,
     minimumPlan: "free",
+    contextWindow: 128_000,
+    tier: "powerful",
   },
 
   "llama-3.1-8b-instant": {
@@ -139,6 +176,8 @@ export const APPROVED_MODELS: Readonly<Record<string, ModelDefinition>> = {
     capability: "chat",
     maxOutputTokens: 8_000,
     minimumPlan: "free",
+    contextWindow: 131_072,
+    tier: "fast",
   },
 
   /* ---------------------------------------------------------------- */
@@ -151,18 +190,31 @@ export const APPROVED_MODELS: Readonly<Record<string, ModelDefinition>> = {
     capability: "vision",
     maxOutputTokens: 16_000,
     minimumPlan: "free",
+    contextWindow: 128_000,
+    tier: "balanced",
   },
 
   /* ---------------------------------------------------------------- */
   /* Speech                                                            */
   /* ---------------------------------------------------------------- */
 
+  /*
+    Speech and transcription models carry contextWindow 0 and tier
+    "balanced" because neither figure means anything for them: they do
+    not consume a text context and there are no siblings to rank them
+    against. Routing only ever chooses between chat candidates, so these
+    values are never read -- they exist because the fields are required,
+    and inventing plausible-looking numbers would be worse than
+    recording that the question does not apply.
+  */
   "gpt-4o-mini-tts": {
     id: "gpt-4o-mini-tts",
     provider: "openai",
     capability: "speech",
     maxOutputTokens: 0,
     minimumPlan: "free",
+    contextWindow: 0,
+    tier: "balanced",
   },
 
   /* ---------------------------------------------------------------- */
@@ -175,6 +227,8 @@ export const APPROVED_MODELS: Readonly<Record<string, ModelDefinition>> = {
     capability: "transcription",
     maxOutputTokens: 0,
     minimumPlan: "free",
+    contextWindow: 0,
+    tier: "balanced",
   },
 
   "gpt-4o-mini-transcribe": {
@@ -183,6 +237,8 @@ export const APPROVED_MODELS: Readonly<Record<string, ModelDefinition>> = {
     capability: "transcription",
     maxOutputTokens: 0,
     minimumPlan: "free",
+    contextWindow: 0,
+    tier: "balanced",
   },
 };
 
