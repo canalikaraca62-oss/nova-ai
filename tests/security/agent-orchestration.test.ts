@@ -4,8 +4,10 @@
  * Phase 9 (see IMPLEMENTATION_PLAN.md).
  *
  * ARCHITECTURE_AUDIT.md §14: agent execution was a single stateless LLM
- * call — no tools, no permission model, no approval, no state. The agent
- * definitions in lib/agents/ were never consulted by it.
+ * call — no tools, no permission model, no approval, no state. A
+ * parallel set of persona definitions in lib/agents/ was never
+ * consulted by it, and has since been deleted; lib/orchestration/
+ * registry.ts holds the agents that actually carry limits.
  *
  * And `/api/action` decided whether an action needed confirmation from a
  * CLIENT-SUPPLIED field, so risk was self-declared.

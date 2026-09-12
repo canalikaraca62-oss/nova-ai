@@ -13,8 +13,8 @@
  *
  * ARCHITECTURE_AUDIT.md §14: `/api/agents/execute` is a single stateless
  * LLM call. It has no tools, no planning, no permission model, and it
- * never consults `lib/agents/registry.ts` — the agent definitions that
- * do exist are decorative.
+ * never consulted the persona definitions that lived in `lib/agents/`
+ * — they were decorative, and have since been deleted.
  *
  * Worse, `/api/action` decided whether an action needed confirmation
  * from a CLIENT-SUPPLIED field:
@@ -318,10 +318,17 @@ export interface OrchestrationAgent {
 /**
  * Agents available for orchestration.
  *
- * Intentionally few. `lib/agents/` holds 13 persona definitions with no
- * execution semantics; registering all of them here would grant
- * capability to definitions that were never designed with a permission
- * model. These three are declared with explicit limits instead.
+ * Intentionally few.
+ *
+ * `lib/agents/` used to hold thirteen persona definitions with no
+ * execution semantics -- descriptions of what an agent was FOR, with
+ * no permission model, no tool allowlist and no limits. Registering
+ * them here would have granted capability to definitions never
+ * designed to carry it, so they were never consulted, and they have
+ * since been deleted for that reason. Only lib/agents/types.ts
+ * remains, because lib/ai/context.ts uses its AgentDefinition type.
+ *
+ * These agents are declared with explicit limits instead.
  */
 export const AGENT_REGISTRY: Readonly<
   Record<string, OrchestrationAgent>
