@@ -97,6 +97,27 @@ void describe("Every edge comes from a foreign key", () => {
     );
   });
 
+  void test("Brain records attach through their own foreign keys", () => {
+    /*
+     * The third edge source, added deliberately: public.knowledge has
+     * project_id and workspace_id. A record attaches to its project when
+     * it has one and to its workspace only when it does not, so one
+     * record never appears in two places.
+     */
+    assert.match(
+      PAGE,
+      /const from = item\.project_id\s*\?\s*`p:\$\{item\.project_id\}`\s*:\s*item\.workspace_id\s*\?\s*`w:\$\{item\.workspace_id\}`\s*:\s*null;/,
+      "A knowledge edge must come from knowledge.project_id, falling back " +
+        "to knowledge.workspace_id -- never from anything inferred.",
+    );
+
+    assert.match(
+      PAGE,
+      /if \(from === null\) continue;/,
+      "A record with neither link is drawn unconnected, not guessed into place.",
+    );
+  });
+
   void test("an edge is dropped unless both ends exist", () => {
     /*
      * A project whose workspace the caller cannot see must not sprout a

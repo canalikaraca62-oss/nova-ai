@@ -16,6 +16,9 @@ import type { GraphEdge, GraphNode } from "./GraphScene";
 
     workspace --contains--> project   (projects.workspace_id)
     project   --contains--> task      (tasks.project_id)
+    project   --holds-->    knowledge (knowledge.project_id)
+    workspace --holds-->    knowledge (knowledge.workspace_id, only when
+                                       the record has no project)
 
   Both are real foreign keys, and every row arrives through an
   authorized, session-scoped API. Nothing here is inferred. If two
@@ -33,7 +36,7 @@ import type { GraphEdge, GraphNode } from "./GraphScene";
   zero rows and a view of it would draw nothing. Wiring it up means
   building the producer first, not adding a query here.
 
-  Agents, documents, decisions and outcomes are not here either. The
+  Agents, decisions and outcomes are not here either. The
   product has no edge data for them, and a graph that invents
   relationships to look complete is worth less than one that shows only
   what is true.
@@ -70,6 +73,19 @@ interface TaskRow {
   project_id: string | null;
 }
 
+/**
+ * A Brain record. Both links are real columns on public.knowledge; a
+ * record attaches to its project when it has one, and to its workspace
+ * only when it does not -- drawing both would show one record in two
+ * places.
+ */
+interface KnowledgeRow {
+  id: string;
+  title: string;
+  project_id: string | null;
+  workspace_id: string | null;
+}
+
 /* -------------------------------------------------------------------------- */
 /*                                    PAGE                                    */
 /* -------------------------------------------------------------------------- */
@@ -78,6 +94,7 @@ export default function GraphPage() {
   const [workspaces, setWorkspaces] = useState<WorkspaceRow[]>([]);
   const [projects, setProjects] = useState<ProjectRow[]>([]);
   const [tasks, setTasks] = useState<TaskRow[]>([]);
+  const [knowledge, setKnowledge] = useState<KnowledgeRow[]>([]);
 
   const [isLoading, setIsLoading] = useState(true);
   const [graphError, setGraphError] = useState<string | null>(null);
@@ -87,21 +104,28 @@ export default function GraphPage() {
     setGraphError(null);
 
     try {
-      const [workspaceResponse, projectResponse, taskResponse] =
-        await Promise.all([
-          fetch("/api/workspaces", { cache: "no-store" }),
-          fetch("/api/projects", { cache: "no-store" }),
-          fetch("/api/tasks", { cache: "no-store" }),
-        ]);
+      const [
+        workspaceResponse,
+        projectResponse,
+        taskResponse,
+        knowledgeResponse,
+      ] = await Promise.all([
+        fetch("/api/workspaces", { cache: "no-store" }),
+        fetch("/api/projects", { cache: "no-store" }),
+        fetch("/api/tasks", { cache: "no-store" }),
+        fetch("/api/knowledge?limit=100", { cache: "no-store" }),
+      ]);
 
       if (
         workspaceResponse.status === 401 ||
         projectResponse.status === 401 ||
-        taskResponse.status === 401
+        taskResponse.status === 401 ||
+        knowledgeResponse.status === 401
       ) {
         setWorkspaces([]);
         setProjects([]);
         setTasks([]);
+        setKnowledge([]);
         return;
       }
 
@@ -126,7 +150,13 @@ export default function GraphPage() {
 
       setWorkspaces(workspacePayload?.workspaces ?? []);
       setProjects(projectPayload?.data ?? []);
+      /* /api/knowledge returns its rows directly under `data`. */
+      const knowledgePayload = (await knowledgeResponse
+        .json()
+        .catch(() => null)) as { data?: KnowledgeRow[] } | null;
+
       setTasks(taskPayload?.data?.tasks ?? []);
+      setKnowledge(knowledgePayload?.data ?? []);
     } catch {
       setGraphError("The work graph could not be loaded.");
     } finally {
@@ -165,6 +195,11 @@ export default function GraphPage() {
         label: task.title,
         kind: "task" as const,
       })),
+      ...knowledge.map((item) => ({
+        id: `k:${item.id}`,
+        label: item.title,
+        kind: "knowledge" as const,
+      })),
     ];
 
     const known = new Set(graphNodes.map((node) => node.id));
@@ -199,8 +234,29 @@ export default function GraphPage() {
       }
     }
 
+    for (const item of knowledge) {
+      /*
+        One parent per record: its project when it has one, otherwise
+        its workspace. A record with neither is drawn unconnected rather
+        than guessed into place.
+      */
+      const from = item.project_id
+        ? `p:${item.project_id}`
+        : item.workspace_id
+          ? `w:${item.workspace_id}`
+          : null;
+
+      if (from === null) continue;
+
+      const to = `k:${item.id}`;
+
+      if (known.has(from) && known.has(to)) {
+        graphEdges.push({ from, to });
+      }
+    }
+
     return { nodes: graphNodes, edges: graphEdges };
-  }, [workspaces, projects, tasks]);
+  }, [workspaces, projects, tasks, knowledge]);
 
   /** Projects grouped under their workspace, for the readable view. */
   const grouped = useMemo(() => {
@@ -211,9 +267,12 @@ export default function GraphPage() {
         .map((project) => ({
           project,
           tasks: tasks.filter((task) => task.project_id === project.id),
+          knowledge: knowledge.filter(
+            (item) => item.project_id === project.id,
+          ),
         })),
     }));
-  }, [workspaces, projects, tasks]);
+  }, [workspaces, projects, tasks, knowledge]);
 
   const orphanProjects = useMemo(
     () => projects.filter((project) => !project.workspace_id),
@@ -229,9 +288,10 @@ export default function GraphPage() {
           </h1>
 
           <p className="mt-2 max-w-2xl text-sm leading-6 text-foreground/50">
-            How your work connects: workspaces hold projects, and
-            projects hold tasks. Every connection shown here comes from
-            a real link in your data.
+            How your work connects: workspaces hold projects, projects
+            hold tasks, and what you have taught the Brain is attached to
+            the project or workspace it belongs to. Every connection shown
+            here comes from a real link in your data.
           </p>
         </header>
 
@@ -277,6 +337,7 @@ export default function GraphPage() {
                 <Legend color="bg-foreground" label="Workspace" />
                 <Legend color="bg-violet-500" label="Project" />
                 <Legend color="bg-cyan-400" label="Task" />
+                <Legend color="bg-amber-500" label="Knowledge" />
 
                 <span className="ml-auto">
                   {nodes.length} node{nodes.length === 1 ? "" : "s"}
@@ -313,7 +374,11 @@ export default function GraphPage() {
                     ) : (
                       <ul className="mt-3 space-y-3">
                         {workspaceProjects.map(
-                          ({ project, tasks: projectTasks }) => (
+                          ({
+                            project,
+                            tasks: projectTasks,
+                            knowledge: projectKnowledge,
+                          }) => (
                             <li key={project.id}>
                               <Link
                                 href={`/projects/${project.id}`}
@@ -325,6 +390,9 @@ export default function GraphPage() {
                               <span className="ml-2 text-xs text-foreground/40">
                                 {projectTasks.length} task
                                 {projectTasks.length === 1 ? "" : "s"}
+                                {projectKnowledge.length > 0
+                                  ? ` · ${projectKnowledge.length} knowledge`
+                                  : ""}
                               </span>
                             </li>
                           ),

@@ -1,882 +1,585 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useDialogBehaviour } from "@/app/components/ui/useDialogBehaviour";
 
-type ActivityCategory =
-  | "all"
-  | "ai"
-  | "agent"
-  | "project"
-  | "knowledge"
-  | "task"
-  | "automation"
-  | "file"
-  | "security"
-  | "system";
+/*
+  SYRAVEN — Activity
 
-type ActivityStatus = "success" | "running" | "pending" | "failed" | "info";
+  WHERE THESE EVENTS COME FROM
+
+  GET /api/activity, which reads the caller's own projects, tasks, Brain
+  records and agent approvals and derives events from their timestamp
+  columns (lib/activity/events.ts). Every entry is either "this row was
+  created then", "this row was last changed then", or a terminal moment
+  a column records explicitly -- completed_at, decided_at, expires_at.
+
+  WHAT IT USED TO SHOW
+
+  Eight invented events presented as the user's own history ("Research
+  Agent completed a market analysis", "24 sources"), each stamped "2
+  minutes ago" and flagged unread. After those went, the page still
+  carried a pulsing "Live activity feed" badge over a feed that was
+  never live, a panel reporting "AI activity: Active" and "Automations:
+  Healthy" when no automation exists, and "Mark all as read" over read
+  state that nothing stores and a reload discarded.
+
+  All of that is gone. There is no unread concept because nothing
+  records reads. The feed is not live, so it says when it was loaded and
+  offers a refresh that actually refetches. Categories are limited to
+  the four that have a source, so no filter permanently reads zero.
+*/
+
+type ActivityKind = "project" | "task" | "knowledge" | "approval";
+
+type ActivityTone = "success" | "progress" | "pending" | "failed" | "info";
 
 type ActivityItem = {
   id: string;
+  kind: ActivityKind;
   title: string;
-  description: string;
-  category: Exclude<ActivityCategory, "all">;
-  status: ActivityStatus;
-  createdAt: string;
-  actor: string;
-  workspace?: string;
-  metadata?: string[];
-  unread?: boolean;
+  detail: string;
+  tone: ActivityTone;
+  occurredAt: string;
+  href: string | null;
 };
 
-const categoryConfig: Record<
-  Exclude<ActivityCategory, "all">,
-  {
-    label: string;
-    icon: string;
-    color: string;
-    bg: string;
-  }
-> = {
-  ai: {
-    label: "AI",
-    icon: "✦",
-    color: "text-violet-300",
-    bg: "bg-violet-500/10 border-violet-500/20",
-  },
-  agent: {
-    label: "Agents",
-    icon: "◈",
-    color: "text-cyan-300",
-    bg: "bg-cyan-500/10 border-cyan-500/20",
-  },
-  project: {
-    label: "Projects",
-    icon: "◫",
-    color: "text-blue-300",
-    bg: "bg-blue-500/10 border-blue-500/20",
-  },
-  knowledge: {
-    label: "Knowledge",
-    icon: "◇",
-    color: "text-amber-300",
-    bg: "bg-amber-500/10 border-amber-500/20",
-  },
-  task: {
-    label: "Tasks",
-    icon: "✓",
-    color: "text-emerald-300",
-    bg: "bg-emerald-500/10 border-emerald-500/20",
-  },
-  automation: {
-    label: "Automation",
-    icon: "↻",
-    color: "text-pink-300",
-    bg: "bg-pink-500/10 border-pink-500/20",
-  },
-  file: {
-    label: "Files",
-    icon: "▤",
-    color: "text-orange-300",
-    bg: "bg-orange-500/10 border-orange-500/20",
-  },
-  security: {
-    label: "Security",
-    icon: "◉",
-    color: "text-red-300",
-    bg: "bg-red-500/10 border-red-500/20",
-  },
-  system: {
-    label: "System",
-    icon: "●",
-    color: "text-slate-300",
-    bg: "bg-slate-500/10 border-slate-500/20",
-  },
+type KindFilter = "all" | ActivityKind;
+
+type TimeFilter = "all" | "today" | "week";
+
+const KINDS: readonly ActivityKind[] = ["project", "task", "knowledge", "approval"];
+
+const KIND: Record<ActivityKind, { label: string; mark: string }> = {
+  project: { label: "Projects", mark: "◫" },
+  task: { label: "Tasks", mark: "✓" },
+  knowledge: { label: "Brain", mark: "◇" },
+  approval: { label: "Approvals", mark: "◈" },
 };
 
-const statusConfig: Record<
-  ActivityStatus,
-  {
-    label: string;
-    className: string;
-    dot: string;
-  }
-> = {
+const TONE: Record<ActivityTone, { label: string; badge: string; dot: string }> = {
   success: {
-    label: "Completed",
-    className:
-      "border-emerald-500/20 bg-emerald-500/10 text-emerald-300",
-    dot: "bg-emerald-400",
+    label: "Done",
+    badge: "border-success/30 bg-success/10 text-success",
+    dot: "bg-success",
   },
-  running: {
-    label: "Running",
-    className: "border-cyan-500/20 bg-cyan-500/10 text-cyan-300",
-    dot: "bg-cyan-400",
+  progress: {
+    label: "In progress",
+    badge: "border-info/30 bg-info/10 text-info",
+    dot: "bg-info",
   },
   pending: {
-    label: "Pending",
-    className: "border-amber-500/20 bg-amber-500/10 text-amber-300",
-    dot: "bg-amber-400",
+    label: "Waiting on you",
+    badge: "border-warning/30 bg-warning/10 text-warning",
+    dot: "bg-warning",
   },
   failed: {
     label: "Needs attention",
-    className: "border-red-500/20 bg-red-500/10 text-red-300",
-    dot: "bg-red-400",
+    badge: "border-destructive/30 bg-destructive/10 text-destructive",
+    dot: "bg-destructive",
   },
   info: {
-    label: "Updated",
-    className: "border-slate-500/20 bg-slate-500/10 text-slate-300",
-    dot: "bg-slate-400",
+    label: "Recorded",
+    badge: "border-border bg-muted text-muted-foreground",
+    dot: "bg-muted-foreground",
   },
 };
 
-/*
- * ACTIVITY IS NOT SEEDED.
- *
- * Eight invented events opened this page as though they were the user's
- * own history: "Research Agent completed a market analysis" with "24
- * sources" and "8 insights", a knowledge index "Indexing 12 documents",
- * each stamped "2 minutes ago" and flagged unread. None of it had
- * happened. Refresh then slept 650ms behind a spinner and changed
- * nothing, because there is no /api/activity to call.
- *
- * A feed of fabricated events is worse than an empty one: it tells a
- * user that work was done on their behalf that never was, and the
- * detail ("24 sources") is exactly what makes it believable.
- *
- * There is no activity endpoint, so the honest state is empty. The page
- * keeps its filters, grouping and detail panel, and EmptyActivityState
- * already says what will appear here once events are recorded.
- */
+const DAY_MS = 86_400_000;
 
+/** Local midnight of the day containing `ms`. */
+function startOfDay(ms: number): number {
+  const date = new Date(ms);
+  date.setHours(0, 0, 0, 0);
+  return date.getTime();
+}
 
-function getActivityGroup(createdAt: string) {
-  const value = createdAt.toLowerCase();
+function dayGroup(occurredAt: string, now: number): "Today" | "Yesterday" | "Earlier" {
+  const at = Date.parse(occurredAt);
+  const today = startOfDay(now);
 
-  if (
-    value.includes("minute") ||
-    value.includes("hour") ||
-    value.includes("just")
-  ) {
-    return "Today";
-  }
-
-  if (value.includes("yesterday")) {
-    return "Yesterday";
-  }
-
+  if (at >= today) return "Today";
+  if (at >= today - DAY_MS) return "Yesterday";
   return "Earlier";
 }
 
+/** Relative to the moment the feed was loaded, not to a clock read during render. */
+function formatWhen(occurredAt: string, now: number): string {
+  const at = Date.parse(occurredAt);
+  const seconds = Math.max(0, Math.round((now - at) / 1000));
+
+  if (seconds < 60) return "just now";
+
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return minutes === 1 ? "1 minute ago" : `${minutes} minutes ago`;
+
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return hours === 1 ? "1 hour ago" : `${hours} hours ago`;
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: new Date(at).getFullYear() === new Date(now).getFullYear() ? undefined : "numeric",
+  }).format(at);
+}
+
+function formatExact(occurredAt: string): string {
+  return new Intl.DateTimeFormat("en-US", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(Date.parse(occurredAt));
+}
+
 export default function ActivityPage() {
-  const [activities, setActivities] =
-    useState<ActivityItem[]>([]);
+  const [activities, setActivities] = useState<ActivityItem[]>([]);
 
-  const [activeCategory, setActiveCategory] =
-    useState<ActivityCategory>("all");
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [degraded, setDegraded] = useState<string[]>([]);
 
+  /** When the feed was fetched. Times are shown relative to this. */
+  const [loadedAt, setLoadedAt] = useState<number | null>(null);
+
+  const [kind, setKind] = useState<KindFilter>("all");
+  const [timeFilter, setTimeFilter] = useState<TimeFilter>("all");
   const [search, setSearch] = useState("");
 
-  const [selectedActivity, setSelectedActivity] =
-    useState<ActivityItem | null>(null);
+  const [selected, setSelected] = useState<ActivityItem | null>(null);
 
-  const [showUnreadOnly, setShowUnreadOnly] = useState(false);
+  const load = useCallback(async () => {
+    setIsLoading(true);
+    setLoadError(null);
 
-  const [timeFilter, setTimeFilter] = useState("all");
+    try {
+      const response = await fetch("/api/activity", { cache: "no-store" });
 
+      if (response.status === 401) {
+        setActivities([]);
+        setDegraded([]);
+        return;
+      }
 
-  const unreadCount = activities.filter(
-    (activity) => activity.unread
-  ).length;
+      if (!response.ok) throw new Error("failed");
 
-  const filteredActivities = useMemo(() => {
+      const payload = (await response.json().catch(() => null)) as {
+        data?: { events?: ActivityItem[]; degraded?: string[] };
+      } | null;
+
+      setActivities(payload?.data?.events ?? []);
+      setDegraded(payload?.data?.degraded ?? []);
+      setLoadedAt(Date.now());
+    } catch {
+      setLoadError("Your activity could not be loaded.");
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void Promise.resolve().then(() => {
+      if (cancelled) return undefined;
+
+      return load();
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [load]);
+
+  const now = loadedAt ?? 0;
+
+  const filtered = useMemo(() => {
+    const query = search.trim().toLowerCase();
+
     return activities.filter((activity) => {
-      const searchValue = search.toLowerCase();
+      if (kind !== "all" && activity.kind !== kind) return false;
 
-      const matchesSearch =
-        !searchValue ||
-        activity.title.toLowerCase().includes(searchValue) ||
-        activity.description.toLowerCase().includes(searchValue) ||
-        activity.actor.toLowerCase().includes(searchValue) ||
-        activity.workspace?.toLowerCase().includes(searchValue);
+      if (timeFilter === "today" && dayGroup(activity.occurredAt, now) !== "Today") {
+        return false;
+      }
 
-      const matchesCategory =
-        activeCategory === "all" ||
-        activity.category === activeCategory;
+      if (timeFilter === "week" && now - Date.parse(activity.occurredAt) > 7 * DAY_MS) {
+        return false;
+      }
 
-      const matchesUnread =
-        !showUnreadOnly || activity.unread === true;
-
-      const matchesTime =
-        timeFilter === "all" ||
-        (timeFilter === "today" &&
-          getActivityGroup(activity.createdAt) === "Today") ||
-        (timeFilter === "week" &&
-          !activity.createdAt.toLowerCase().includes("earlier"));
+      if (!query) return true;
 
       return (
-        matchesSearch &&
-        matchesCategory &&
-        matchesUnread &&
-        matchesTime
+        activity.title.toLowerCase().includes(query) ||
+        activity.detail.toLowerCase().includes(query)
       );
     });
-  }, [
-    activities,
-    search,
-    activeCategory,
-    showUnreadOnly,
-    timeFilter,
-  ]);
+  }, [activities, kind, timeFilter, search, now]);
 
-  const groupedActivities = useMemo(() => {
-    return filteredActivities.reduce<Record<string, ActivityItem[]>>(
-      (groups, activity) => {
-        const group = getActivityGroup(activity.createdAt);
+  const grouped = useMemo(() => {
+    const groups: Record<"Today" | "Yesterday" | "Earlier", ActivityItem[]> = {
+      Today: [],
+      Yesterday: [],
+      Earlier: [],
+    };
 
-        if (!groups[group]) {
-          groups[group] = [];
-        }
+    for (const activity of filtered) groups[dayGroup(activity.occurredAt, now)].push(activity);
 
-        groups[group].push(activity);
+    return groups;
+  }, [filtered, now]);
 
-        return groups;
-      },
-      {}
-    );
-  }, [filteredActivities]);
+  const counts = useMemo(() => {
+    const byTone = (tone: ActivityTone) =>
+      activities.filter((activity) => activity.tone === tone).length;
 
-  const markAllAsRead = () => {
-    setActivities((current) =>
-      current.map((activity) => ({
-        ...activity,
-        unread: false,
-      }))
-    );
-  };
+    return {
+      total: activities.length,
+      done: byTone("success"),
+      waiting: byTone("pending"),
+      attention: byTone("failed"),
+    };
+  }, [activities]);
 
-  /*
-    There is no refresh.
+  const kindCount = (value: KindFilter) =>
+    value === "all"
+      ? activities.length
+      : activities.filter((activity) => activity.kind === value).length;
 
-    This handler set isLoading, slept 650ms and cleared it, having
-    fetched nothing — a spinner that reported work it never did. The
-    control is removed rather than left inert; when /api/activity exists,
-    a real one replaces it here.
-  */
-
-  const categoryCount = (category: ActivityCategory) => {
-    if (category === "all") {
-      return activities.length;
-    }
-
-    return activities.filter(
-      (activity) => activity.category === category
-    ).length;
-  };
-
-  const stats = {
-    total: activities.length,
-    completed: activities.filter(
-      (activity) => activity.status === "success"
-    ).length,
-    running: activities.filter(
-      (activity) => activity.status === "running"
-    ).length,
-    attention: activities.filter(
-      (activity) => activity.status === "failed"
-    ).length,
-  };
+  const filtersActive = kind !== "all" || timeFilter !== "all" || search.trim() !== "";
 
   return (
     <div className="bg-background text-foreground">
-      <div className="mx-auto w-full max-w-[1700px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
-        {/* HEADER */}
+      <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+        <header className="flex flex-col gap-6 border-b border-border pb-8 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-2xl">
+            <h1 className="text-3xl font-semibold tracking-tight">Activity</h1>
 
-        <section className="relative overflow-hidden rounded-[32px] border border-white/[0.08] bg-gradient-to-br from-[#15151d] via-[#101016] to-[#0b0b10]">
-          <div className="pointer-events-none absolute -right-40 -top-40 h-[420px] w-[420px] rounded-full bg-violet-600/10 blur-[120px]" />
-
-          <div className="relative p-6 sm:p-8 lg:p-10">
-            <div className="flex flex-col gap-8 xl:flex-row xl:items-end xl:justify-between">
-              <div className="max-w-3xl">
-                <div className="mb-5 flex items-center gap-3">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-violet-500/20 bg-violet-500/10 text-lg text-violet-300 shadow-[0_0_30px_rgba(139,92,246,0.12)]">
-                    ✦
-                  </div>
-
-                  <div>
-                    <p className="text-[11px] font-bold uppercase tracking-[0.28em] text-violet-300">
-                      SYRAVEN Intelligence
-                    </p>
-
-                    <p className="mt-1 text-xs text-foreground/35">
-                      Your complete activity layer
-                    </p>
-                  </div>
-                </div>
-
-                <h1 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl lg:text-5xl">
-                  Everything happening in{" "}
-                  <span className="bg-gradient-to-r from-violet-300 via-blue-300 to-cyan-300 bg-clip-text text-transparent">
-                    your SYRAVEN world.
-                  </span>
-                </h1>
-
-                <p className="mt-5 max-w-2xl text-sm leading-7 text-foreground/45 sm:text-base">
-                  Follow your AI, agents, projects, automations, files,
-                  knowledge and workspace activity from one intelligent
-                  timeline.
-                </p>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-3">
-                {unreadCount > 0 && (
-                  <button
-                    type="button"
-                    onClick={markAllAsRead}
-                    className="rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-3 text-sm font-medium text-foreground/60 transition hover:border-white/[0.14] hover:bg-white/[0.06] hover:text-foreground"
-                  >
-                    Mark all as read
-                  </button>
-                )}
-
-                {/*
-                  A "Refresh activity" button stood here. It set a
-                  spinner, slept 650ms and cleared it, having fetched
-                  nothing — there is no /api/activity. Removed rather
-                  than left inert; a real control belongs here once the
-                  endpoint exists.
-                */}
-              </div>
-            </div>
-
-            <div className="mt-10 grid grid-cols-2 gap-3 lg:grid-cols-4">
-              <StatCard
-                label="Total activity"
-                value={stats.total}
-                detail="Across SYRAVEN"
-                accent="violet"
-              />
-
-              <StatCard
-                label="Completed"
-                value={stats.completed}
-                detail="Successfully finished"
-                accent="green"
-              />
-
-              <StatCard
-                label="Running now"
-                value={stats.running}
-                detail="Active intelligence"
-                accent="cyan"
-              />
-
-              <StatCard
-                label="Needs attention"
-                value={stats.attention}
-                detail="Review recommended"
-                accent="red"
-              />
-            </div>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              What has changed across your projects, tasks, Brain and agent
+              approvals, newest first. Each entry comes from a timestamp
+              recorded on the item itself.
+            </p>
           </div>
+
+          <div className="flex items-center gap-3">
+            {loadedAt !== null && !isLoading ? (
+              <span className="text-xs text-muted-foreground">
+                Loaded {formatWhen(new Date(loadedAt).toISOString(), loadedAt)}
+              </span>
+            ) : null}
+
+            <button
+              type="button"
+              onClick={() => void load()}
+              disabled={isLoading}
+              className="inline-flex h-10 items-center rounded-xl border border-border bg-card px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isLoading ? "Loading..." : "Refresh"}
+            </button>
+          </div>
+        </header>
+
+        <section
+          aria-label="Summary"
+          className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4"
+        >
+          <Stat label="Events" value={counts.total} />
+          <Stat label="Done" value={counts.done} tone="success" />
+          <Stat label="Waiting on you" value={counts.waiting} tone="pending" />
+          <Stat label="Needs attention" value={counts.attention} tone="failed" />
         </section>
 
-        {/* CONTROLS */}
+        {counts.waiting > 0 ? (
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-foreground">
+            <span>
+              {counts.waiting === 1
+                ? "An agent step is waiting for your decision."
+                : `${counts.waiting} agent steps are waiting for your decision.`}
+            </span>
 
-        <section className="mt-6 rounded-[28px] border border-white/[0.07] bg-background/80 p-4 backdrop-blur-xl sm:p-5">
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-            <div className="relative w-full xl:max-w-md">
-              <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-foreground/30">
-                ⌕
-              </span>
-
-              <input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search activity..."
-                className="h-12 w-full rounded-xl border border-white/[0.08] bg-black/20 pl-11 pr-4 text-sm text-foreground outline-none transition placeholder:text-foreground/25 focus:border-violet-500/40 focus:bg-black/30"
-              />
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <select
-                value={timeFilter}
-                onChange={(event) =>
-                  setTimeFilter(event.target.value)
-                }
-                className="h-11 rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 text-sm text-foreground/70 outline-none"
-              >
-                <option value="all">All time</option>
-                <option value="today">Today</option>
-                <option value="week">This week</option>
-              </select>
-
-              <button
-                type="button"
-                onClick={() =>
-                  setShowUnreadOnly((current) => !current)
-                }
-                className={`h-11 rounded-xl border px-4 text-sm font-medium transition ${
-                  showUnreadOnly
-                    ? "border-violet-500/30 bg-violet-500/10 text-violet-200"
-                    : "border-white/[0.08] bg-white/[0.03] text-white/55 hover:text-white"
-                }`}
-              >
-                {unreadCount > 0
-                  ? `Unread (${unreadCount})`
-                  : "Unread"}
-              </button>
-            </div>
+            <Link href="/approvals" className="font-medium text-warning hover:underline">
+              Review approvals
+            </Link>
           </div>
+        ) : null}
 
-          <div className="mt-5 flex gap-2 overflow-x-auto pb-1">
-            <ActivityFilter
-              active={activeCategory === "all"}
-              label="All"
-              count={categoryCount("all")}
-              onClick={() => setActiveCategory("all")}
+        {loadError ? (
+          <div
+            role="alert"
+            className="mt-6 rounded-2xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive"
+          >
+            {loadError}
+
+            <button
+              type="button"
+              onClick={() => void load()}
+              className="ml-3 font-medium underline"
+            >
+              Try again
+            </button>
+          </div>
+        ) : null}
+
+        {degraded.length > 0 ? (
+          <p
+            role="status"
+            className="mt-6 rounded-2xl border border-border bg-muted/40 p-4 text-sm text-muted-foreground"
+          >
+            Some sources could not be read ({degraded.join(", ")}), so this
+            timeline is incomplete.
+          </p>
+        ) : null}
+
+        <section className="mt-6 flex flex-col gap-4 rounded-2xl border border-border bg-card p-4 sm:p-5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <label htmlFor="activity-search" className="sr-only">
+              Search activity
+            </label>
+
+            <input
+              id="activity-search"
+              type="search"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search activity..."
+              className="h-11 w-full rounded-xl border border-border bg-background px-4 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-foreground/30 sm:max-w-sm"
             />
 
-            {(Object.keys(categoryConfig) as Array<
-              Exclude<ActivityCategory, "all">
-            >).map((category) => {
-              const config = categoryConfig[category];
+            <label htmlFor="activity-time" className="sr-only">
+              Time range
+            </label>
 
-              return (
-                <ActivityFilter
-                  key={category}
-                  active={activeCategory === category}
-                  label={config.label}
-                  icon={config.icon}
-                  count={categoryCount(category)}
-                  onClick={() =>
-                    setActiveCategory(category)
-                  }
-                />
-              );
-            })}
+            <select
+              id="activity-time"
+              value={timeFilter}
+              onChange={(event) => setTimeFilter(event.target.value as TimeFilter)}
+              className="h-11 rounded-xl border border-border bg-background px-3 text-sm text-foreground outline-none"
+            >
+              <option value="all">All time</option>
+              <option value="today">Today</option>
+              <option value="week">Last 7 days</option>
+            </select>
+          </div>
+
+          <div className="flex gap-2 overflow-x-auto pb-1" role="group" aria-label="Filter by kind">
+            <KindChip
+              label="All"
+              count={kindCount("all")}
+              active={kind === "all"}
+              onClick={() => setKind("all")}
+            />
+
+            {KINDS.map((value) => (
+              <KindChip
+                key={value}
+                label={KIND[value].label}
+                mark={KIND[value].mark}
+                count={kindCount(value)}
+                active={kind === value}
+                onClick={() => setKind(value)}
+              />
+            ))}
           </div>
         </section>
 
-        {/* CONTENT */}
-
-        <section className="mt-6 grid gap-6 2xl:grid-cols-[minmax(0,1fr)_380px]">
-          <div className="rounded-[30px] border border-white/[0.07] bg-background/70 p-4 sm:p-6">
-            <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h2 className="text-lg font-semibold text-foreground">
-                  Activity timeline
-                </h2>
-
-                <p className="mt-1 text-sm text-foreground/35">
-                  {filteredActivities.length} event
-                  {filteredActivities.length !== 1 ? "s" : ""}{" "}
-                  matching your filters.
-                </p>
-              </div>
-
-              <div className="inline-flex w-fit items-center gap-2 rounded-full border border-white/[0.07] bg-white/[0.03] px-3 py-1.5 text-xs text-foreground/40">
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
-                Live activity feed
-              </div>
+        <section className="mt-6" aria-label="Timeline">
+          {isLoading && activities.length === 0 ? (
+            <div
+              role="status"
+              aria-live="polite"
+              className="rounded-2xl border border-dashed border-border px-6 py-16 text-center text-sm text-muted-foreground"
+            >
+              Loading your activity...
             </div>
+          ) : filtered.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-border px-6 py-16 text-center">
+              <h2 className="text-lg font-semibold">
+                {filtersActive ? "Nothing matches these filters" : "Nothing has happened yet"}
+              </h2>
 
-            {Object.keys(groupedActivities).length > 0 ? (
-              <div className="space-y-10">
-                {["Today", "Yesterday", "Earlier"].map(
-                  (group) => {
-                    const groupItems = groupedActivities[group];
-
-                    if (!groupItems?.length) {
-                      return null;
-                    }
-
-                    return (
-                      <div key={group}>
-                        <div className="mb-5 flex items-center gap-4">
-                          <p className="shrink-0 text-xs font-bold uppercase tracking-[0.2em] text-foreground/35">
-                            {group}
-                          </p>
-
-                          <div className="h-px w-full bg-white/[0.06]" />
-                        </div>
-
-                        <div className="space-y-3">
-                          {groupItems.map((activity) => (
-                            <ActivityRow
-                              key={activity.id}
-                              activity={activity}
-                              onSelect={() => {
-                                setSelectedActivity(activity);
-
-                                if (activity.unread) {
-                                  setActivities((current) =>
-                                    current.map((item) =>
-                                      item.id === activity.id
-                                        ? {
-                                            ...item,
-                                            unread: false,
-                                          }
-                                        : item
-                                    )
-                                  );
-                                }
-                              }}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  }
-                )}
-              </div>
-            ) : (
-              <EmptyActivityState
-                onReset={() => {
-                  setSearch("");
-                  setActiveCategory("all");
-                  setShowUnreadOnly(false);
-                  setTimeFilter("all");
-                }}
-              />
-            )}
-          </div>
-
-          {/* RIGHT PANEL */}
-
-          <aside className="space-y-6">
-            <div className="rounded-[30px] border border-white/[0.07] bg-gradient-to-b from-[#15151d] to-[#0d0d12] p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-[0.2em] text-foreground/35">
-                    SYRAVEN Pulse
-                  </p>
-
-                  <h3 className="mt-2 text-lg font-semibold">
-                    Your workspace is active
-                  </h3>
-                </div>
-
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-emerald-500/20 bg-emerald-500/10 text-emerald-300">
-                  ↗
-                </div>
-              </div>
-
-              <div className="mt-7 space-y-4">
-                <PulseRow
-                  label="AI activity"
-                  value="Active"
-                  dot="bg-violet-400"
-                />
-
-                <PulseRow
-                  label="Agents"
-                  value={`${stats.running} running`}
-                  dot="bg-cyan-400"
-                />
-
-                <PulseRow
-                  label="Automations"
-                  value="Healthy"
-                  dot="bg-emerald-400"
-                />
-
-                <PulseRow
-                  label="Attention needed"
-                  value={
-                    stats.attention > 0
-                      ? `${stats.attention} item`
-                      : "None"
-                  }
-                  dot={
-                    stats.attention > 0
-                      ? "bg-red-400"
-                      : "bg-emerald-400"
-                  }
-                />
-              </div>
-            </div>
-
-            <div className="rounded-[30px] border border-violet-500/15 bg-violet-500/[0.04] p-6">
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-violet-500/20 bg-violet-500/10 text-violet-300">
-                ✦
-              </div>
-
-              <h3 className="mt-5 text-lg font-semibold">
-                Intelligent activity
-              </h3>
-
-              <p className="mt-2 text-sm leading-6 text-foreground/40">
-                As SYRAVEN grows, this feed becomes the central
-                intelligence layer connecting your AI, agents,
-                automations, projects and workspace.
+              <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted-foreground">
+                {filtersActive
+                  ? "Try a wider time range or a different kind."
+                  : "Create a project, add a task or teach the Brain something, and it appears here."}
               </p>
 
-              <div className="mt-6 rounded-2xl border border-white/[0.06] bg-black/20 p-4">
-                <p className="text-xs font-medium text-foreground/35">
-                  NEXT LEVEL
-                </p>
-
-                <p className="mt-2 text-sm leading-6 text-foreground/60">
-                  Activity will support deep links, execution history,
-                  agent runs, security events and workspace insights.
-                </p>
-              </div>
+              {filtersActive ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setKind("all");
+                    setTimeFilter("all");
+                    setSearch("");
+                  }}
+                  className="mt-5 text-sm font-medium text-primary hover:underline"
+                >
+                  Clear filters
+                </button>
+              ) : (
+                <Link
+                  href="/projects"
+                  className="mt-5 inline-block text-sm font-medium text-primary hover:underline"
+                >
+                  Go to projects
+                </Link>
+              )}
             </div>
-          </aside>
+          ) : (
+            <div className="space-y-8">
+              {(["Today", "Yesterday", "Earlier"] as const).map((group) =>
+                grouped[group].length === 0 ? null : (
+                  <div key={group}>
+                    <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      {group}
+                    </h2>
+
+                    <ul className="space-y-2">
+                      {grouped[group].map((activity) => (
+                        <li key={activity.id}>
+                          <ActivityRow
+                            activity={activity}
+                            now={now}
+                            onSelect={() => setSelected(activity)}
+                          />
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ),
+              )}
+            </div>
+          )}
         </section>
       </div>
 
-      {/* DETAIL MODAL */}
-
-      {selectedActivity && (
-        <ActivityDetailModal
-          activity={selectedActivity}
-          onClose={() => setSelectedActivity(null)}
-        />
-      )}
+      {selected ? (
+        <ActivityDetail activity={selected} onClose={() => setSelected(null)} />
+      ) : null}
     </div>
   );
 }
 
-function StatCard({
+function Stat({
   label,
   value,
-  detail,
-  accent,
+  tone,
 }: {
   label: string;
   value: number;
-  detail: string;
-  accent: "violet" | "green" | "cyan" | "red";
+  tone?: ActivityTone;
 }) {
-  const accentMap = {
-    violet:
-      "border-violet-500/15 bg-violet-500/[0.04] text-violet-300",
-    green:
-      "border-emerald-500/15 bg-emerald-500/[0.04] text-emerald-300",
-    cyan:
-      "border-cyan-500/15 bg-cyan-500/[0.04] text-cyan-300",
-    red: "border-red-500/15 bg-red-500/[0.04] text-red-300",
-  };
-
   return (
-    <div
-      className={`rounded-2xl border p-4 sm:p-5 ${accentMap[accent]}`}
-    >
-      <p className="text-xs font-medium text-foreground/35">
+    <div className="rounded-2xl border border-border bg-card p-4">
+      <p className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+        {tone ? (
+          <span aria-hidden="true" className={`h-1.5 w-1.5 rounded-full ${TONE[tone].dot}`} />
+        ) : null}
         {label}
       </p>
 
-      <p className="mt-3 text-2xl font-semibold tracking-tight sm:text-3xl">
-        {value}
-      </p>
-
-      <p className="mt-2 text-xs text-foreground/35">
-        {detail}
-      </p>
+      <p className="mt-2 text-2xl font-semibold tabular-nums">{value}</p>
     </div>
   );
 }
 
-function ActivityFilter({
-  active,
+function KindChip({
   label,
+  mark,
   count,
-  icon,
+  active,
   onClick,
 }: {
-  active: boolean;
   label: string;
+  mark?: string;
   count: number;
-  icon?: string;
+  active: boolean;
   onClick: () => void;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`inline-flex shrink-0 items-center gap-2 rounded-xl border px-3.5 py-2.5 text-sm transition ${
+      aria-pressed={active}
+      className={`inline-flex shrink-0 items-center gap-2 rounded-xl border px-3.5 py-2 text-sm transition-colors ${
         active
-          ? "border-violet-500/30 bg-violet-500/10 text-violet-200"
-          : "border-white/[0.07] bg-white/[0.02] text-white/45 hover:border-white/[0.12] hover:bg-white/[0.05] hover:text-white"
+          ? "border-foreground/30 bg-foreground/10 text-foreground"
+          : "border-border bg-background text-muted-foreground hover:text-foreground"
       }`}
     >
-      {icon && <span className="text-sm">{icon}</span>}
-
+      {mark ? <span aria-hidden="true">{mark}</span> : null}
       {label}
-
-      <span
-        className={`rounded-md px-1.5 py-0.5 text-[10px] ${
-          active
-            ? "bg-violet-400/10 text-violet-200"
-            : "bg-white/[0.05] text-white/30"
-        }`}
-      >
-        {count}
-      </span>
+      <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] tabular-nums">{count}</span>
     </button>
   );
 }
 
 function ActivityRow({
   activity,
+  now,
   onSelect,
 }: {
   activity: ActivityItem;
+  now: number;
   onSelect: () => void;
 }) {
-  const category = categoryConfig[activity.category];
-  const status = statusConfig[activity.status];
+  const tone = TONE[activity.tone];
 
   return (
     <button
       type="button"
       onClick={onSelect}
-      className="group relative flex w-full flex-col gap-4 rounded-2xl border border-white/[0.06] bg-white/[0.015] p-4 text-left transition hover:-translate-y-[1px] hover:border-white/[0.12] hover:bg-white/[0.035] sm:flex-row sm:items-start sm:p-5"
+      className="flex w-full items-start gap-4 rounded-2xl border border-border bg-card p-4 text-left transition-colors hover:bg-muted/50"
     >
-      {activity.unread && (
-        <span className="absolute right-4 top-4 h-2 w-2 rounded-full bg-violet-400 shadow-[0_0_16px_rgba(139,92,246,0.8)]" />
-      )}
-
-      <div
-        className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border text-lg ${category.bg} ${category.color}`}
+      <span
+        aria-hidden="true"
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border bg-muted text-base"
       >
-        {category.icon}
-      </div>
+        {KIND[activity.kind].mark}
+      </span>
 
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <h3 className="pr-4 text-sm font-semibold text-foreground/85 transition group-hover:text-foreground sm:text-[15px]">
-            {activity.title}
-          </h3>
+      <span className="min-w-0 flex-1">
+        <span className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+          <span className="text-sm font-semibold text-foreground">{activity.title}</span>
 
-          <span className="shrink-0 text-xs text-foreground/30">
-            {activity.createdAt}
-          </span>
-        </div>
-
-        <p className="mt-2 max-w-4xl text-sm leading-6 text-foreground/40">
-          {activity.description}
-        </p>
-
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          <span
-            className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium ${status.className}`}
+          <time
+            dateTime={activity.occurredAt}
+            className="shrink-0 text-xs text-muted-foreground"
           >
-            <span
-              className={`h-1.5 w-1.5 rounded-full ${status.dot}`}
-            />
+            {formatWhen(activity.occurredAt, now)}
+          </time>
+        </span>
 
-            {status.label}
-          </span>
+        <span className="mt-1 block truncate text-sm text-muted-foreground">
+          {activity.detail}
+        </span>
 
-          <span className="rounded-full border border-white/[0.06] bg-white/[0.025] px-2.5 py-1 text-[11px] text-foreground/35">
-            {activity.actor}
-          </span>
-
-          {activity.workspace && (
-            <span className="rounded-full border border-white/[0.06] bg-white/[0.025] px-2.5 py-1 text-[11px] text-foreground/35">
-              {activity.workspace}
-            </span>
-          )}
-        </div>
-      </div>
-
-      <span className="absolute bottom-4 right-4 text-lg text-foreground/10 transition group-hover:translate-x-0.5 group-hover:text-foreground/40">
-        →
+        <span
+          className={`mt-3 inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${tone.badge}`}
+        >
+          <span aria-hidden="true" className={`h-1.5 w-1.5 rounded-full ${tone.dot}`} />
+          {tone.label}
+        </span>
       </span>
     </button>
   );
 }
 
-function PulseRow({
-  label,
-  value,
-  dot,
-}: {
-  label: string;
-  value: string;
-  dot: string;
-}) {
-  return (
-    <div className="flex items-center justify-between gap-4">
-      <div className="flex items-center gap-2.5">
-        <span
-          className={`h-2 w-2 rounded-full shadow-[0_0_12px_currentColor] ${dot}`}
-        />
-
-        <span className="text-sm text-foreground/45">{label}</span>
-      </div>
-
-      <span className="text-sm font-medium text-foreground/70">
-        {value}
-      </span>
-    </div>
-  );
-}
-
-function EmptyActivityState({
-  onReset,
-}: {
-  onReset: () => void;
-}) {
-  return (
-    <div className="flex min-h-[400px] flex-col items-center justify-center px-6 text-center">
-      <div className="flex h-16 w-16 items-center justify-center rounded-3xl border border-white/[0.07] bg-white/[0.03] text-2xl text-foreground/40">
-        ✦
-      </div>
-
-      <h3 className="mt-6 text-lg font-semibold">
-        No activity found
-      </h3>
-
-      <p className="mt-2 max-w-sm text-sm leading-6 text-foreground/35">
-        Try changing your filters or search for something else in
-        your SYRAVEN activity.
-      </p>
-
-      <button
-        type="button"
-        onClick={onReset}
-        className="mt-6 rounded-xl border border-white/[0.08] bg-white/[0.04] px-4 py-2.5 text-sm text-foreground/60 transition hover:bg-white/[0.07] hover:text-foreground"
-      >
-        Reset filters
-      </button>
-    </div>
-  );
-}
-
-function ActivityDetailModal({
+function ActivityDetail({
   activity,
   onClose,
 }: {
   activity: ActivityItem;
   onClose: () => void;
 }) {
-  const category = categoryConfig[activity.category];
-  const status = statusConfig[activity.status];
-
   const panelRef = useRef<HTMLDivElement | null>(null);
 
-  /*
-    This modal had Escape and nothing else: no role, so a screen
-    reader announced nothing had opened; no accessible name; and no
-    focus trap, so Tab walked out of the panel into the page it was
-    covering. The hook replaces the hand-rolled Escape listener and
-    adds the rest.
-  */
-  useDialogBehaviour({
-    open: true,
-    onClose,
-    panelRef,
-  });
+  useDialogBehaviour({ open: true, onClose, panelRef });
+
+  const tone = TONE[activity.tone];
 
   return (
     <div
-      className="motion-backdrop fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-0 backdrop-blur-md sm:items-center sm:p-6"
+      className="motion-backdrop fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-0 sm:items-center sm:p-6"
       onMouseDown={onClose}
     >
       <div
@@ -884,111 +587,66 @@ function ActivityDetailModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="activity-detail-title"
-        className="motion-dialog w-full max-w-2xl rounded-t-[32px] border border-white/[0.1] bg-card p-6 shadow-2xl sm:rounded-[32px] sm:p-8"
+        className="motion-dialog w-full max-w-lg rounded-t-3xl border border-border bg-card p-6 shadow-2xl sm:rounded-3xl"
         onMouseDown={(event) => event.stopPropagation()}
       >
-        <div className="flex items-start justify-between gap-6">
-          <div
-            className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border text-xl ${category.bg} ${category.color}`}
+        <div className="flex items-start justify-between gap-4">
+          <span
+            className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${tone.badge}`}
           >
-            {category.icon}
-          </div>
+            <span aria-hidden="true" className={`h-1.5 w-1.5 rounded-full ${tone.dot}`} />
+            {tone.label}
+          </span>
 
           <button
             type="button"
             onClick={onClose}
-            className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/[0.07] bg-white/[0.03] text-foreground/40 transition hover:bg-white/[0.07] hover:text-foreground"
             aria-label="Close activity details"
+            className="flex h-9 w-9 items-center justify-center rounded-xl border border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           >
             ×
           </button>
         </div>
 
-        <div className="mt-7">
-          <div className="flex flex-wrap items-center gap-2">
-            <span
-              className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium ${status.className}`}
-            >
-              <span
-                className={`h-1.5 w-1.5 rounded-full ${status.dot}`}
-              />
+        <h2 id="activity-detail-title" className="mt-4 text-xl font-semibold tracking-tight">
+          {activity.title}
+        </h2>
 
-              {status.label}
-            </span>
+        <p className="mt-2 break-words text-sm text-muted-foreground">{activity.detail}</p>
 
-            <span className="text-xs text-foreground/30">
-              {activity.createdAt}
-            </span>
+        <dl className="mt-6 grid gap-3 sm:grid-cols-2">
+          <div className="rounded-xl border border-border bg-muted/40 p-3">
+            <dt className="text-xs text-muted-foreground">Kind</dt>
+            <dd className="mt-1 text-sm font-medium">{KIND[activity.kind].label}</dd>
           </div>
 
-          <h2
-            id="activity-detail-title"
-            className="mt-5 text-2xl font-semibold tracking-tight text-foreground"
-          >
-            {activity.title}
-          </h2>
-
-          <p className="mt-4 text-sm leading-7 text-foreground/45 sm:text-base">
-            {activity.description}
-          </p>
-        </div>
-
-        <div className="mt-8 grid gap-3 sm:grid-cols-2">
-          <DetailBox label="Source" value={activity.actor} />
-
-          <DetailBox
-            label="Workspace"
-            value={activity.workspace || "SYRAVEN"}
-          />
-        </div>
-
-        {activity.metadata && activity.metadata.length > 0 && (
-          <div className="mt-6">
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-foreground/30">
-              Activity metadata
-            </p>
-
-            <div className="mt-3 flex flex-wrap gap-2">
-              {activity.metadata.map((item) => (
-                <span
-                  key={item}
-                  className="rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2 text-xs text-foreground/55"
-                >
-                  {item}
-                </span>
-              ))}
-            </div>
+          <div className="rounded-xl border border-border bg-muted/40 p-3">
+            <dt className="text-xs text-muted-foreground">When</dt>
+            <dd className="mt-1 text-sm font-medium">
+              <time dateTime={activity.occurredAt}>{formatExact(activity.occurredAt)}</time>
+            </dd>
           </div>
-        )}
+        </dl>
 
-        <div className="mt-8 flex justify-end border-t border-white/[0.06] pt-6">
+        <div className="mt-6 flex justify-end gap-3 border-t border-border pt-5">
           <button
             type="button"
             onClick={onClose}
-            className="rounded-xl bg-white px-5 py-3 text-sm font-semibold text-black transition hover:bg-white/90"
+            className="inline-flex h-10 items-center rounded-xl border border-border px-4 text-sm font-medium transition-colors hover:bg-muted"
           >
-            Done
+            Close
           </button>
+
+          {activity.href ? (
+            <Link
+              href={activity.href}
+              className="inline-flex h-10 items-center rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
+            >
+              Open
+            </Link>
+          ) : null}
         </div>
       </div>
-    </div>
-  );
-}
-
-function DetailBox({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
-  return (
-    <div className="rounded-2xl border border-white/[0.06] bg-black/20 p-4">
-      <p className="text-xs text-foreground/30">{label}</p>
-
-      <p className="mt-2 truncate text-sm font-medium text-foreground/70">
-        {value}
-      </p>
     </div>
   );
 }

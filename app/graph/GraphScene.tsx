@@ -48,7 +48,7 @@ import { useEffect, useRef, useState } from "react";
 export interface GraphNode {
   readonly id: string;
   readonly label: string;
-  readonly kind: "workspace" | "project" | "task";
+  readonly kind: "workspace" | "project" | "task" | "knowledge";
 }
 
 export interface GraphEdge {
@@ -68,6 +68,7 @@ const KIND_COLOR: Record<GraphNode["kind"], number> = {
   workspace: 0xfafafa,
   project: 0x8b5cf6,
   task: 0x22d3ee,
+  knowledge: 0xf59e0b,
 };
 
 /**
@@ -85,19 +86,21 @@ function layout(
     workspace: 0,
     project: 3.2,
     task: 6.4,
+    knowledge: 8.8,
   };
 
   const byKind: Record<string, GraphNode[]> = {
     workspace: [],
     project: [],
     task: [],
+    knowledge: [],
   };
 
   for (const node of nodes) byKind[node.kind]?.push(node);
 
   const positions = new Map<string, [number, number, number]>();
 
-  for (const kind of ["workspace", "project", "task"] as const) {
+  for (const kind of ["workspace", "project", "task", "knowledge"] as const) {
     const group = byKind[kind] ?? [];
     const radius = rings[kind];
 
@@ -227,7 +230,7 @@ export default function GraphScene({ nodes, edges }: GraphSceneProps) {
         }
 
         /* One point cloud per kind, so each keeps its colour. */
-        for (const kind of ["workspace", "project", "task"] as const) {
+        for (const kind of ["workspace", "project", "task", "knowledge"] as const) {
           const group = drawn.filter((node) => node.kind === kind);
           if (group.length === 0) continue;
 
