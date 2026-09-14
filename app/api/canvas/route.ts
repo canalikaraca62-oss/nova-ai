@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 
-import OpenAI from "openai";
-
 import { withAuth } from "@/lib/api/withAuth";
 import { enforceUsage } from "@/lib/api/usageGuard";
+import { chatCompletion } from "@/lib/ai/provider";
+import { selectModel } from "@/lib/ai/registry";
+import { clampMaxTokens } from "@/lib/usage/entitlements";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -221,46 +222,6 @@ function extractJson(
 }
 
 /* ==================================================
-   FALLBACK CANVAS
-================================================== */
-
-function createFallbackCanvas(
-  prompt: string,
-  content: string,
-  mode: string
-): CanvasDocument {
-  const source =
-    content || prompt;
-
-  return {
-    title:
-      prompt
-        .slice(0, 80)
-        .trim() ||
-      "New SYRAVEN Canvas",
-
-    description:
-      `SYRAVEN ${mode} workspace`,
-
-    blocks: [
-      {
-        id: createId(),
-        type: "heading",
-        content:
-          "SYRAVEN Canvas",
-      },
-      {
-        id: createId(),
-        type: "paragraph",
-        content:
-          source ||
-          "Start creating your workspace.",
-      },
-    ],
-  };
-}
-
-/* ==================================================
    POST
 ================================================== */
 
@@ -315,46 +276,47 @@ export const POST = withAuth(async (
       );
     }
 
-    const apiKey =
-      process.env.OPENAI_API_KEY;
-
     /*
-      A missing API key is not an error here.
-      Canvas falls back to a basic document.
-    */
+      The registry chooses the model for the caller's plan and the
+      provider adapter carries the call, as for every other generation
+      route. This route used to build its own OpenAI SDK client and send
+      whatever OPENAI_CANVAS_MODEL named -- a model no plan check had
+      approved, on a transport the AI policy never saw.
 
-    if (!apiKey) {
+      A missing capability says so. This route also once answered
+      success: true with a template built from the caller's own text
+      (ARCHITECTURE_NORTH_STAR.md §9).
+    */
+    const model = selectModel(
+      null,
+      "chat",
+      guard.entitlement.effectivePlan
+    );
+
+    if (!model.ok) {
       return NextResponse.json(
         {
-          success: true,
-          source: "fallback",
-          canvas:
-            createFallbackCanvas(
-              prompt,
-              content,
-              mode
-            ),
+          success: false,
+          error:
+            "AI canvas generation is not configured on this deployment.",
         },
         {
-          status: 200,
+          status: 503,
         }
       );
     }
 
-    const openai =
-      new OpenAI({
-        apiKey,
-      });
-
     const sourceText =
       content || prompt;
 
-    const response =
-      await openai.chat.completions.create({
-        model:
-          process.env
-            .OPENAI_CANVAS_MODEL ||
-          "gpt-4o-mini",
+    const completion =
+      await chatCompletion({
+        model: model.model,
+
+        maxTokens: Math.min(
+          clampMaxTokens(guard.entitlement, null),
+          model.model.maxOutputTokens
+        ),
 
         temperature: 0.4,
 
@@ -414,41 +376,42 @@ ${sourceText}
         ],
       });
 
-    const aiContent =
-      response.choices[0]
-        ?.message
-        ?.content;
-
-    if (!aiContent) {
+    if (!completion.ok) {
+      /*
+        Normalised by the adapter -- including an empty answer -- so no
+        provider internals reach the client.
+      */
       return NextResponse.json(
         {
-          success: true,
-          source: "fallback",
-
-          canvas:
-            createFallbackCanvas(
-              prompt,
-              content,
-              mode
-            ),
+          success: false,
+          error: completion.error.clientMessage,
         },
         {
-          status: 200,
+          status: completion.error.status,
         }
       );
     }
 
+    /*
+      The call succeeded, so it is metered -- with the counts the provider
+      reported -- whether or not its answer parses into a canvas.
+    */
+    await guard.record({
+      model: completion.modelId,
+      promptTokens: completion.usage.promptTokens,
+      completionTokens: completion.usage.completionTokens,
+      totalTokens: completion.usage.totalTokens,
+    });
+
     const parsed =
       extractJson(
-        aiContent
+        completion.content
       );
 
     const canvas =
       normalizeCanvas(
         parsed
       );
-
-    await guard.record({});
 
     return NextResponse.json(
       {
@@ -461,19 +424,16 @@ ${sourceText}
       }
     );
   } catch (error) {
-    console.error(
-      "SYRAVEN CANVAS API ERROR:",
-      error
-    );
+    /* Name only: a provider error message can carry request internals. */
+    console.error("[SYRAVEN_CANVAS_ERROR]", {
+      userId: session.userId,
+      name: error instanceof Error ? error.name : "unknown",
+    });
 
     return NextResponse.json(
       {
         success: false,
-
-        error:
-          error instanceof Error
-            ? error.message
-            : "The canvas could not be created.",
+        error: "The canvas could not be created.",
       },
       {
         status: 500,

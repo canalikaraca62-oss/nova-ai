@@ -1,0 +1,79 @@
+-- =========================================================
+-- SYRAVEN — profiles: billing state is written by the server only
+-- 20260913120000_syraven_profiles_billing_lockdown.sql
+--
+-- STATUS: WRITTEN, NOT APPLIED. Needs explicit founder approval before it
+-- touches production (MIGRATION_APPROVAL_REQUIRED.md).
+--
+-- THE HOLE (found in the Phase 1 adversarial review, 2026-09-13)
+--
+-- `public.profiles` is the billing state of record: every column is
+-- plan, subscription or trial state. lib/usage/entitlements.ts reads
+-- `plan`, `subscription_status` and `trial_ends_at` from it to decide
+-- which limits and models a caller gets.
+--
+-- Two applied migrations combine into a direct write path for the
+-- signed-in user, around every API route:
+--
+--   20260904122000  policy "profiles_update_own"
+--                   for update to authenticated
+--                   using (auth.uid() = id) with check (auth.uid() = id)
+--   20260906120000  grant select, insert, update, delete
+--                   on all tables in schema public to authenticated
+--
+-- So PostgREST, called with the public anon key and the user's own
+-- session token, accepts
+--
+--   PATCH /rest/v1/profiles?id=eq.<own id>
+--   { "plan": "business", "subscription_status": "active" }
+--
+-- and the next request is served with paid-plan limits. The comment in
+-- 20260904122000 recorded this and deferred it; the application-level
+-- invariant (only the Stripe webhook writes a plan) held in code while
+-- the database did not enforce it.
+--
+-- THE FIX
+--
+-- The client gets no write path to profiles at all. There is nothing on
+-- the row a user should edit: no display name, no preference -- only
+-- billing state. Deny by default.
+--
+--   - the UPDATE policy is dropped
+--   - INSERT, UPDATE and DELETE are revoked from `authenticated` and
+--     `anon` at the table level, so a future permissive policy cannot
+--     silently reopen the path
+--   - `profiles_select_own` is untouched: users still read their plan
+--
+-- EXPECTED PRODUCTION EFFECT
+--
+--   - A signed-in user's PATCH/POST/DELETE on /rest/v1/profiles is
+--     refused (permission denied).
+--   - The Stripe webhook is unaffected: it writes with the service role
+--     (lib/supabaseAdmin.ts), which keeps its own grant and bypasses RLS.
+--   - Entitlement reads are unaffected (SELECT is not revoked).
+--   - No application path writes profiles with the caller's client:
+--     `.from("profiles")` writes exist only in
+--     app/api/billing/webhook/route.ts (service role), pinned by
+--     tests/security/architecture-invariants.test.ts (invariant 12).
+--   - Rows already edited through the hole are NOT detected or repaired
+--     here. Before or after applying, compare `profiles.plan` with the
+--     Stripe subscription of record for every non-free row.
+--
+-- REVERSIBILITY
+--
+--   grant update on table public.profiles to authenticated;
+--   + recreate "profiles_update_own" from 20260904122000.
+--   (Reopens the hole; documented only so rollback is not improvised.)
+--
+-- SAFETY
+--
+--   - idempotent: drop policy if exists; revoke of a privilege not held
+--     is a no-op
+--   - no table, column, row or function is created, altered or removed
+-- =========================================================
+
+drop policy if exists "profiles_update_own" on public.profiles;
+
+revoke insert, update, delete on table public.profiles from authenticated;
+
+revoke insert, update, delete on table public.profiles from anon;

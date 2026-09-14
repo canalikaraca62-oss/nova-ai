@@ -141,7 +141,12 @@ void describe("Migrated routes use the caller's RLS-enforced client", () => {
     "app/api/knowledge/route.ts",
     "app/api/knowledge/search/route.ts",
     "app/api/tasks/route.ts",
-    "app/api/tasks/execute/route.ts",
+    /*
+     * app/api/tasks/execute/route.ts left this list when it stopped
+     * reading data. It fabricated task execution and now answers 410
+     * without touching the database; architecture-invariants.test.ts
+     * pins that it can no longer mark a task completed.
+     */
     "app/api/usage/route.ts",
     "app/api/projects/route.ts",
   ];

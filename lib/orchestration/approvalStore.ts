@@ -9,6 +9,9 @@ import {
 } from "./execution";
 import type { RiskLevel } from "./registry";
 
+/** Postgres unique_violation: a live approval for this action already exists. */
+const UNIQUE_VIOLATION = "23505";
+
 /*
   SYRAVEN — Approval persistence
 
@@ -198,10 +201,13 @@ export async function loadApprovals(
  * exactly that case. Writing an id this code has not proven membership
  * of would be inventing tenancy.
  *
- * Conflicts are ignored rather than retried. The partial unique index
- * means a second live row for the same (execution, tool, user) cannot
- * exist, so a duplicate request is already represented by the row that
- * is there.
+ * A duplicate is not an error. The partial unique index means a second
+ * live row for the same (execution, tool, user) cannot exist, so a
+ * repeated request is already represented by the row that is there.
+ *
+ * Resolves true only when every requested tool has a live row -- written
+ * now, or already present. The route must not tell a person something is
+ * waiting for their approval when nothing was recorded.
  */
 export async function requestApprovals(
   session: AuthenticatedSession,
@@ -214,8 +220,8 @@ export async function requestApprovals(
     workspaceId: string | null;
     projectId: string | null;
   },
-): Promise<void> {
-  if (input.toolIds.length === 0) return;
+): Promise<boolean> {
+  if (input.toolIds.length === 0) return true;
 
   const now = Date.now();
 
@@ -250,17 +256,40 @@ export async function requestApprovals(
   });
 
   /*
-    A failed insert is deliberately not surfaced to the caller. The run
-    has already stopped at awaiting_approval; failing to record the
-    request means the user sees nothing to approve, which is a worse
-    experience but not a weaker boundary. Nothing executes either way.
+    One plain insert per tool, and every result is read.
+
+    This was an upsert whose conflict target named the columns of a
+    PARTIAL unique index. Postgres infers a partial index for ON CONFLICT
+    only when the statement repeats the index predicate, which
+    PostgREST's on_conflict cannot express -- so the statement is refused
+    (42P10), and its result was discarded. The run then answered "This
+    plan needs your approval" while no approval existed to give.
+
+    A plain insert needs no inference. A live row for the same action
+    makes the partial unique index refuse it with 23505, which means
+    "already requested" and is success. Any other refusal is a failure,
+    logged and reported: nothing runs either way, but the person must
+    not be told something waits for them that does not.
   */
-  await session.supabase
-    .from("agent_approvals")
-    .upsert(rows, {
-      onConflict: "execution_key,tool_id,requested_for_user_id",
-      ignoreDuplicates: true,
-    });
+  let recorded = true;
+
+  for (const row of rows) {
+    const { error } = await session.supabase
+      .from("agent_approvals")
+      .insert(row);
+
+    if (error && error.code !== UNIQUE_VIOLATION) {
+      console.error("SYRAVEN APPROVAL: request could not be recorded.", {
+        userId: session.userId,
+        toolId: row.tool_id,
+        code: error.code,
+      });
+
+      recorded = false;
+    }
+  }
+
+  return recorded;
 }
 
 export type DecisionOutcome =
@@ -311,29 +340,52 @@ export async function decideApproval(
 }
 
 /**
- * Marks an approval consumed after the step it authorized has run.
+ * Spends an approval for exactly one execution, BEFORE its step runs.
  *
- * THIS IS NOT BOOKKEEPING. The partial unique index covers only the
- * non-terminal states, and `verifyApproval()` accepts any record whose
- * state is 'approved' and whose expiry has not passed. An approval left
- * at 'approved' after use therefore authorizes the same step again --
- * a refresh, a retry, or a second request with the same goal produces
- * the same execution key and finds the grant still live.
+ * THIS REPLACES A CONSUME-AFTER-RUN THAT LEFT A RACE. `verifyApproval()`
+ * accepts any approved, unexpired record, and the same goal derives the
+ * same execution key. When the grant was only marked 'used' after the
+ * whole run, two concurrent requests for one goal could both load it
+ * while it was still 'approved', both pass verification, and both run
+ * the high-risk step before either spent it.
  *
- * Moving it to 'used' closes that, and frees the unique index so a
- * fresh approval for the same action can be requested deliberately.
+ * Here approved -> used is a compare-and-set. The update matches only a
+ * row that is still 'approved' and unexpired, and only the request whose
+ * update returns that row may run the step. Every other request gets
+ * false and runs nothing. A database error is also false: a grant that
+ * could not be claimed must never read as permission.
+ *
+ * The grant is spent whether the step then succeeds or fails. It
+ * authorized the ATTEMPT, and a failed attempt at a destructive action
+ * is not a licence to try again unasked. Moving the row to 'used' also
+ * frees the partial unique index, so a fresh approval for the same
+ * action can be requested deliberately.
  */
-export async function consumeApproval(
+export async function claimApproval(
   session: AuthenticatedSession,
   input: { executionKey: string; toolId: string },
-): Promise<void> {
-  await session.supabase
+): Promise<boolean> {
+  const { data, error } = await session.supabase
     .from("agent_approvals")
     .update({ status: "used" })
     .eq("execution_key", input.executionKey)
     .eq("tool_id", input.toolId)
     .eq("requested_for_user_id", session.userId)
-    .eq("status", "approved");
+    .eq("status", "approved")
+    .gt("expires_at", new Date().toISOString())
+    .select("id")
+    .maybeSingle();
+
+  if (error) {
+    console.error("SYRAVEN APPROVAL: claim failed.", {
+      userId: session.userId,
+      toolId: input.toolId,
+    });
+
+    return false;
+  }
+
+  return data !== null;
 }
 
 /**

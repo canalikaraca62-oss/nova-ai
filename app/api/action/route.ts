@@ -15,13 +15,10 @@ import {
  * TYPES
  * ================================================== */
 
-type ActionPayload = {
-  action?: ActionRequest;
-};
-
 type ActionResultStatus =
   | "completed"
   | "pending_confirmation"
+  | "not_executed"
   | "rejected"
   | "unsupported";
 
@@ -257,19 +254,33 @@ export const POST = withAuth(async (
     }
 
     /* ==============================================
-     * SAFE INTERNAL ACTIONS
+     * CLASSIFIED, NOT RUN
      * ============================================== */
 
+    /*
+      A low-risk, registered action is classified here -- and NOT run.
+
+      This branch used to answer success: true, status "completed",
+      message "Done." for an action nothing executed: the route has no
+      executor. Claiming completion for work that never happened is the
+      fabricated-success defect. Work runs through /api/agents/run, where
+      plans are validated, approvals claimed and tools executed on the
+      caller's own client -- the one execution path.
+    */
     if (isSafeAction(action)) {
-      return json({
-        success: true,
-        status: "completed",
-        message:
-          "Done.",
-        data: {
-          actionType: action.type,
+      return json(
+        {
+          success: false,
+          status: "not_executed",
+          message:
+            "This endpoint classifies actions; it does not run them. Run work through an agent.",
+          data: {
+            actionType: action.type,
+            requiresApproval: false,
+          },
         },
-      });
+        409
+      );
     }
 
     /* ==============================================

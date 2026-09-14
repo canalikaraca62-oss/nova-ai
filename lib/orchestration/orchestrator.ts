@@ -53,6 +53,7 @@ import { recommendModel } from "@/lib/ai/routing";
 import { sanitizeUntrusted } from "@/lib/memory/contextBudget";
 import {
   type ExecutionState,
+  type ApprovalCheck,
   type ApprovalRecord,
   checkBudget,
   deriveExecutionKey,
@@ -61,6 +62,7 @@ import {
 } from "./execution";
 import { EXECUTION_LIMITS, validatePlan } from "./planValidation";
 import { getAgent, requiresHumanApproval } from "./registry";
+import { approvalGate, settleRun } from "./runSettlement";
 import { executeTool, type ToolContext } from "./tools";
 
 /* -------------------------------------------------------------------------- */
@@ -81,6 +83,16 @@ export interface OrchestrationRequest {
    * request body.
    */
   readonly approvals?: ReadonlyMap<string, ApprovalRecord>;
+  /**
+   * Spends one verified approval, atomically, BEFORE its step runs.
+   *
+   * Resolves true only for the single request that wins the approved ->
+   * used transition. Supplied by the route, which owns every database
+   * write on this path. When it is absent no high-risk step can run:
+   * a grant that cannot be spent is treated as a grant that does not
+   * exist.
+   */
+  readonly claimApproval?: (toolId: string) => Promise<boolean>;
 }
 
 export interface StepResult {
@@ -204,9 +216,12 @@ export function parsePlanResponse(content: string): unknown {
  *   1. agent must exist and be permitted for the caller's plan
  *   2. model proposes a plan
  *   3. EVERY step validated against the registry
- *   4. high-risk steps require a server-held approval record
- *   5. budget checked before each call
- *   6. tool executes on the caller's RLS client
+ *   4. EVERY high-risk step holds a server-held approval record before
+ *      ANY step runs -- otherwise the whole plan waits (approval gate)
+ *   5. each grant spent by compare-and-set before its step runs
+ *   6. budget checked before each call
+ *   7. tool executes on the caller's RLS client
+ *   8. the run is `completed` only if every step completed
  */
 export async function runOrchestration(
   request: OrchestrationRequest,
@@ -398,7 +413,84 @@ export async function runOrchestration(
   }
 
   /* ---------------------------------------------------------------- */
-  /* 3. Execute, step by step                                          */
+  /* 3. The approval gate -- before ANY step runs                      */
+  /* ---------------------------------------------------------------- */
+
+  const approvals = request.approvals ?? new Map<string, ApprovalRecord>();
+
+  /*
+    One verdict per high-risk tool, taken once, so every step of that
+    tool is judged against the same reading of its grant.
+  */
+  const approvalChecks = new Map<string, ApprovalCheck>();
+
+  for (const step of validation.plan.steps) {
+    if (requiresHumanApproval(step.risk) && !approvalChecks.has(step.tool.id)) {
+      approvalChecks.set(
+        step.tool.id,
+        verifyApproval(approvals.get(step.tool.id) ?? null, {
+          actingUserId: request.session.userId,
+          toolId: step.tool.id,
+          workspaceId: request.workspaceId,
+          projectId: request.projectId,
+        }),
+      );
+    }
+  }
+
+  const gate = approvalGate(
+    validation.plan.steps.map((step) => ({
+      toolId: step.tool.id,
+      requiresApproval: requiresHumanApproval(step.risk),
+      approved: approvalChecks.get(step.tool.id)?.valid === true,
+    })),
+  );
+
+  if (!gate.open) {
+    /*
+      Nothing has run, and nothing will until every grant this plan
+      needs is in place. Running the steps around an unapproved one
+      would carry out a plan the user has not agreed to as a whole --
+      and steps after it would run although the step before them never
+      did. Absence of a record is a denial; no request body can stand
+      in for one.
+    */
+    advance("awaiting_approval");
+
+    return {
+      executionKey,
+      usage: completion.usage,
+      modelId: completion.modelId,
+      state,
+      agentId: agent.id,
+      steps: validation.plan.steps.map((step): StepResult => {
+        const check = approvalChecks.get(step.tool.id);
+
+        return check !== undefined && !check.valid
+          ? {
+              index: step.index,
+              tool: step.tool.id,
+              risk: step.risk,
+              status: "awaiting_approval",
+              summary: `Requires approval (${check.reason}).`,
+            }
+          : {
+              index: step.index,
+              tool: step.tool.id,
+              risk: step.risk,
+              status: "skipped",
+              summary: "Not run: this plan waits for approval of another step.",
+            };
+      }),
+      error: null,
+      pendingApprovals: gate.awaiting,
+      /* Nothing ran, so no grant was spent. */
+      consumedApprovals: [],
+    };
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* 4. Execute, step by step                                          */
   /* ---------------------------------------------------------------- */
 
   const budget = { toolCallsUsed: 0, depth: 0, startedAt };
@@ -410,7 +502,6 @@ export async function runOrchestration(
   };
 
   const results: StepResult[] = [];
-  const pendingApprovals: string[] = [];
 
   /*
     Grants that were verified AND then actually spent.
@@ -422,8 +513,6 @@ export async function runOrchestration(
     happened.
   */
   const consumedApprovals: string[] = [];
-
-  const approvals = request.approvals ?? new Map();
 
   for (const step of validation.plan.steps) {
     /* Budget is re-checked before EVERY call, not once up front. */
@@ -460,20 +549,43 @@ export async function runOrchestration(
 
       if (!check.valid) {
         /*
-         * Absence of a record is a denial. There is no path where a
-         * request body claiming approval satisfies this.
-         */
-        pendingApprovals.push(step.tool.id);
-
+          The gate found this grant valid; it no longer is -- typically
+          it expired while earlier steps ran. Fail closed: run nothing
+          more. Passing over the step and carrying on is exactly what
+          the gate exists to prevent.
+        */
         results.push({
           index: step.index,
           tool: step.tool.id,
           risk: step.risk,
-          status: "awaiting_approval",
-          summary: `Requires approval (${check.reason}).`,
+          status: "failed",
+          summary: `Not run: its approval is no longer valid (${check.reason}).`,
         });
 
-        continue;
+        break;
+      }
+
+      /*
+        Verified is not yet spent. Two concurrent requests for the same
+        goal share one execution key and can both verify the same live
+        grant; only the request that wins this claim may run the step.
+        The loser stops here, having executed nothing.
+      */
+      const claimed = request.claimApproval
+        ? await request.claimApproval(step.tool.id)
+        : false;
+
+      if (!claimed) {
+        results.push({
+          index: step.index,
+          tool: step.tool.id,
+          risk: step.risk,
+          status: "failed",
+          summary:
+            "Not run: the approval for this step was already used or could not be claimed.",
+        });
+
+        break;
       }
     }
 
@@ -511,40 +623,26 @@ export async function runOrchestration(
   }
 
   /* ---------------------------------------------------------------- */
-  /* 4. Settle                                                         */
+  /* 5. Settle                                                         */
   /* ---------------------------------------------------------------- */
 
-  if (pendingApprovals.length > 0 && state === "planning") {
-    advance("awaiting_approval");
+  /*
+    `completed` only when every step completed (settleRun). A refused
+    claim, a failed step, or a budget stop settles as `failed`, with the
+    steps that did run listed -- never as a finished run.
+  */
+  const settlement = settleRun(results.map((result) => result.status));
 
-    return {
-      executionKey,
-      usage: completion.usage,
-      modelId: completion.modelId,
-      state,
-      agentId: agent.id,
-      steps: results,
-      error: null,
-      pendingApprovals,
-      /*
-        Empty by construction: a run that stopped for approval executed
-        no step, so it spent no grant.
-      */
-      consumedApprovals: [],
-    };
-  }
+  if (state === "executing") advance("validating");
 
-  const anyFailed = results.some((r) => r.status === "failed");
+  /*
+    From `planning` -- nothing ran -- the machine accepts only `failed`,
+    which is also the only settlement a run that executed nothing can
+    reach. If the machine ever refuses a settlement, the run failed.
+  */
+  const settled = advance(settlement.state);
 
-  if (state === "executing") {
-    advance("validating");
-    advance(anyFailed ? "failed" : "completed");
-  } else if (state === "planning") {
-    /* Nothing ran — an empty but valid plan. */
-    advance("executing");
-    advance("validating");
-    advance("completed");
-  }
+  if (!settled) advance("failed");
 
   return {
     executionKey,
@@ -553,8 +651,9 @@ export async function runOrchestration(
     state,
     agentId: agent.id,
     steps: results,
-    error: anyFailed ? "STEP_FAILED" : null,
-    pendingApprovals,
+    error: settled ? settlement.error : "PLAN_INCOMPLETE",
+    /* The gate returned early for any plan still waiting on a grant. */
+    pendingApprovals: [],
     consumedApprovals,
   };
 }

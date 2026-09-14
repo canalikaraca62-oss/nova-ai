@@ -43,11 +43,11 @@ already been created there by hand.
 > is timestamped `165000` specifically to close this.
 
 Because the baseline is inserted *before* an already-applied migration,
-pushing requires:
-
-```bash
-npx supabase db push --linked --include-all
-```
+the CLI treats it as out of order: `supabase db push` refuses it unless
+`--include-all` is given. That flag is **not** a safe way to apply
+anything today — see §6. `--include-all` pushes *every* local migration
+missing from the target's history, and this checkout is linked to the
+production project.
 
 ---
 
@@ -118,12 +118,16 @@ then reconcile in a follow-up migration.
 
 ### 3.1 Present reality
 
-Application routes use `supabaseAdmin` (service role), which **bypasses
-RLS entirely** (ARCHITECTURE_AUDIT.md §8.6). Today, safety rests on the
-explicit `user_id` filters added in Phase 1.
+**[Corrected 2026-09-14 — this described 2026-09-04 and is no longer
+true.]** Application routes now use the caller's own RLS-enforced client
+(`session.supabase`). The service role is confined to an allowlist
+(`tests/security/data-access.test.ts`): the Stripe webhook, metering,
+the job queue, notifications insert, file upload and registration.
 
-RLS is therefore **defence in depth** right now. It becomes the primary
-control in **Phase 3**, when routes move to a user-scoped client.
+RLS is therefore the **primary** control, and for a signed-in user
+calling PostgREST directly it is the **only** one
+(`docs/architecture/ADR-003-database-is-the-write-boundary.md`). The
+explicit `user_id` filters in routes are defence in depth.
 
 ### 3.2 Policy pattern
 
@@ -252,23 +256,44 @@ The remaining step needs Docker or a schema dump.
 
 ---
 
-## 6. Applying these migrations
+## 6. Applying migrations
 
-**Not yet applied.** The files are in the repository; the live database
-is unchanged.
+> **Never run `supabase db push` from this checkout — with or without
+> `--linked`, `--include-all` or `--dry-run`.** The Supabase CLI here is
+> linked to the **production** project (`supabase/.temp/project-ref` =
+> `wpmbumtpcuahyqmdeqgf`). `db push` applies every local migration
+> missing from the target's history, and `--include-all` adds the
+> out-of-order ones as well, so a single command would apply every
+> pending migration — not the one that was approved. Even `--dry-run`
+> connects to the linked (production) database.
 
-```bash
-# preview
-npx supabase db push --linked --dry-run --include-all
+This section said on 2026-09-04 that the §1 migrations were "not yet
+applied". Later sessions record them as applied. The authoritative list
+of migrations still pending is `MIGRATION_APPROVAL_REQUIRED.md`.
 
-# apply
-npx supabase db push --linked --include-all
-```
+For any migration not yet applied:
 
-`--include-all` is required because the baseline is intentionally
-timestamped before an already-applied migration (§1.1).
+1. **Founder approval, per file and per target.** No migration reaches
+   production without explicit founder approval in the conversation.
+2. **Test project first** (`akhkukajdgayqwhedeoo`). Production only after
+   the file has been applied and checked there.
+3. **Verify the target before any schema change.** Open the target
+   project's SQL editor in the Supabase dashboard and confirm the project
+   ref in the URL. Never infer the target from the CLI link; if a CLI
+   command is used at all, pass the target explicitly and confirm which
+   project it names first.
+4. **Apply one file.** Paste that single approved file into the verified
+   project's SQL editor and run it.
+5. **Record it** in that project's migration history so no later command
+   re-runs it: `supabase migration repair --status applied <version>`,
+   pointed explicitly at the verified target (see
+   `supabase migration repair --help` for the target option).
+6. **Check the result** with the read-only queries listed for that
+   migration (`pg_policies`, `has_table_privilege`,
+   `information_schema.column_privileges`).
 
 **Before applying to any environment with real data:** take a backup.
-All migrations are additive and were validated against a database where
+The Phase 2 migrations in §1 were validated against a database where
 every table held **0 rows**; behaviour with populated tables (especially
-enabling RLS) should be reviewed against that environment first.
+enabling RLS, revoking privileges or adding constraints) should be
+reviewed against that environment first.

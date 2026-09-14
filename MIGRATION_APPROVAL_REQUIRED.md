@@ -1,12 +1,44 @@
-# Migration awaiting approval
+# Migrations awaiting approval
 
-**One migration is written, tested, and NOT applied.**
+**Status 2026-09-14:** the two Phase 1 migrations (1, 2) are **applied
+and verified on TEST and PRODUCTION** by the founder, through the SQL
+Editor. Migration history: not recorded on TEST, not reported on
+PRODUCTION. Migrations 3 and 4 are **not applied** anywhere and still
+need explicit approval. Because the history may lack 1 and 2, a
+`db push` would re-run them and apply 3 and 4 unapproved — see "To
+apply" below.
 
-```
-supabase/migrations/20260909120000_syraven_integration_connections.sql
-```
+| Order | Migration | Closes / adds | Urgency |
+|---|---|---|---|
+| 1 | `20260913120000_syraven_profiles_billing_lockdown.sql` | A signed-in user can set their own `plan`, `subscription_status` and `trial_ends_at` through PostgREST (`profiles_update_own` + the blanket DML grant) and receive paid-plan limits | **APPLIED — TEST + PRODUCTION (founder, 2026-09-14)** |
+| 2 | `20260913130000_syraven_tenant_write_boundaries.sql` | `messages` insert into another user's conversation; `projects` planted in another organization; `agent_approvals` rows rewritable (expiry past the TTL, tool, effect, scope) | **APPLIED — TEST + PRODUCTION (founder, 2026-09-14)** |
+| 3 | `20260909120000_syraven_integration_connections.sql` | Connector connection table (section below) | Needed before any connector |
+| 4 | `20260910120000_syraven_jobs_lease_policy.sql` | Cancel-own-jobs policy, column-level update grant on `jobs` | Needed before any job runner |
 
-Nothing has been run against any database. This file is the request.
+Each Phase 1 file states its hole, its fix, its **expected production
+effect** and its rollback in its header. Neither was executed against a
+database: no local Postgres exists on the machine that wrote them.
+
+**Before applying 1:** compare `profiles.plan` with the Stripe
+subscription of record for every non-free row — the migration closes the
+hole; it does not detect rows already edited through it.
+
+**Before any job runner exists (not fixed by 4):** `jobs` INSERT is
+open to `authenticated` with a client-chosen `priority`, `status` and
+`payload`, and `claimNextJob` claims across tenants by priority using
+the service role. A runner must not ship until job creation is
+server-only (ARCHITECTURE_NORTH_STAR.md §9).
+
+**Known repository defect, not fixed here:**
+`20260908120000_syraven_canvases.sql` calls `public.set_updated_at()`,
+which no migration defines (`handle_updated_at` exists). Production
+evidently has the function; a database built from these migrations
+alone would fail at that file. Changing an applied migration is not
+safe; the fix is a new migration, when the test project is next rebuilt.
+
+---
+
+## 3. `20260909120000_syraven_integration_connections.sql`
 
 ---
 
@@ -108,11 +140,28 @@ real send and then resolves to:
 That is the intended state — materially better than the model inventing
 a step while the interface implies the mail went out.
 
-## To apply
+## To apply — applies to every migration in this file
 
-```bash
-supabase db push
-```
+**Never run `supabase db push` from this checkout.** The Supabase CLI
+here is linked to the **production** project
+(`supabase/.temp/project-ref` = `wpmbumtpcuahyqmdeqgf`), and `db push`
+applies *every* local migration missing from the target's history — today
+all four migrations in the table at the top, not the one you approved.
 
-Review the file first. Nothing in this repository will apply it
-automatically.
+Apply one approved file at a time, to the **test** project
+(`akhkukajdgayqwhedeoo`) before production:
+
+1. Get explicit founder approval for that one file, and for the target.
+2. Open the target project's SQL editor in the Supabase dashboard and
+   confirm the project ref in the URL before running anything.
+3. Paste that single file and run it.
+4. Record it in that project's migration history so a later push cannot
+   re-run it: `supabase migration repair --status applied <version>`,
+   pointed explicitly at the verified target (see
+   `supabase migration repair --help` for the target option). Never rely
+   on the default link without checking which project it names.
+5. Run the read-only checks for that migration (Phase 1 Step 1 report),
+   e.g. `select has_table_privilege('authenticated', 'public.profiles', 'UPDATE');`
+   must return `false` after `20260913120000`.
+
+Nothing in this repository applies a migration automatically.

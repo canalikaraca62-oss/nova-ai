@@ -151,15 +151,56 @@ void describe("An approval authorizes one execution", () => {
     );
   });
 
-  void test("the run route actually consumes what was used", () => {
+  void test("the run route hands the orchestrator a claim, not a later consume", () => {
     /*
-     * Defining consumeApproval is not enough — an unused function
-     * leaves the replay open. This asserts the call site.
+     * Consuming after the run left a race: two concurrent requests for
+     * one goal could both verify the same live grant and both execute.
+     * The route must now pass a claim the orchestrator wins BEFORE the
+     * step runs -- and must no longer spend grants afterwards.
      */
     assert.match(
       RUN_ROUTE,
-      /consumeApproval\(/,
-      "A grant that is never consumed authorizes the next refresh too.",
+      /claimApproval:\s*\(toolId(?::\s*string)?\)\s*=>\s*claimApproval\(session,\s*\{\s*executionKey,\s*toolId\s*\}\)/,
+      "The run route must supply a claim bound to the key it derived.",
+    );
+
+    assert.ok(
+      !/consumeApproval\(/.test(RUN_ROUTE),
+      "A consume after the run reopens the concurrent double execution.",
+    );
+  });
+
+  void test("a claim is a compare-and-set on a live, unexpired grant", () => {
+    const start = STORE.indexOf("export async function claimApproval");
+    assert.ok(start !== -1, "claimApproval must exist in the store.");
+
+    const claim = STORE.slice(start, start + 1_200);
+
+    assert.match(claim, /\.eq\("status",\s*"approved"\)/, "Only an approved row may be claimed.");
+    assert.match(claim, /\.gt\("expires_at",/, "An expired grant must not be claimable.");
+    assert.match(claim, /\.eq\("requested_for_user_id",\s*session\.userId\)/);
+    assert.match(
+      claim,
+      /return data !== null;/,
+      "Only the request whose update returned the row has claimed it.",
+    );
+    assert.match(claim, /if \(error\) \{[\s\S]*?return false;/, "A failed claim must deny.");
+  });
+
+  void test("a high-risk step runs only after its approval is claimed", () => {
+    const claimIndex = ORCHESTRATOR.indexOf("await request.claimApproval(step.tool.id)");
+    const executeIndex = ORCHESTRATOR.indexOf("const outcome = await executeTool");
+
+    assert.ok(claimIndex !== -1, "The orchestrator must claim the grant.");
+    assert.ok(
+      claimIndex < executeIndex,
+      "Claiming after execution reopens the concurrent double run.",
+    );
+
+    assert.match(
+      ORCHESTRATOR,
+      /request\.claimApproval\s*\?\s*await request\.claimApproval\(step\.tool\.id\)\s*:\s*false/,
+      "Without a claim function no high-risk step may run.",
     );
   });
 

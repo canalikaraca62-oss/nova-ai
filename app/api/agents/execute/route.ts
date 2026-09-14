@@ -3,7 +3,33 @@ import { NextResponse } from "next/server";
 import { withAuth } from "@/lib/api/withAuth";
 import { enforceUsage } from "@/lib/api/usageGuard";
 import { resolveAiPolicy } from "@/lib/api/aiPolicy";
-import { AI_REQUEST_POLICY } from "@/lib/ai/provider";
+import { chatCompletion, chatCompletionStream } from "@/lib/ai/provider";
+
+/*
+  SYRAVEN — /api/agents/execute
+
+  WHAT THIS ROUTE IS
+
+  A single chat completion with an agent-flavoured system message. It
+  runs no tools, writes nothing and changes nothing outside the reply.
+  Work that acts -- plans, tools, approvals -- runs through
+  /api/agents/run and the orchestration registry, the one execution
+  path (ARCHITECTURE_NORTH_STAR.md). `agentId` / `agentName` here are
+  labels for the system message; they grant no capability.
+
+  WHY IT GOES THROUGH THE PROVIDER ADAPTER
+
+  This route used to call a provider itself, choosing the key as
+  AI_API_KEY || GROQ_API_KEY || OPENAI_API_KEY and the endpoint as
+  AI_BASE_URL || GROQ_BASE_URL || api.groq.com. With only an OpenAI key
+  configured, every call sent the OpenAI secret key to Groq's endpoint,
+  with an OpenAI model name. lib/ai/provider.ts picks the key and the
+  endpoint from the SAME provider -- the one that owns the model the
+  policy selected -- so a key can only ever go to its own provider.
+
+  Token counts are reported as the provider gave them, and null when it
+  did not. They used to fall back to 0, a measurement nobody made.
+*/
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -31,41 +57,6 @@ type ExecuteAgentRequest = {
   stream?: boolean;
   metadata?: Record<string, unknown>;
 };
-
-type AIResponse = {
-  id?: string;
-  choices?: Array<{
-    message?: {
-      role?: string;
-      content?: string | null;
-    };
-    finish_reason?: string | null;
-  }>;
-  usage?: {
-    prompt_tokens?: number;
-    completion_tokens?: number;
-    total_tokens?: number;
-  };
-};
-
-/* -------------------------------------------------------------------------- */
-/*                              CONFIGURATION                                 */
-/* -------------------------------------------------------------------------- */
-
-const DEFAULT_MODEL =
-  process.env.AI_DEFAULT_MODEL ||
-  process.env.GROQ_MODEL ||
-  "llama-3.3-70b-versatile";
-
-const AI_BASE_URL =
-  process.env.AI_BASE_URL ||
-  process.env.GROQ_BASE_URL ||
-  "https://api.groq.com/openai/v1";
-
-const AI_API_KEY =
-  process.env.AI_API_KEY ||
-  process.env.GROQ_API_KEY ||
-  process.env.OPENAI_API_KEY;
 
 /* -------------------------------------------------------------------------- */
 /*                                HELPERS                                     */
@@ -140,26 +131,6 @@ function normalizeMessages(
   }
 
   return messages;
-}
-
-function clampNumber(
-  value: unknown,
-  min: number,
-  max: number,
-  fallback: number
-) {
-  if (typeof value !== "number") {
-    return fallback;
-  }
-
-  if (!Number.isFinite(value)) {
-    return fallback;
-  }
-
-  return Math.min(
-    Math.max(value, min),
-    max
-  );
 }
 
 function createExecutionId() {
@@ -252,21 +223,10 @@ export const POST = withAuth(async (
   if (guard.denied) {
     return guard.response;
   }
+
   const executionId = createExecutionId();
 
   try {
-    if (!AI_API_KEY) {
-      console.error(
-        "[SYRAVEN AGENT EXECUTE] Missing AI API key"
-      );
-
-      return jsonError(
-        "AI service is not configured.",
-        500,
-        "AI_NOT_CONFIGURED"
-      );
-    }
-
     let body: ExecuteAgentRequest;
 
     try {
@@ -291,23 +251,6 @@ export const POST = withAuth(async (
       stream,
       metadata,
     } = body;
-
-    /*
-     * ----------------------------------------------------------------------
-     * MESSAGE NORMALIZATION
-     * ----------------------------------------------------------------------
-     *
-     * Buradaki yapı özellikle TypeScript hatasını çözüyor.
-     *
-     * rawMessages içinden gelen role değeri "string" kabul edilmiyor.
-     * normalizeRole() sadece:
-     *
-     * "system"
-     * "user"
-     * "assistant"
-     *
-     * değerlerini AgentRole olarak geçiriyor.
-     */
 
     const messages: AgentMessage[] =
       normalizeMessages(rawMessages);
@@ -358,8 +301,8 @@ export const POST = withAuth(async (
       AI POLICY (Phase 7)
 
       Model validated against the approved registry and token budget
-      clamped by plan. This route previously allowed ANY model string
-      and up to 32,768 tokens regardless of plan.
+      clamped by plan. The resolved model also decides the provider --
+      and therefore the key -- in the adapter below.
     */
     const policy =
       resolveAiPolicy({
@@ -374,87 +317,46 @@ export const POST = withAuth(async (
       return policy.response;
     }
 
-    const selectedModel =
-      policy.policy.model.id;
-
-    const selectedTemperature =
-      policy.policy.temperature;
-
-    const selectedMaxTokens =
-      policy.policy.maxTokens;
-
-    const requestPayload = {
-      model: selectedModel,
+    const completionRequest = {
+      model: policy.policy.model,
       messages,
-      temperature:
-        selectedTemperature,
-      max_tokens:
-        selectedMaxTokens,
-      stream: Boolean(stream),
+      maxTokens: policy.policy.maxTokens,
+      temperature: policy.policy.temperature,
     };
 
-    /*
-     * ----------------------------------------------------------------------
-     * STREAMING
-     * ----------------------------------------------------------------------
-     */
+    /* ------------------------------------------------------------------ */
+    /* STREAMING                                                           */
+    /* ------------------------------------------------------------------ */
 
     if (stream) {
-      const aiResponse = await fetch(
-        `${AI_BASE_URL}/chat/completions`,
-        {
-          method: "POST",
-          headers: {
-            Authorization:
-              `Bearer ${AI_API_KEY}`,
-            "Content-Type":
-              "application/json",
-            Accept:
-              "text/event-stream",
-          },
-          body: JSON.stringify(
-            requestPayload
-          ),
-          /*
-            SECURITY/RELIABILITY: a SERVER-owned timeout. Passing the
-            caller's signal let a client hold a provider connection
-            open indefinitely.
-          */
-          signal: AbortSignal.timeout(
-            AI_REQUEST_POLICY.timeoutMs
-          ),
-        }
-      );
+      const streamed =
+        await chatCompletionStream(completionRequest);
 
-      if (!aiResponse.ok) {
-        const errorText =
-          await aiResponse.text();
-
-        /* Phase 11: provider bodies echo the request; bound to 300. */
+      if (!streamed.ok) {
         console.error(
           "[SYRAVEN AGENT STREAM ERROR]",
-          {
-            executionId,
-            status:
-              aiResponse.status,
-            detail: errorText.slice(0, 300),
-          }
+          { executionId, kind: streamed.error.kind }
         );
 
         return jsonError(
-          "The AI service could not process the request.",
-          aiResponse.status,
+          streamed.error.clientMessage,
+          streamed.error.status,
           "AI_EXECUTION_FAILED"
         );
       }
 
-      if (!aiResponse.body) {
-        return jsonError(
-          "The AI service returned an empty stream.",
-          502,
-          "EMPTY_STREAM"
-        );
-      }
+      /*
+        A stream reports no token counts up front. The call is recorded
+        as not measured -- never as zero, and never skipped: an
+        unrecorded stream would be a paid call that counts against
+        nothing.
+      */
+      await guard.record({
+        model: streamed.modelId,
+        promptTokens: null,
+        completionTokens: null,
+        totalTokens: null,
+      });
 
       const headers = new Headers();
 
@@ -484,7 +386,7 @@ export const POST = withAuth(async (
       );
 
       return new Response(
-        aiResponse.body,
+        streamed.body,
         {
           status: 200,
           headers,
@@ -492,91 +394,28 @@ export const POST = withAuth(async (
       );
     }
 
-    /*
-     * ----------------------------------------------------------------------
-     * STANDARD RESPONSE
-     * ----------------------------------------------------------------------
-     */
+    /* ------------------------------------------------------------------ */
+    /* STANDARD RESPONSE                                                   */
+    /* ------------------------------------------------------------------ */
 
-    const aiResponse = await fetch(
-      `${AI_BASE_URL}/chat/completions`,
-      {
-        method: "POST",
-        headers: {
-          Authorization:
-            `Bearer ${AI_API_KEY}`,
-          "Content-Type":
-            "application/json",
-        },
-        body: JSON.stringify(
-          requestPayload
-        ),
-        /*
-            SECURITY/RELIABILITY: a SERVER-owned timeout. Passing the
-            caller's signal let a client hold a provider connection
-            open indefinitely.
-          */
-          signal: AbortSignal.timeout(
-            AI_REQUEST_POLICY.timeoutMs
-          ),
-      }
-    );
+    const completion =
+      await chatCompletion(completionRequest);
 
-    if (!aiResponse.ok) {
-      const errorText =
-        await aiResponse.text();
-
-      /* Phase 11: provider bodies echo the request; bound to 300. */
+    if (!completion.ok) {
       console.error(
         "[SYRAVEN AGENT EXECUTION ERROR]",
         {
           executionId,
-          status: aiResponse.status,
+          kind: completion.error.kind,
           agentId,
           agentName,
-          detail: errorText.slice(0, 300),
         }
       );
 
       return jsonError(
-        "The AI service could not process the request.",
-        aiResponse.status,
+        completion.error.clientMessage,
+        completion.error.status,
         "AI_EXECUTION_FAILED"
-      );
-    }
-
-    let data: AIResponse;
-
-    try {
-      data =
-        (await aiResponse.json()) as AIResponse;
-    } catch {
-      return jsonError(
-        "Invalid response received from the AI service.",
-        502,
-        "INVALID_AI_RESPONSE"
-      );
-    }
-
-    const content =
-      data.choices?.[0]?.message?.content?.trim() ||
-      "";
-
-    if (!content) {
-      console.error(
-        "[SYRAVEN AGENT EMPTY RESPONSE]",
-        {
-          executionId,
-          agentId,
-          agentName,
-          response: data,
-        }
-      );
-
-      return jsonError(
-        "The AI returned an empty response.",
-        502,
-        "EMPTY_AI_RESPONSE"
       );
     }
 
@@ -585,10 +424,10 @@ export const POST = withAuth(async (
       response, so a caller cannot under-report consumption.
     */
     await guard.record({
-      model: selectedModel,
-      promptTokens: data.usage?.prompt_tokens ?? null,
-      completionTokens: data.usage?.completion_tokens ?? null,
-      totalTokens: data.usage?.total_tokens ?? null,
+      model: completion.modelId,
+      promptTokens: completion.usage.promptTokens,
+      completionTokens: completion.usage.completionTokens,
+      totalTokens: completion.usage.totalTokens,
     });
 
     return NextResponse.json(
@@ -602,7 +441,7 @@ export const POST = withAuth(async (
           agentName:
             agentName || null,
           model:
-            selectedModel,
+            completion.modelId,
           status:
             "completed",
         },
@@ -610,22 +449,11 @@ export const POST = withAuth(async (
         message: {
           role:
             "assistant" as const,
-          content,
+          content: completion.content,
         },
 
-        usage: {
-          promptTokens:
-            data.usage
-              ?.prompt_tokens || 0,
-
-          completionTokens:
-            data.usage
-              ?.completion_tokens || 0,
-
-          totalTokens:
-            data.usage
-              ?.total_tokens || 0,
-        },
+        /* As measured by the provider; null where it measured nothing. */
+        usage: completion.usage,
 
         metadata:
           metadata || {},
@@ -639,29 +467,13 @@ export const POST = withAuth(async (
       }
     );
   } catch (error) {
-    const message =
-      error instanceof Error
-        ? error.message
-        : "Unknown execution error";
-
     console.error(
       "[SYRAVEN AGENT EXECUTE FATAL ERROR]",
       {
         executionId,
-        error: message,
+        name: error instanceof Error ? error.name : "unknown",
       }
     );
-
-    if (
-      error instanceof Error &&
-      error.name === "AbortError"
-    ) {
-      return jsonError(
-        "The request was cancelled.",
-        499,
-        "REQUEST_ABORTED"
-      );
-    }
 
     return jsonError(
       "An unexpected error occurred while executing the agent.",

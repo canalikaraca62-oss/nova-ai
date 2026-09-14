@@ -172,6 +172,18 @@ Phase 7 model/token policy and Phase 5 rate limits apply unchanged.
 
 ## 10. Known limitations — stated plainly
 
+> **Correction (2026-09-13, Phase 1 North Star).** Parts of this section
+> are out of date. Approvals **do** persist: `public.agent_approvals`
+> (migration `20260905120000`) stores them, `lib/orchestration/approvalStore.ts`
+> reads and writes them, and a high-risk step can execute once a person
+> approves it at `/approvals`. A grant is now spent **before** its step
+> runs, by compare-and-set (`claimApproval`), which closed a concurrent
+> double-execution window. The in-memory `lib/tasks/scheduler.ts` no
+> longer exists; the durable substrate is `public.jobs` via
+> `lib/autopilot/queue.ts`, which has no caller yet. Run state itself
+> is still request-scoped, as described below. The current, evidence-based
+> picture is `ARCHITECTURE_NORTH_STAR.md`.
+
 **The scheduler is in-memory and not durable.** `lib/tasks/scheduler.ts`
 holds state in a `Map` with `setTimeout`. It is lost on restart and does
 not work across instances. It currently has **zero importers**, so

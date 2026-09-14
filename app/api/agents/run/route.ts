@@ -45,7 +45,7 @@ import {
 import { deriveExecutionKey } from "@/lib/orchestration/execution";
 import { runOrchestration } from "@/lib/orchestration/orchestrator";
 import {
-  consumeApproval,
+  claimApproval,
   loadApprovals,
   requestApprovals,
 } from "@/lib/orchestration/approvalStore";
@@ -219,6 +219,14 @@ export const POST = withAuth(async (request, session) => {
         has no effect anywhere on this path.
       */
       approvals: await loadApprovals(session, executionKey),
+      /*
+        Spent BEFORE the step runs, by compare-and-set, for the same key.
+        Consuming after the run left two concurrent requests free to
+        verify one grant and both execute; now only the request that wins
+        the approved -> used transition runs the step.
+      */
+      claimApproval: (toolId: string) =>
+        claimApproval(session, { executionKey, toolId }),
     });
 
     if (result.error === "UNKNOWN_AGENT") {
@@ -266,7 +274,7 @@ export const POST = withAuth(async (request, session) => {
         effectByTool.set(step.tool, effectForTool(step.tool));
       }
 
-      await requestApprovals(session, {
+      const recorded = await requestApprovals(session, {
         executionKey: result.executionKey,
         agentId: result.agentId ?? "",
         toolIds: result.pendingApprovals,
@@ -275,6 +283,22 @@ export const POST = withAuth(async (request, session) => {
         workspaceId: requestedWorkspaceId,
         projectId: requestedProjectId,
       });
+
+      if (!recorded) {
+        /*
+          Saying "needs your approval" with no approval recorded sends the
+          person to an empty approvals page. Nothing ran; say so.
+        */
+        return json(
+          {
+            success: false,
+            status: "failed",
+            message:
+              "This plan needs approval, but the request could not be recorded. Nothing was run.",
+          },
+          503,
+        );
+      }
 
       return json({
         success: false,
@@ -290,19 +314,10 @@ export const POST = withAuth(async (request, session) => {
     }
 
     /*
-      Spend the grants that were actually used.
-
-      An approval left at 'approved' after its step has run is still
-      live — verifyApproval accepts any approved, unexpired record, and
-      the same goal derives the same execution key. A refresh would find
-      the grant waiting and run the step again without asking.
+      Nothing to spend here. Every grant this run used was claimed by the
+      orchestrator before its step ran (claimApproval above), so there is
+      no window in which a used approval is still 'approved'.
     */
-    for (const toolId of result.consumedApprovals) {
-      await consumeApproval(session, {
-        executionKey: result.executionKey,
-        toolId,
-      });
-    }
 
     if (result.state === "failed") {
       return json(

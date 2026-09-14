@@ -4,16 +4,12 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import {
   ArrowRight,
-  BarChart3,
-  Clock3,
-  FileText,
   Image as ImageIcon,
   Mic2,
   Plus,
   Presentation,
   Search,
   Sparkles,
-  TrendingUp,
   Video,
   WandSparkles,
 } from "lucide-react";
@@ -27,18 +23,15 @@ type StudioTool = {
   href: string;
   category: Exclude<StudioCategory, "all">;
   icon: typeof ImageIcon;
-  status: "Ready" | "Beta";
+  status: "Ready" | "Unavailable";
   badge: string;
 };
 
-type RecentProject = {
-  id: string;
-  title: string;
-  type: Exclude<StudioCategory, "all">;
-  createdAt: string;
-  href: string;
-};
-
+/*
+  `status` states what this deployment can do, not what the tool aims to
+  do. Image, video and audio generation have no provider wired -- each
+  page renders CapabilityUnavailable -- so they are not "Ready".
+*/
 const studioTools: StudioTool[] = [
   {
     id: "image",
@@ -48,7 +41,7 @@ const studioTools: StudioTool[] = [
     href: "/studio/image",
     category: "image",
     icon: ImageIcon,
-    status: "Ready",
+    status: "Unavailable",
     badge: "Visual Generation",
   },
   {
@@ -59,7 +52,7 @@ const studioTools: StudioTool[] = [
     href: "/studio/video",
     category: "video",
     icon: Video,
-    status: "Ready",
+    status: "Unavailable",
     badge: "Motion Generation",
   },
   {
@@ -70,7 +63,7 @@ const studioTools: StudioTool[] = [
     href: "/studio/audio",
     category: "audio",
     icon: Mic2,
-    status: "Ready",
+    status: "Unavailable",
     badge: "Audio Intelligence",
   },
   {
@@ -83,37 +76,6 @@ const studioTools: StudioTool[] = [
     icon: Presentation,
     status: "Ready",
     badge: "Intelligent Slides",
-  },
-];
-
-const recentProjects: RecentProject[] = [
-  {
-    id: "project-1",
-    title: "Future Global Infrastructure",
-    type: "presentation",
-    createdAt: "Today",
-    href: "/studio/presentation",
-  },
-  {
-    id: "project-2",
-    title: "Next Generation AI City",
-    type: "video",
-    createdAt: "Today",
-    href: "/studio/video",
-  },
-  {
-    id: "project-3",
-    title: "Premium Technology Campaign",
-    type: "image",
-    createdAt: "Yesterday",
-    href: "/studio/image",
-  },
-  {
-    id: "project-4",
-    title: "Global Product Voice",
-    type: "audio",
-    createdAt: "Yesterday",
-    href: "/studio/audio",
   },
 ];
 
@@ -174,47 +136,9 @@ export default function StudioPage() {
     });
   }, [selectedCategory, searchQuery]);
 
-  const getProjectIcon = (
-    type: RecentProject["type"],
-  ) => {
-    switch (type) {
-      case "image":
-        return ImageIcon;
-
-      case "video":
-        return Video;
-
-      case "audio":
-        return Mic2;
-
-      case "presentation":
-        return Presentation;
-
-      default:
-        return FileText;
-    }
-  };
-
-  const getProjectLabel = (
-    type: RecentProject["type"],
-  ) => {
-    switch (type) {
-      case "image":
-        return "Image Studio";
-
-      case "video":
-        return "Video Studio";
-
-      case "audio":
-        return "Audio Studio";
-
-      case "presentation":
-        return "Presentation";
-
-      default:
-        return "Studio";
-    }
-  };
+  const availableCount = studioTools.filter(
+    (tool) => tool.status === "Ready",
+  ).length;
 
   return (
     /*
@@ -345,52 +269,22 @@ export default function StudioPage() {
           </div>
         </section>
 
-        {/* STATS */}
+        {/* STATS -- counted from studioTools, never asserted. The cards
+            that stood here counted a hardcoded sample list as "Recent
+            Generations" and claimed "Instant" processing nobody measured. */}
 
-        <section className="mb-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
-                <Sparkles className="h-5 w-5 text-primary" />
-              </div>
-
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
-            </div>
-
-            <p className="mt-5 text-2xl font-bold">
-              4
-            </p>
-
-            <p className="mt-1 text-sm text-muted-foreground">
-              AI Creative Tools
-            </p>
-          </div>
-
+        <section className="mb-8 grid gap-4 sm:grid-cols-2">
           <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
-              <BarChart3 className="h-5 w-5 text-primary" />
+              <Sparkles className="h-5 w-5 text-primary" />
             </div>
 
             <p className="mt-5 text-2xl font-bold">
-              {recentProjects.length}
+              {studioTools.length}
             </p>
 
             <p className="mt-1 text-sm text-muted-foreground">
-              Recent Generations
-            </p>
-          </div>
-
-          <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
-              <Clock3 className="h-5 w-5 text-primary" />
-            </div>
-
-            <p className="mt-5 text-2xl font-bold">
-              Instant
-            </p>
-
-            <p className="mt-1 text-sm text-muted-foreground">
-              AI Processing
+              Creative tools
             </p>
           </div>
 
@@ -400,11 +294,11 @@ export default function StudioPage() {
             </div>
 
             <p className="mt-5 text-2xl font-bold">
-              Unified
+              {availableCount}
             </p>
 
             <p className="mt-1 text-sm text-muted-foreground">
-              Creative Workspace
+              Available on this deployment
             </p>
           </div>
         </section>
@@ -547,63 +441,10 @@ export default function StudioPage() {
           </div>
         )}
 
-        {/* RECENT PROJECTS */}
-
-        <section className="mt-10">
-          <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <h2 className="text-2xl font-bold tracking-tight">
-                Recent Activity
-              </h2>
-
-              <p className="mt-2 text-sm text-muted-foreground">
-                Continue working on your latest creative projects.
-              </p>
-            </div>
-
-            <Link
-              href="/projects"
-              className="inline-flex items-center gap-2 text-sm font-medium text-primary transition hover:opacity-80"
-            >
-              View Projects
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            {recentProjects.map((project) => {
-              const Icon = getProjectIcon(project.type);
-
-              return (
-                <Link
-                  key={project.id}
-                  href={project.href}
-                  className="group rounded-2xl border border-border bg-card p-5 shadow-sm transition-all hover:-translate-y-1 hover:border-primary/40 hover:shadow-md"
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
-                      <Icon className="h-5 w-5 text-primary" />
-                    </div>
-
-                    <ArrowRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-1 group-hover:text-primary" />
-                  </div>
-
-                  <h3 className="mt-6 truncate text-sm font-semibold">
-                    {project.title}
-                  </h3>
-
-                  <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
-                    <span>
-                      {getProjectLabel(project.type)}
-                    </span>
-
-                    <span>{project.createdAt}</span>
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
-        </section>
+        {/* No "Recent Activity" here: studio output is not persisted, so
+            there is no recent work to list. The section that stood here
+            showed four hardcoded titles, dated "Today" and "Yesterday",
+            as the user's own projects. */}
 
         {/* BOTTOM CTA */}
 
