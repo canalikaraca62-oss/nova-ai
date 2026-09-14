@@ -135,9 +135,9 @@ const apps: AppItem[] = [
     id: "code",
     name: "Developer Lab",
     description:
-      "Analyze code, generate solutions and orchestrate advanced development workflows.",
+      "Code analysis and development workflows. Not available yet.",
     category: "Development",
-    status: "Ready",
+    status: "Coming soon",
     href: "/studio",
     icon: "</>",
     color: "from-sky-500 to-cyan-500",
@@ -160,7 +160,7 @@ const apps: AppItem[] = [
     id: "billing",
     name: "Business Intelligence",
     description:
-      "Monitor usage, plans, growth and operational intelligence across your organization.",
+      "Your plan, subscription and payments in one place.",
     category: "Business",
     status: "Ready",
     href: "/billing",
@@ -172,9 +172,9 @@ const apps: AppItem[] = [
     id: "voice",
     name: "Voice Intelligence",
     description:
-      "Speak, transcribe and interact through a next-generation voice interface.",
+      "Voice conversations and transcription. Not available yet.",
     category: "AI",
-    status: "Beta",
+    status: "Coming soon",
     href: "/chat",
     icon: "⌁",
     color: "from-purple-500 to-violet-600",
@@ -326,7 +326,7 @@ export default function AppsPage() {
           <div className="grid border-t border-white/10 sm:grid-cols-3">
             <div className="border-b border-white/10 px-6 py-5 sm:border-b-0 sm:border-r sm:px-10">
               <p className="text-2xl font-semibold tracking-tight">
-                {apps.length}+
+                {apps.length}
               </p>
               <p className="mt-1 text-sm text-foreground/45">
                 Intelligent applications

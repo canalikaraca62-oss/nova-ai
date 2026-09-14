@@ -7,133 +7,39 @@ import {
   Activity,
   ArrowLeft,
   Calendar,
-  CheckCircle2,
   Clock3,
-  Edit3,
   ExternalLink,
   FileText,
   FolderKanban,
   Plus,
-  Settings,
-  Sparkles,
-  Target,
-  Users,
+  SearchX,
 } from "lucide-react";
 
-type ProjectStatus = "active" | "planning" | "completed" | "draft" | "archived";
+/*
+  One project, loaded from GET /api/projects?id=.
+
+  Only what the project row holds is shown. This page used to fall back
+  to hardcoded sample projects, render an invented activity feed and
+  "Momentum Strong / Risk Low / AI confidence 94%" cards on every
+  project, and show progress, member and task counts it never measured
+  (docs/engineering/PURIFICATION_EVIDENCE.md P2-E03). Tasks and activity
+  live on /tasks and /activity, which do measure them.
+*/
+
+type ProjectStatus = "active" | "completed" | "draft" | "archived";
 
 interface Project {
   id: string;
   name: string;
   description: string;
-  status: ProjectStatus;
-  progress: number;
-  members: number;
-  tasksCompleted: number;
-  totalTasks: number;
-  updatedAt: string;
+  status: string;
   createdAt: string;
-  deadline: string;
-  workspace: string;
+  updatedAt: string;
+  dueDate: string | null;
 }
 
-const projects: Record<string, Project> = {
-  "syraven-platform": {
-    id: "syraven-platform",
-    name: "SYRAVEN Platform",
-    description:
-      "The central AI operating system for building intelligent workflows, managing knowledge, and coordinating autonomous agents.",
-    status: "active",
-    progress: 78,
-    members: 12,
-    tasksCompleted: 94,
-    totalTasks: 120,
-    updatedAt: "Updated 2 minutes ago",
-    createdAt: "January 12, 2026",
-    deadline: "December 31, 2026",
-    workspace: "SYRAVEN Core",
-  },
-  "ai-research": {
-    id: "ai-research",
-    name: "AI Research",
-    description:
-      "Advanced research initiatives focused on next-generation reasoning systems and intelligent agent architectures.",
-    status: "active",
-    progress: 64,
-    members: 8,
-    tasksCompleted: 51,
-    totalTasks: 80,
-    updatedAt: "Updated 1 hour ago",
-    createdAt: "February 4, 2026",
-    deadline: "October 20, 2026",
-    workspace: "Research Lab",
-  },
-  "knowledge-engine": {
-    id: "knowledge-engine",
-    name: "Knowledge Engine",
-    description:
-      "A unified knowledge infrastructure designed to connect documents, memories, agents, and organizational intelligence.",
-    status: "planning",
-    progress: 32,
-    members: 6,
-    tasksCompleted: 18,
-    totalTasks: 56,
-    updatedAt: "Updated yesterday",
-    createdAt: "March 18, 2026",
-    deadline: "March 30, 2027",
-    workspace: "Intelligence",
-  },
-};
-
-const fallbackProject: Project = {
-  id: "project",
-  name: "Untitled Project",
-  description:
-    "This project is part of your SYRAVEN workspace. Add more details to begin organizing tasks, knowledge, and collaboration.",
-  status: "planning",
-  progress: 0,
-  members: 1,
-  tasksCompleted: 0,
-  totalTasks: 0,
-  updatedAt: "Recently created",
-  createdAt: "Today",
-  deadline: "Not set",
-  workspace: "Personal Workspace",
-};
-
-const activities = [
-  {
-    title: "Project workspace updated",
-    description:
-      "Project settings and workspace configuration were updated.",
-    time: "2 minutes ago",
-    icon: Settings,
-  },
-  {
-    title: "New knowledge connected",
-    description:
-      "Research documents were linked to this project.",
-    time: "24 minutes ago",
-    icon: FileText,
-  },
-  {
-    title: "Tasks completed",
-    description:
-      "Multiple project tasks were marked as completed.",
-    time: "1 hour ago",
-    icon: CheckCircle2,
-  },
-  {
-    title: "AI analysis generated",
-    description:
-      "SYRAVEN generated a new project intelligence summary.",
-    time: "3 hours ago",
-    icon: Sparkles,
-  },
-];
-
-function getStatusConfig(status: ProjectStatus) {
-  switch (status) {
+function getStatusConfig(status: string) {
+  switch (status as ProjectStatus) {
     case "active":
       return {
         label: "Active",
@@ -158,47 +64,45 @@ function getStatusConfig(status: ProjectStatus) {
     case "archived":
       return {
         label: "Archived",
-        className:
-          "border-muted bg-muted text-muted-foreground",
+        className: "border-muted bg-muted text-muted-foreground",
       };
 
     default:
       return {
-        label: "Planning",
-        className:
-          "border-amber-500/20 bg-amber-500/10 text-amber-600 dark:text-amber-400",
+        label: "Unknown status",
+        className: "border-muted bg-muted text-muted-foreground",
       };
   }
+}
+
+function formatDate(value: string | null): string {
+  if (!value) return "Not set";
+
+  const date = new Date(value);
+
+  return Number.isNaN(date.getTime())
+    ? "Not set"
+    : date.toLocaleDateString(undefined, {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      });
 }
 
 export default function ProjectDetailPage() {
   const params = useParams<{ id: string }>();
 
-  const projectId =
-    typeof params?.id === "string"
-      ? params.id
-      : "project";
+  const projectId = typeof params?.id === "string" ? params.id : "";
 
-  /*
-    Load the real project.
-
-    This page previously read a hardcoded `projects` record and, on a
-    miss, rendered `fallbackProject` with the id title-cased into a
-    name. Every project created through the app therefore opened as
-    invented data -- 0% progress, 0 tasks -- contradicting whatever
-    the user had just typed.
-
-    The demo record is kept as a fallback ONLY for the sample ids it
-    already contained, so existing links keep working; a real id now
-    loads real data.
-  */
-  const [loaded, setLoaded] = useState<Project | null>(null);
+  const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
+  const [signedOut, setSignedOut] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setLoadError(null);
+    setSignedOut(false);
 
     try {
       const response = await fetch(
@@ -207,13 +111,18 @@ export default function ProjectDetailPage() {
       );
 
       if (response.status === 401) {
-        /* Signed out: fall through to the sample content. */
-        setLoaded(null);
+        setProject(null);
+        setSignedOut(true);
+        return;
+      }
+
+      if (!response.ok) {
+        setProject(null);
+        setLoadError("This project could not be loaded.");
         return;
       }
 
       const payload = (await response.json().catch(() => null)) as {
-        success?: boolean;
         data?: {
           id: string;
           name: string;
@@ -227,30 +136,21 @@ export default function ProjectDetailPage() {
 
       const row = payload?.data?.[0];
 
-      if (!row) {
-        setLoaded(null);
-        return;
-      }
-
-      setLoaded({
-        id: row.id,
-        name: row.name,
-        description: row.description ?? "",
-        status: row.status as ProjectStatus,
-        /*
-          Counts come from tasks, which this view does not query.
-          Reporting zero is honest; inventing a percentage was not.
-        */
-        progress: 0,
-        members: 1,
-        tasksCompleted: 0,
-        totalTasks: 0,
-        updatedAt: row.updated_at,
-        createdAt: row.created_at,
-        deadline: row.due_date ?? "",
-        workspace: "",
-      });
+      setProject(
+        row
+          ? {
+              id: row.id,
+              name: row.name,
+              description: row.description ?? "",
+              status: row.status,
+              createdAt: row.created_at,
+              updatedAt: row.updated_at,
+              dueDate: row.due_date,
+            }
+          : null,
+      );
     } catch {
+      setProject(null);
       setLoadError("This project could not be loaded.");
     } finally {
       setLoading(false);
@@ -271,24 +171,6 @@ export default function ProjectDetailPage() {
     };
   }, [load]);
 
-  const project =
-    loaded ??
-    projects[projectId] ?? {
-      ...fallbackProject,
-      id: projectId,
-    };
-
-  const status = getStatusConfig(project.status);
-
-  const taskProgress =
-    project.totalTasks > 0
-      ? Math.round(
-          (project.tasksCompleted /
-            project.totalTasks) *
-            100
-        )
-      : 0;
-
   return (
     /*
       A plain container, not a second <main>: AppChrome already emits
@@ -296,447 +178,137 @@ export default function ProjectDetailPage() {
     */
     <div className="bg-background">
       <div className="mx-auto w-full max-w-7xl px-6 py-8 lg:px-8 lg:py-10">
+        <Link
+          href="/projects"
+          className="inline-flex w-fit items-center gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back to projects
+        </Link>
+
         {loadError ? (
           <p
             role="alert"
-            className="mb-6 rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+            className="mt-6 rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive"
           >
             {loadError}
           </p>
         ) : null}
 
         {loading ? (
-          <p className="mb-6 text-sm text-muted-foreground">
+          <p role="status" className="mt-6 text-sm text-muted-foreground">
             Loading project...
           </p>
         ) : null}
 
-        {/* Top navigation */}
-        <div className="flex flex-col gap-5 border-b border-border pb-6 sm:flex-row sm:items-center sm:justify-between">
-          <Link
-            href="/projects"
-            className="inline-flex w-fit items-center gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back to projects
-          </Link>
+        {!loading && !project && !loadError ? (
+          <div className="mx-auto flex max-w-md flex-col items-center py-20 text-center">
+            <div className="rounded-2xl bg-muted p-4">
+              <SearchX className="h-8 w-8 text-muted-foreground" />
+            </div>
 
-          <div className="flex items-center gap-3">
+            <h1 className="mt-6 text-2xl font-semibold text-foreground">
+              {signedOut ? "Sign in to view this project" : "Project not found"}
+            </h1>
+
+            <p className="mt-3 text-sm leading-6 text-muted-foreground">
+              {signedOut
+                ? "Projects belong to an account. Sign in, then open it again."
+                : "This project does not exist, or it belongs to another account."}
+            </p>
+
             <Link
-              href={`/projects/${project.id}`}
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+              href={signedOut ? "/login" : "/projects"}
+              className="mt-6 inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
             >
-              <Edit3 className="h-4 w-4" />
-              Edit project
+              {signedOut ? "Sign in" : "Back to projects"}
             </Link>
-
-            {/*
-              Removed rather than disabled: "more project options"
-              named no options, and "Edit project" beside it already
-              covers the one real action. An overflow control with an
-              empty menu behind it is a promise the page cannot keep.
-            */}
           </div>
-        </div>
+        ) : null}
 
-        {/* Hero */}
-        <section className="py-8 lg:py-10">
-          <div className="flex flex-col gap-8 lg:flex-row lg:items-start lg:justify-between">
-            <div className="max-w-3xl">
-              <div className="flex flex-wrap items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-                  <FolderKanban className="h-6 w-6" />
-                </div>
-
-                <span
-                  className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${status.className}`}
-                >
-                  {status.label}
-                </span>
-
-                <span className="text-sm text-muted-foreground">
-                  {project.updatedAt}
-                </span>
-              </div>
-
-              <h1 className="mt-6 text-4xl font-semibold tracking-tight text-foreground sm:text-5xl">
-                {project.name}
-              </h1>
-
-              <p className="mt-5 max-w-2xl text-base leading-7 text-muted-foreground sm:text-lg">
-                {project.description}
-              </p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3 sm:flex lg:flex-col">
-              <Link
-                href="/tasks"
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-primary px-5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
-              >
-                <Plus className="h-4 w-4" />
-                Add task
-              </Link>
-
-              <Link
-                href="/studio"
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-border bg-card px-5 text-sm font-medium text-foreground transition-colors hover:bg-muted"
-              >
-                <Sparkles className="h-4 w-4" />
-                Open Studio
-              </Link>
-            </div>
-          </div>
-        </section>
-
-        {/* Metrics */}
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <MetricCard
-            icon={Activity}
-            label="Project progress"
-            value={`${project.progress}%`}
-            description="Overall completion"
-          />
-
-          <MetricCard
-            icon={CheckCircle2}
-            label="Tasks"
-            value={`${project.tasksCompleted}/${project.totalTasks}`}
-            description={`${taskProgress}% task completion`}
-          />
-
-          <MetricCard
-            icon={Users}
-            label="Team members"
-            value={String(project.members)}
-            description="Active collaborators"
-          />
-
-          <MetricCard
-            icon={Calendar}
-            label="Deadline"
-            value={project.deadline}
-            description="Project target date"
-            smallValue
-          />
-        </section>
-
-        {/* Main content */}
-        <div className="mt-8 grid gap-8 xl:grid-cols-[minmax(0,1fr)_340px]">
-          <div className="space-y-8">
-            {/* Progress */}
-            <section className="rounded-3xl border border-border bg-card p-6 sm:p-8">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <Target className="h-5 w-5 text-primary" />
-
-                    <h2 className="text-xl font-semibold text-foreground">
-                      Project progress
-                    </h2>
-                  </div>
-
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    Track the overall progress of this project.
-                  </p>
-                </div>
-
-                <span className="text-3xl font-semibold tracking-tight text-foreground">
-                  {project.progress}%
-                </span>
-              </div>
-
-              <div className="mt-7">
-                <div className="h-3 overflow-hidden rounded-full bg-muted">
-                  <div
-                    className="h-full rounded-full bg-primary transition-all duration-500"
-                    style={{
-                      width: `${Math.min(
-                        Math.max(project.progress, 0),
-                        100
-                      )}%`,
-                    }}
-                  />
-                </div>
-
-                <div className="mt-4 flex items-center justify-between text-sm text-muted-foreground">
-                  <span>
-                    {project.tasksCompleted} tasks completed
-                  </span>
-
-                  <span>
-                    {Math.max(
-                      project.totalTasks -
-                        project.tasksCompleted,
-                      0
-                    )}{" "}
-                    remaining
-                  </span>
-                </div>
-              </div>
-            </section>
-
-            {/* Project intelligence */}
-            <section className="rounded-3xl border border-border bg-card p-6 sm:p-8">
-              <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <Sparkles className="h-5 w-5 text-primary" />
-
-                    <h2 className="text-xl font-semibold text-foreground">
-                      SYRAVEN Intelligence
-                    </h2>
-                  </div>
-
-                  <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-                    AI-powered insights generated from your project
-                    activity, tasks, workspace knowledge and
-                    collaboration patterns.
-                  </p>
-                </div>
-
-                <Link
-                  href={`/projects/${project.id}`}
-                  className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl border border-border px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted"
-                >
-                  View insights
-                  <ExternalLink className="h-4 w-4" />
-                </Link>
-              </div>
-
-              <div className="mt-7 grid gap-4 md:grid-cols-3">
-                <InsightCard
-                  title="Momentum"
-                  value="Strong"
-                  description="Project activity is trending upward."
-                />
-
-                <InsightCard
-                  title="Risk level"
-                  value="Low"
-                  description="No critical blockers detected."
-                />
-
-                <InsightCard
-                  title="AI confidence"
-                  value="94%"
-                  description="Based on current project signals."
-                />
-              </div>
-            </section>
-
-            {/* Activity */}
-            <section className="rounded-3xl border border-border bg-card p-6 sm:p-8">
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <Clock3 className="h-5 w-5 text-primary" />
-
-                    <h2 className="text-xl font-semibold text-foreground">
-                      Recent activity
-                    </h2>
-                  </div>
-
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    The latest activity across this project.
-                  </p>
-                </div>
-
-                <Link
-                  href="/privacy/activity"
-                  className="text-sm font-medium text-primary hover:underline"
-                >
-                  View all
-                </Link>
-              </div>
-
-              <div className="mt-7 space-y-6">
-                {activities.map((activity) => {
-                  const Icon = activity.icon;
-
-                  return (
-                    <div
-                      key={activity.title}
-                      className="flex gap-4"
-                    >
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground">
-                        <Icon className="h-4 w-4" />
-                      </div>
-
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-                          <h3 className="text-sm font-semibold text-foreground">
-                            {activity.title}
-                          </h3>
-
-                          <span className="shrink-0 text-xs text-muted-foreground">
-                            {activity.time}
-                          </span>
-                        </div>
-
-                        <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                          {activity.description}
-                        </p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
-          </div>
-
-          {/* Sidebar */}
-          <aside className="space-y-6">
-            <section className="rounded-3xl border border-border bg-card p-6">
-              <h2 className="text-base font-semibold text-foreground">
-                Project details
-              </h2>
-
-              <dl className="mt-6 space-y-5">
-                <DetailRow
-                  label="Workspace"
-                  value={project.workspace}
-                />
-
-                <DetailRow
-                  label="Created"
-                  value={project.createdAt}
-                />
-
-                <DetailRow
-                  label="Deadline"
-                  value={project.deadline}
-                />
-
-                <DetailRow
-                  label="Status"
-                  value={status.label}
-                />
-              </dl>
-            </section>
-
-            <section className="rounded-3xl border border-border bg-card p-6">
-              <h2 className="text-base font-semibold text-foreground">
-                Quick actions
-              </h2>
-
-              <div className="mt-5 space-y-2">
-                <QuickAction
-                  href="/tasks"
-                  icon={Plus}
-                  label="Create new task"
-                />
-
-                <QuickAction
-                  href="/knowledge"
-                  icon={FileText}
-                  label="Project knowledge"
-                />
-
-                <QuickAction
-                  href="/studio"
-                  icon={Sparkles}
-                  label="Ask SYRAVEN AI"
-                />
-
-                <QuickAction
-                  href={`/projects/${project.id}`}
-                  icon={Settings}
-                  label="Project settings"
-                />
-              </div>
-            </section>
-
-            <section className="rounded-3xl border border-primary/15 bg-primary/[0.04] p-6">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                <Sparkles className="h-5 w-5" />
-              </div>
-
-              <h2 className="mt-5 text-base font-semibold text-foreground">
-                AI project assistant
-              </h2>
-
-              <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                Ask SYRAVEN to analyze progress, identify risks, create
-                plans or generate your next steps.
-              </p>
-
-              <Link
-                href="/studio"
-                className="mt-5 inline-flex text-sm font-semibold text-primary hover:underline"
-              >
-                Open AI assistant
-              </Link>
-            </section>
-          </aside>
-        </div>
+        {project ? (
+          <ProjectView project={project} />
+        ) : null}
       </div>
     </div>
   );
 }
 
-function MetricCard({
-  icon: Icon,
-  label,
-  value,
-  description,
-  smallValue = false,
-}: {
-  icon: typeof Activity;
-  label: string;
-  value: string;
-  description: string;
-  smallValue?: boolean;
-}) {
+function ProjectView({ project }: { project: Project }) {
+  const status = getStatusConfig(project.status);
+
   return (
-    <div className="rounded-2xl border border-border bg-card p-5">
-      <div className="flex items-center justify-between">
-        <span className="text-sm font-medium text-muted-foreground">
-          {label}
-        </span>
+    <>
+      <section className="border-b border-border py-8 lg:py-10">
+        <div className="flex flex-col gap-8 lg:flex-row lg:items-start lg:justify-between">
+          <div className="max-w-3xl">
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                <FolderKanban className="h-6 w-6" />
+              </div>
 
-        <Icon className="h-4 w-4 text-primary" />
+              <span
+                className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${status.className}`}
+              >
+                {status.label}
+              </span>
+
+              <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                <Clock3 className="h-4 w-4" />
+                Updated {formatDate(project.updatedAt)}
+              </span>
+            </div>
+
+            <h1 className="mt-6 text-4xl font-semibold tracking-tight text-foreground sm:text-5xl">
+              {project.name}
+            </h1>
+
+            <p className="mt-5 max-w-2xl text-base leading-7 text-muted-foreground sm:text-lg">
+              {project.description || "No description yet."}
+            </p>
+          </div>
+
+          <Link
+            href="/tasks"
+            className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-primary px-5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
+          >
+            <Plus className="h-4 w-4" />
+            Add task
+          </Link>
+        </div>
+      </section>
+
+      <div className="mt-8 grid gap-8 xl:grid-cols-[minmax(0,1fr)_340px]">
+        <section className="rounded-3xl border border-border bg-card p-6 sm:p-8">
+          <div className="flex items-center gap-2">
+            <Calendar className="h-5 w-5 text-primary" />
+
+            <h2 className="text-xl font-semibold text-foreground">
+              Project details
+            </h2>
+          </div>
+
+          <dl className="mt-6 grid gap-5 sm:grid-cols-2">
+            <DetailRow label="Status" value={status.label} />
+            <DetailRow label="Deadline" value={formatDate(project.dueDate)} />
+            <DetailRow label="Created" value={formatDate(project.createdAt)} />
+            <DetailRow label="Last updated" value={formatDate(project.updatedAt)} />
+          </dl>
+        </section>
+
+        <aside className="rounded-3xl border border-border bg-card p-6">
+          <h2 className="text-base font-semibold text-foreground">
+            Quick actions
+          </h2>
+
+          <div className="mt-5 space-y-2">
+            <QuickAction href="/tasks" icon={Plus} label="Create new task" />
+            <QuickAction href="/knowledge" icon={FileText} label="Knowledge" />
+            <QuickAction href="/activity" icon={Activity} label="Recent activity" />
+          </div>
+        </aside>
       </div>
-
-      <div
-        className={`mt-4 font-semibold tracking-tight text-foreground ${
-          smallValue
-            ? "text-lg"
-            : "text-3xl"
-        }`}
-      >
-        {value}
-      </div>
-
-      <p className="mt-2 text-xs text-muted-foreground">
-        {description}
-      </p>
-    </div>
-  );
-}
-
-function InsightCard({
-  title,
-  value,
-  description,
-}: {
-  title: string;
-  value: string;
-  description: string;
-}) {
-  return (
-    <div className="rounded-2xl border border-border bg-background p-5">
-      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        {title}
-      </p>
-
-      <p className="mt-3 text-2xl font-semibold text-foreground">
-        {value}
-      </p>
-
-      <p className="mt-2 text-sm leading-6 text-muted-foreground">
-        {description}
-      </p>
-    </div>
+    </>
   );
 }
 

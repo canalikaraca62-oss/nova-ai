@@ -11,7 +11,6 @@ import {
   Keyboard,
   LayoutDashboard,
   MessageSquare,
-  Mic,
   PanelLeft,
   Plug,
   Plus,
@@ -328,28 +327,16 @@ function createDefaultCommands(): CommandPaletteItem[] {
         "dashboard",
         "workspace",
       ],
-      href: "/apps",
+      href: "/dashboard",
       icon: (
         <LayoutDashboard className="h-4 w-4" />
       ),
     },
-    {
-      id: "voice",
-      title: "Voice chat",
-      description:
-        "Start a voice conversation",
-      group: "AI",
-      keywords: [
-        "voice",
-        "microphone",
-        "speak",
-        "audio",
-      ],
-      href: "/chat",
-      icon: (
-        <Mic className="h-4 w-4" />
-      ),
-    },
+    /*
+      A "Voice chat" entry used to open plain text chat: no page starts a
+      voice conversation (docs/engineering/PURIFICATION_EVIDENCE.md
+      P2-E08).
+    */
     {
       id: "search",
       title: "Universal search",

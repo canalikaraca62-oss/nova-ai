@@ -570,7 +570,7 @@ export default function MarketplaceDetailPage() {
                   </p>
 
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Install and start using it instantly.
+                    Installation is not available yet.
                   </p>
                 </div>
               </div>

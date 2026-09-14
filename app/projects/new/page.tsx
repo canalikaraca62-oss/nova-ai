@@ -1,20 +1,16 @@
 "use client";
 
-import type { FormEvent} from "react";
-import { useMemo, useState } from "react";
+import { type FormEvent, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
   Calendar,
-  Check,
-  ChevronDown,
   FolderKanban,
   Loader2,
   Plus,
   Sparkles,
   Target,
-  Users,
 } from "lucide-react";
 
 /*
@@ -25,26 +21,22 @@ import {
 */
 type ProjectStatus = "draft" | "active";
 
-const workspaceOptions = [
-  "SYRAVEN Core",
-  "Research Lab",
-  "Intelligence",
-  "Product",
-  "Personal Workspace",
-];
+/*
+  A workspace picker and an "initial team size" input used to sit here.
+  The workspaces were an invented list and neither value was ever sent to
+  /api/projects, so both controls changed nothing
+  (docs/engineering/PURIFICATION_EVIDENCE.md P2-E05).
+*/
 
 export default function NewProjectPage() {
   const router = useRouter();
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [workspace, setWorkspace] = useState("SYRAVEN Core");
   const [status, setStatus] = useState<ProjectStatus>("draft");
   const [deadline, setDeadline] = useState("");
-  const [members, setMembers] = useState("1");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [showWorkspaces, setShowWorkspaces] = useState(false);
 
   const isValid = useMemo(() => {
     return name.trim().length >= 3 && description.trim().length >= 10;
@@ -246,47 +238,6 @@ export default function NewProjectPage() {
                 </div>
 
                 <div className="mt-8 grid gap-6 md:grid-cols-2">
-                  {/* Workspace */}
-                  <div className="relative">
-                    <label className="text-sm font-medium text-foreground">
-                      Workspace
-                    </label>
-
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setShowWorkspaces((value) => !value)
-                      }
-                      className="mt-2 flex h-12 w-full items-center justify-between rounded-xl border border-border bg-background px-4 text-left text-sm text-foreground transition-colors hover:bg-muted"
-                    >
-                      <span>{workspace}</span>
-
-                      <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                    </button>
-
-                    {showWorkspaces && (
-                      <div className="absolute z-20 mt-2 w-full overflow-hidden rounded-xl border border-border bg-card p-1 shadow-xl">
-                        {workspaceOptions.map((option) => (
-                          <button
-                            key={option}
-                            type="button"
-                            onClick={() => {
-                              setWorkspace(option);
-                              setShowWorkspaces(false);
-                            }}
-                            className="flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-left text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                          >
-                            {option}
-
-                            {workspace === option && (
-                              <Check className="h-4 w-4 text-primary" />
-                            )}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
                   {/* Status */}
                   <div>
                     <label className="text-sm font-medium text-foreground">
@@ -344,31 +295,6 @@ export default function NewProjectPage() {
                     </div>
                   </div>
 
-                  {/* Members */}
-                  <div>
-                    <label
-                      htmlFor="members"
-                      className="text-sm font-medium text-foreground"
-                    >
-                      Initial team size
-                    </label>
-
-                    <div className="relative mt-2">
-                      <Users className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-
-                      <input
-                        id="members"
-                        type="number"
-                        min="1"
-                        max="10000"
-                        value={members}
-                        onChange={(event) =>
-                          setMembers(event.target.value)
-                        }
-                        className="h-12 w-full rounded-xl border border-border bg-background py-2 pl-11 pr-4 text-sm text-foreground outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/10"
-                      />
-                    </div>
-                  </div>
                 </div>
               </section>
 
@@ -407,11 +333,6 @@ export default function NewProjectPage() {
                     value={
                       name.trim() || "Not specified"
                     }
-                  />
-
-                  <SummaryRow
-                    label="Workspace"
-                    value={workspace}
                   />
 
                   <SummaryRow
@@ -487,7 +408,7 @@ export default function NewProjectPage() {
                 <ol className="mt-5 space-y-4">
                   <Step
                     number="1"
-                    text="Your project workspace is created."
+                    text="Your project is created."
                   />
                   <Step
                     number="2"

@@ -307,6 +307,28 @@ export const GET = withAuth(async (
       searchParams.get("offset")
     );
 
+    /*
+      One record, for /knowledge/[id]. Additive: the user_id scope below
+      still applies, so an id outside the caller's records returns
+      nothing. A malformed id is refused before it reaches the database.
+    */
+    const recordId = normalizeString(
+      searchParams.get("id"),
+      200
+    );
+
+    if (
+      recordId !== null &&
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        recordId
+      )
+    ) {
+      return jsonError(
+        "Knowledge record not found.",
+        404
+      );
+    }
+
     let query = db
       .from("knowledge")
       .select(
@@ -352,6 +374,13 @@ export const GET = withAuth(async (
       "user_id",
       userId
     );
+
+    if (recordId !== null) {
+      query = query.eq(
+        "id",
+        recordId
+      );
+    }
 
     /*
       SECURITY: prove the workspace before filtering by it.

@@ -6,7 +6,7 @@ import { useCallback, useMemo, useState } from "react";
 
 import AiActivity from "@/app/components/ui/AiActivity";
 
-type AgentStatus = "ready" | "running" | "paused" | "error";
+type AgentStatus = "ready" | "running" | "paused" | "error" | "unavailable";
 type AgentTab =
   | "overview"
   | "activity"
@@ -197,53 +197,29 @@ const AGENTS: Record<string, Agent> = {
   },
 };
 
+/*
+  A catalogue agent -- one created under /agents -- has no runtime: only
+  the agents mapped in ORCHESTRATION_AGENT reach the execution engine.
+  This used to render every one as a verified, ready agent with invented
+  capabilities, connections and permissions, and then refuse to run it
+  (docs/engineering/PURIFICATION_EVIDENCE.md P2-E02). It now says what
+  it is.
+*/
 function getFallbackAgent(id: string): Agent {
   return {
     id,
-    name:
-      `${id
-        .split("-")
-        .map((item) => item.charAt(0).toUpperCase() + item.slice(1))
-        .join(" ")  } Agent`,
+    name: "Your agent",
     description:
-      "An agent set up to plan, carry out and finish complex work across SYRAVEN.",
-    category: "SYRAVEN Agent",
+      "An agent from your catalogue. Catalogue agents cannot run yet: only the Research, Coding and Writing agents are connected to the execution engine.",
+    category: "Catalogue agent",
     icon: "✦",
-    status: "ready",
-    verified: true,
+    status: "unavailable",
+    verified: false,
     featured: false,
-    capabilities: [
-      "Considered planning",
-      "Multi-step execution",
-      "Context awareness",
-      "Knowledge entegrasyonu",
-      "Task entegrasyonu",
-      "Reporting results",
-    ],
-    suggestedTasks: [
-      "Start a new task with this agent",
-      "Mevcut projemi analiz et",
-      "Build me a plan I can actually act on",
-    ],
-    integrations: ["Chat", "Knowledge", "Tasks", "Projects"],
-    permissions: [
-      {
-        label: "Chat context",
-        description: "Can use the context of the work already under way.",
-        enabled: true,
-        required: true,
-      },
-      {
-        label: "Knowledge",
-        description: "Can search the knowledge sources you select.",
-        enabled: true,
-      },
-      {
-        label: "Tasks",
-        description: "Can suggest tasks and ways to automate them.",
-        enabled: false,
-      },
-    ],
+    capabilities: [],
+    suggestedTasks: [],
+    integrations: [],
+    permissions: [],
   };
 }
 
@@ -266,6 +242,10 @@ const STATUS_CONFIG: Record<
   error: {
     label: "Error",
     className: "bg-red-500/10 text-red-400 border-red-500/20",
+  },
+  unavailable: {
+    label: "Cannot run yet",
+    className: "bg-white/[0.05] text-zinc-400 border-white/10",
   },
 };
 
@@ -790,6 +770,7 @@ export default function AgentDetailPage() {
                 </div>
               )}
 
+              {agent.suggestedTasks.length > 0 && (
               <div className="mt-8 border-t border-white/[0.06] pt-6">
                 <div className="mb-4 flex items-center justify-between gap-4">
                   <h3 className="font-medium">Quick start</h3>
@@ -817,10 +798,12 @@ export default function AgentDetailPage() {
                   ))}
                 </div>
               </div>
+              )}
             </section>
 
             {/* Sidebar */}
             <aside className="space-y-6">
+              {agent.capabilities.length > 0 && (
               <section className="rounded-3xl border border-white/[0.08] bg-white/[0.025] p-5">
                 <h2 className="font-semibold">Yetenekler</h2>
 
@@ -835,7 +818,9 @@ export default function AgentDetailPage() {
                   ))}
                 </div>
               </section>
+              )}
 
+              {agent.integrations.length > 0 && (
               <section className="rounded-3xl border border-white/[0.08] bg-white/[0.025] p-5">
                 <div className="flex items-center justify-between">
                   <h2 className="font-semibold">Connections</h2>
@@ -862,6 +847,7 @@ export default function AgentDetailPage() {
                   ))}
                 </div>
               </section>
+              )}
 
               <section className="rounded-3xl border border-violet-500/15 bg-gradient-to-br from-violet-500/[0.09] to-transparent p-5">
                 <p className="text-xs font-medium uppercase tracking-[0.16em] text-violet-300">

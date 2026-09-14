@@ -137,12 +137,19 @@ void describe("/projects/[id] shows the real project", () => {
     );
   });
 
-  void test("loaded data takes precedence over the sample record", () => {
-    assert.match(
-      DETAIL,
-      /loaded\s*\?\?/,
-      "A real project must win over the hardcoded demo content.",
+  void test("no sample record stands in for a project", () => {
+    /*
+     * This used to require that a loaded project win over hardcoded demo
+     * records (`loaded ??`). Phase 2 deleted the demo records
+     * (PURIFICATION_EVIDENCE.md P2-E03): a project that does not load is
+     * reported as missing, never replaced by one that does not exist.
+     */
+    assert.ok(
+      !/fallbackProject|projects\[projectId\]|Untitled Project/.test(DETAIL),
+      "CRITICAL: a sample project can stand in for the real one again.",
     );
+
+    assert.match(DETAIL, /Project not found/, "A missing project must say so.");
   });
 
   void test("a missing project is not disguised as a real one", () => {

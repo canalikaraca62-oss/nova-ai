@@ -2,133 +2,63 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { createElement, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
   ArrowLeft,
   BookOpen,
-  Brain,
   Calendar,
   Clock,
-  Database,
-  FileText,
-  FolderOpen,
+  ExternalLink,
   Hash,
   SearchX,
   Share2,
-  Sparkles,
 } from "lucide-react";
 
-type KnowledgeType =
-  | "document"
-  | "note"
-  | "research"
-  | "dataset";
+/*
+  One knowledge record, loaded from GET /api/knowledge?id=.
 
-interface KnowledgeItem {
+  This page used to look the id up in four hardcoded records, so every
+  real record -- linked from /knowledge, /search and the activity feed --
+  landed on "Knowledge not found" while the demo slugs rendered invented
+  content and an "Intelligence: Active" card
+  (docs/engineering/PURIFICATION_EVIDENCE.md P2-E01).
+*/
+
+interface KnowledgeRecord {
   id: string;
   title: string;
-  description: string;
-  type: KnowledgeType;
-  updatedAt: string;
-  createdAt: string;
-  author: string;
-  tags: string[];
-  content: string[];
+  description: string | null;
+  content: string | null;
+  type: string | null;
+  status: string | null;
+  tags: string[] | null;
+  source_url: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
-const KNOWLEDGE_ITEMS: KnowledgeItem[] = [
-  {
-    id: "ai-strategy",
-    title: "AI Strategy & Architecture",
-    description:
-      "Core architecture, product strategy and AI system decisions.",
-    type: "research",
-    updatedAt: "Recently updated",
-    createdAt: "August 2026",
-    author: "SYRAVEN Intelligence",
-    tags: ["AI", "Architecture", "Strategy"],
-    content: [
-      "This knowledge space contains the core strategic decisions and architectural principles behind the SYRAVEN intelligence platform.",
-      "The system is designed around scalable intelligence, autonomous workflows, secure data handling and modular product capabilities.",
-      "Every major technical decision should support long-term extensibility while maintaining a fast and reliable user experience.",
-    ],
-  },
-  {
-    id: "product-research",
-    title: "Product Research",
-    description:
-      "Research, market analysis and product discovery notes.",
-    type: "research",
-    updatedAt: "Updated today",
-    createdAt: "August 2026",
-    author: "Product Intelligence",
-    tags: ["Research", "Product"],
-    content: [
-      "This collection contains product discovery research, competitive analysis and market intelligence.",
-      "Insights are continuously organized to help teams identify opportunities, understand user needs and improve strategic decisions.",
-      "Research should be connected to measurable outcomes and actionable product initiatives.",
-    ],
-  },
-  {
-    id: "technical-docs",
-    title: "Technical Documentation",
-    description:
-      "Engineering documentation, APIs and implementation details.",
-    type: "document",
-    updatedAt: "Updated yesterday",
-    createdAt: "July 2026",
-    author: "Engineering",
-    tags: ["Engineering", "API"],
-    content: [
-      "This section centralizes technical architecture, implementation decisions and engineering documentation.",
-      "Documentation should remain clear, maintainable and accessible to every authorized team member.",
-      "Each system component should define its responsibilities, dependencies and operational constraints.",
-    ],
-  },
-  {
-    id: "user-insights",
-    title: "User Insights",
-    description:
-      "Customer feedback, interviews and behavioral insights.",
-    type: "dataset",
-    updatedAt: "Updated 2 days ago",
-    createdAt: "July 2026",
-    author: "Research Team",
-    tags: ["Users", "Insights"],
-    content: [
-      "This knowledge collection aggregates user feedback, behavioral signals and qualitative research.",
-      "Patterns discovered here can inform product priorities, interface improvements and automation opportunities.",
-      "Insights should be reviewed regularly and connected to validated product decisions.",
-    ],
-  },
-];
+function formatDate(value: string): string {
+  const date = new Date(value);
 
-const TYPE_LABELS: Record<
-  KnowledgeType,
-  string
-> = {
-  document: "Document",
-  note: "Note",
-  research: "Research",
-  dataset: "Dataset",
-};
+  return Number.isNaN(date.getTime())
+    ? "Unknown"
+    : date.toLocaleDateString(undefined, {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      });
+}
 
-function getTypeIcon(type: KnowledgeType) {
-  switch (type) {
-    case "research":
-      return Brain;
+/*
+  A stored source URL is user-supplied. It is rendered as a link only
+  when it is http(s): anything else -- a javascript: URL above all --
+  would turn a knowledge record into a script link.
+*/
+function safeSourceUrl(value: string | null): string | null {
+  if (!value) return null;
 
-    case "dataset":
-      return Database;
-
-    case "note":
-      return BookOpen;
-
-    case "document":
-    default:
-      return FileText;
-  }
+  return /^https?:\/\//i.test(value.trim()) ? value.trim() : null;
 }
 
 export default function KnowledgeDetailPage() {
@@ -144,57 +74,123 @@ export default function KnowledgeDetailPage() {
     return id ?? "";
   }, [params]);
 
-  const knowledge = useMemo(() => {
-    return KNOWLEDGE_ITEMS.find(
-      (item) => item.id === knowledgeId
-    );
+  const [record, setRecord] = useState<KnowledgeRecord | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [signedOut, setSignedOut] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
+    setSignedOut(false);
+
+    try {
+      const response = await fetch(
+        `/api/knowledge?id=${encodeURIComponent(knowledgeId)}`,
+        { cache: "no-store" },
+      );
+
+      if (response.status === 401) {
+        setRecord(null);
+        setSignedOut(true);
+        return;
+      }
+
+      if (response.status === 404) {
+        setRecord(null);
+        return;
+      }
+
+      if (!response.ok) {
+        setRecord(null);
+        setLoadError("This knowledge record could not be loaded.");
+        return;
+      }
+
+      const payload = (await response.json().catch(() => null)) as {
+        data?: KnowledgeRecord[];
+      } | null;
+
+      setRecord(payload?.data?.[0] ?? null);
+    } catch {
+      setRecord(null);
+      setLoadError("This knowledge record could not be loaded.");
+    } finally {
+      setLoading(false);
+    }
   }, [knowledgeId]);
 
-  if (!knowledge) {
+  useEffect(() => {
+    let cancelled = false;
+
+    void Promise.resolve().then(() => {
+      if (cancelled) return undefined;
+
+      return load();
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [load]);
+
+  if (!record) {
     return (
-    /*
-      A plain container, not a second <main>: AppChrome already emits
-      the page main landmark, and two of them is invalid HTML.
-    */
+      /*
+        A plain container, not a second <main>: AppChrome already emits
+        the page main landmark, and two of them is invalid HTML.
+      */
       <div className="bg-background">
         <div className="mx-auto flex min-h-screen w-full max-w-3xl flex-col items-center justify-center px-6 py-12 text-center">
-          <div className="rounded-2xl bg-muted p-4">
-            <SearchX className="h-8 w-8 text-muted-foreground" />
-          </div>
+          {loading ? (
+            <p role="status" className="text-sm text-muted-foreground">
+              Loading knowledge...
+            </p>
+          ) : loadError ? (
+            <p
+              role="alert"
+              className="rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+            >
+              {loadError}
+            </p>
+          ) : (
+            <>
+              <div className="rounded-2xl bg-muted p-4">
+                <SearchX className="h-8 w-8 text-muted-foreground" />
+              </div>
 
-          <h1 className="mt-6 text-2xl font-semibold text-foreground">
-            Knowledge not found
-          </h1>
+              <h1 className="mt-6 text-2xl font-semibold text-foreground">
+                {signedOut ? "Sign in to view this record" : "Knowledge not found"}
+              </h1>
 
-          <p className="mt-3 max-w-md text-sm leading-6 text-muted-foreground">
-            The knowledge item you are looking for does not
-            exist or may have been moved.
-          </p>
+              <p className="mt-3 max-w-md text-sm leading-6 text-muted-foreground">
+                {signedOut
+                  ? "Knowledge records belong to an account. Sign in, then open it again."
+                  : "This record does not exist, or it belongs to another account."}
+              </p>
+            </>
+          )}
 
           <Link
-            href="/knowledge"
+            href={signedOut ? "/login" : "/knowledge"}
             className="mt-6 inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
           >
             <ArrowLeft className="h-4 w-4" />
-            Back to knowledge
+            {signedOut ? "Sign in" : "Back to knowledge"}
           </Link>
         </div>
       </div>
     );
   }
 
-  /*
-    Rendered through a helper rather than bound to a capitalised
-    identifier. `const TypeIcon = getTypeIcon(...)` reads as a component
-    defined during render, so React treats it as a new component type on
-    every pass and remounts the subtree beneath it -- which is what
-    react-hooks/static-components objects to. The icon is the same
-    lucide component either way; only the binding changes.
-  */
-  const typeIcon = getTypeIcon(knowledge.type);
+  const paragraphs = (record.content ?? "")
+    .split(/\n{2,}/)
+    .map((paragraph) => paragraph.trim())
+    .filter((paragraph) => paragraph.length > 0);
 
-  const renderTypeIcon = (className: string) =>
-    createElement(typeIcon, { className });
+  const tags = (record.tags ?? []).filter((tag) => tag.trim().length > 0);
+
+  const sourceUrl = safeSourceUrl(record.source_url);
 
   return (
     /*
@@ -213,38 +209,36 @@ export default function KnowledgeDetailPage() {
 
         <header className="mt-8 border-b border-border pb-8">
           <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
-            <div className="flex gap-4">
-              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-                {renderTypeIcon("h-7 w-7")}
+            <div>
+              <div className="flex flex-wrap items-center gap-3">
+                {record.type ? (
+                  <span className="rounded-full border border-border bg-background px-3 py-1 text-xs font-medium capitalize text-muted-foreground">
+                    {record.type}
+                  </span>
+                ) : null}
+
+                <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Clock className="h-3.5 w-3.5" />
+                  Updated {formatDate(record.updated_at)}
+                </span>
               </div>
 
-              <div>
-                <div className="flex flex-wrap items-center gap-3">
-                  <span className="rounded-full border border-border bg-background px-3 py-1 text-xs font-medium text-muted-foreground">
-                    {TYPE_LABELS[knowledge.type]}
-                  </span>
+              <h1 className="mt-4 text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+                {record.title}
+              </h1>
 
-                  <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <Clock className="h-3.5 w-3.5" />
-                    {knowledge.updatedAt}
-                  </span>
-                </div>
-
-                <h1 className="mt-4 text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
-                  {knowledge.title}
-                </h1>
-
+              {record.description ? (
                 <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
-                  {knowledge.description}
+                  {record.description}
                 </p>
-              </div>
+              ) : null}
             </div>
 
             {/*
               Sharing needs a sharing model -- who a recipient is, what
               they may see, how access is revoked. None of that exists,
               and knowledge rows are RLS-scoped to their owner, so this
-              button had nothing to call.
+              button has nothing to call.
             */}
             <button
               type="button"
@@ -268,12 +262,10 @@ export default function KnowledgeDetailPage() {
               <Calendar className="h-5 w-5 text-primary" />
 
               <div>
-                <p className="text-xs text-muted-foreground">
-                  Created
-                </p>
+                <p className="text-xs text-muted-foreground">Created</p>
 
                 <p className="mt-1 text-sm font-medium text-foreground">
-                  {knowledge.createdAt}
+                  {formatDate(record.created_at)}
                 </p>
               </div>
             </div>
@@ -281,108 +273,80 @@ export default function KnowledgeDetailPage() {
 
           <div className="rounded-2xl border border-border bg-card p-5">
             <div className="flex items-center gap-3">
-              <FolderOpen className="h-5 w-5 text-primary" />
+              <Clock className="h-5 w-5 text-primary" />
 
               <div>
-                <p className="text-xs text-muted-foreground">
-                  Source
-                </p>
+                <p className="text-xs text-muted-foreground">Status</p>
 
-                <p className="mt-1 text-sm font-medium text-foreground">
-                  {knowledge.author}
+                <p className="mt-1 text-sm font-medium capitalize text-foreground">
+                  {record.status ?? "Unknown"}
                 </p>
               </div>
             </div>
           </div>
 
-          <div className="rounded-2xl border border-border bg-card p-5">
-            <div className="flex items-center gap-3">
-              <Sparkles className="h-5 w-5 text-primary" />
+          {sourceUrl ? (
+            <div className="rounded-2xl border border-border bg-card p-5">
+              <div className="flex items-center gap-3">
+                <ExternalLink className="h-5 w-5 text-primary" />
 
-              <div>
-                <p className="text-xs text-muted-foreground">
-                  Intelligence
-                </p>
+                <div className="min-w-0">
+                  <p className="text-xs text-muted-foreground">Source</p>
 
-                <p className="mt-1 text-sm font-medium text-foreground">
-                  Active
-                </p>
+                  <a
+                    href={sourceUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-1 block truncate text-sm font-medium text-primary hover:underline"
+                  >
+                    {sourceUrl}
+                  </a>
+                </div>
               </div>
             </div>
-          </div>
+          ) : null}
         </section>
 
         <section className="mt-8 rounded-2xl border border-border bg-card p-6 sm:p-8">
           <div className="flex items-center gap-2">
             <BookOpen className="h-5 w-5 text-primary" />
 
-            <h2 className="text-lg font-semibold text-foreground">
-              Overview
-            </h2>
+            <h2 className="text-lg font-semibold text-foreground">Content</h2>
           </div>
 
           <div className="mt-6 space-y-5 text-sm leading-7 text-muted-foreground">
-            {knowledge.content.map(
-              (paragraph, index) => (
-                <p key={index}>
+            {paragraphs.length > 0 ? (
+              paragraphs.map((paragraph, index) => (
+                <p key={index} className="whitespace-pre-wrap">
                   {paragraph}
                 </p>
-              )
+              ))
+            ) : (
+              <p>This record has no content yet.</p>
             )}
           </div>
         </section>
 
-        <section className="mt-6 rounded-2xl border border-border bg-card p-6 sm:p-8">
-          <div className="flex items-center gap-2">
-            <Hash className="h-5 w-5 text-primary" />
+        {tags.length > 0 ? (
+          <section className="mt-6 rounded-2xl border border-border bg-card p-6 sm:p-8">
+            <div className="flex items-center gap-2">
+              <Hash className="h-5 w-5 text-primary" />
 
-            <h2 className="text-lg font-semibold text-foreground">
-              Tags
-            </h2>
-          </div>
-
-          <div className="mt-5 flex flex-wrap gap-2">
-            {knowledge.tags.map((tag) => (
-              <span
-                key={tag}
-                className="rounded-lg bg-muted px-3 py-1.5 text-sm text-muted-foreground"
-              >
-                {tag}
-              </span>
-            ))}
-          </div>
-        </section>
-
-        <section className="mt-6 rounded-2xl border border-primary/20 bg-primary/[0.03] p-6 sm:p-8">
-          <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <div className="flex items-center gap-2 text-primary">
-                <Sparkles className="h-5 w-5" />
-
-                <span className="text-sm font-medium">
-                  AI Knowledge Intelligence
-                </span>
-              </div>
-
-              <h2 className="mt-3 text-xl font-semibold text-foreground">
-                Explore this knowledge with AI
-              </h2>
-
-              <p className="mt-2 max-w-xl text-sm leading-6 text-muted-foreground">
-                Ask questions, generate insights and connect
-                this knowledge with your workspace.
-              </p>
+              <h2 className="text-lg font-semibold text-foreground">Tags</h2>
             </div>
 
-            <Link
-              href="/dashboard"
-              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
-            >
-              <Sparkles className="h-4 w-4" />
-              Ask SYRAVEN
-            </Link>
-          </div>
-        </section>
+            <div className="mt-5 flex flex-wrap gap-2">
+              {tags.map((tag) => (
+                <span
+                  key={tag}
+                  className="rounded-lg bg-muted px-3 py-1.5 text-sm text-muted-foreground"
+                >
+                  {tag}
+                </span>
+              ))}
+            </div>
+          </section>
+        ) : null}
       </div>
     </div>
   );
