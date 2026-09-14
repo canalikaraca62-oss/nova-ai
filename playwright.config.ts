@@ -205,7 +205,25 @@ export default defineConfig({
   retries: 0,
 
   timeout: 90_000,
-  expect: { timeout: 15_000 },
+  expect: {
+    timeout: 15_000,
+    /*
+     * Visual QA foundation (docs/engineering/VISUAL_QA.md). No baseline
+     * exists yet: these settings only decide HOW a screenshot is compared
+     * once a critical page is deliberately approved. Animations and the
+     * caret are frozen so motion cannot fail a comparison.
+     */
+    toHaveScreenshot: {
+      animations: "disabled",
+      caret: "hide",
+      scale: "css",
+      maxDiffPixelRatio: 0.01,
+    },
+  },
+
+  /* Baselines, when they exist, live beside the suite, per viewport project. */
+  snapshotPathTemplate:
+    "tests/e2e/__screenshots__/{projectName}/{testFilePath}/{arg}{ext}",
 
   reporter: [["list"]],
 

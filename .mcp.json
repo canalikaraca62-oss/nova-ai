@@ -1,0 +1,33 @@
+{
+  "mcpServers": {
+    "playwright": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "playwright",
+        "mcp",
+        "--headless",
+        "--browser",
+        "msedge",
+        "--isolated",
+        "--output-dir",
+        ".playwright-mcp",
+        "--blocked-origins",
+        "https://wpmbumtpcuahyqmdeqgf.supabase.co"
+      ]
+    },
+    "playwright-test": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "playwright",
+        "run-test-mcp-server",
+        "--headless",
+        "-c",
+        "playwright.config.ts"
+      ]
+    }
+  }
+}

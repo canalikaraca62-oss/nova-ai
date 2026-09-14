@@ -1,0 +1,33 @@
+{
+  "permissions": {
+    "deny": [
+      "mcp__playwright__browser_run_code_unsafe",
+      "mcp__playwright__browser_file_upload",
+      "mcp__playwright__browser_drop",
+      "mcp__playwright-test__browser_run_code_unsafe",
+      "mcp__playwright-test__browser_drop",
+      "mcp__playwright-test__browser_cookie_list",
+      "mcp__playwright-test__browser_cookie_get",
+      "mcp__playwright-test__browser_cookie_set",
+      "mcp__playwright-test__browser_cookie_delete",
+      "mcp__playwright-test__browser_cookie_clear",
+      "mcp__playwright-test__browser_localstorage_list",
+      "mcp__playwright-test__browser_localstorage_get",
+      "mcp__playwright-test__browser_localstorage_set",
+      "mcp__playwright-test__browser_localstorage_delete",
+      "mcp__playwright-test__browser_localstorage_clear",
+      "mcp__playwright-test__browser_sessionstorage_list",
+      "mcp__playwright-test__browser_sessionstorage_get",
+      "mcp__playwright-test__browser_sessionstorage_set",
+      "mcp__playwright-test__browser_sessionstorage_delete",
+      "mcp__playwright-test__browser_sessionstorage_clear",
+      "mcp__playwright-test__browser_storage_state",
+      "mcp__playwright-test__browser_set_storage_state",
+      "mcp__playwright-test__browser_route",
+      "mcp__playwright-test__browser_route_list",
+      "mcp__playwright-test__browser_unroute",
+      "mcp__playwright-test__browser_start_tracing",
+      "mcp__playwright-test__browser_stop_tracing"
+    ]
+  }
+}

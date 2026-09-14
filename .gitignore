@@ -190,6 +190,13 @@ playwright-report/
 blob-report/
 .playwright/
 
+# Playwright MCP output (screenshots, snapshots, saved sessions) and any
+# saved authentication state. These carry cookies and page content from a
+# signed-in session and must never be committed.
+.playwright-mcp/
+playwright/.auth/
+.auth/
+
 # Throwaway verification scripts (never committed).
 *.tmp.cjs
 *.tmp.json

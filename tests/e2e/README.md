@@ -27,8 +27,12 @@ E2E_TEST_EMAIL=...
 E2E_TEST_PASSWORD=...
 ```
 
-Put them in `.env.local` (gitignored). **Nothing is hardcoded and no
-credential is committed.**
+Put them in `.env.e2e.local` (gitignored), next to the test project's
+`NEXT_PUBLIC_SUPABASE_*` values — **not** `.env.local`, which is the
+development configuration and points at production. `playwright.config.ts`
+loads only an allowlisted set of keys from that file. **Nothing is
+hardcoded and no credential is committed.** See
+`docs/engineering/E2E_SAFETY.md`.
 
 When the variables are absent, `authenticated.spec.ts` **skips** rather
 than fails. A missing credential is an environment gap, not a product
@@ -96,7 +100,8 @@ Things only a browser can verify:
 
 ## What they deliberately do not cover
 
-- **Semantic search** — not wired to any route (Step 5).
+- **Semantic search** — wired (`/api/knowledge/index`, `/api/knowledge/semantic`)
+  but every call spends on the embedding provider, so no spec drives it.
 - **AI/chat flows** — every run would spend money.
 - **Edit flows** — `PATCH` is not exercised yet.
 - **Anything outside projects and tasks** — create/delete is seeded for
