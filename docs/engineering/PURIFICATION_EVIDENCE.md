@@ -125,7 +125,51 @@ dialog tests each for `UpgradeModal`, `ShareChatDialog`, `Dialog`, `Modal`
 (12) and the `PlanCard` billing-surface test (1). **RESULT:** 23 files
 (13,903 lines) deleted; exemptions and list entries for them removed.
 
+### P2-D — unused dependencies
+
+Searched for each name in `app/`, `lib/`, `services/`, `types/`,
+`tests/`, `middleware.ts`, `next.config.ts`, `playwright.config.ts`,
+`eslint.config.mjs`, `postcss.config.mjs`, `app/**/*.css`, `package.json`
+scripts, `.github/`, `.husky/` (value, type-only, dynamic, `require`,
+CSS `@import`/`@plugin`, CLI use).
+
+| ID | Package | Import evidence | Script / config / CLI | Transitive (package-lock.json) | Risk | Decision |
+|---|---|---|---|---|---|---|
+| P2-D01 | `openai` ^4.80.0 (dependency) | none — the last importer, `app/api/canvas/route.ts:3`, was removed when that route moved to the provider adapter (Phase 1 step 7, commit `a4e052d`) | none; the remaining OpenAI calls use HTTP `fetch` through `lib/ai/provider.ts` / route transports | required only by the root manifest | none: no code path loads it | DELETE |
+| P2-D02 | `clsx` ^2.1.1 (dependency) | none | none | required only by the root manifest | none | DELETE |
+| P2-D03 | `@eslint/eslintrc` ^3.2.0 (devDependency) | none — `eslint.config.mjs` uses `eslint/config` and `eslint-config-next`; no `FlatCompat` | none | **also a dependency of `eslint` itself** (lockfile `:3791`), so it stays installed for ESLint | none for lint: ESLint keeps its own copy | DELETE (root declaration only) |
+
+KEEP with evidence: `react-dom` (required peer of `next`), `@types/react-dom`
+(companion types for that peer), `postcss` (PostCSS config for Tailwind
+v4), `husky` (`prepare` script; hooks path `.husky/_`, no hooks today),
+`rimraf` (`clean` script), `supabase` (CLI used by hand per `DATABASE.md`),
+`@playwright/test`, `typescript`, `eslint`, `eslint-config-next`,
+`tailwindcss`, `@tailwindcss/postcss`, `@types/*`, `stripe`, `zod`,
+`three`, `lucide-react`, `@supabase/*`, `next`, `react`.
+
+Undeclared import noted, not changed: `server-only` is imported by 36
+`lib/` files and is not in `package.json`; Next resolves it at build time
+(the Phase 1 production build passed). Declaring it is a separate change.
+
+**VERIFICATION (P2-D):** `npm uninstall --no-audit --no-fund openai clsx
+@eslint/eslintrc` exit 0, "removed 23 packages". The 23 are the three
+plus what only `openai` required — `node-fetch`, `form-data`,
+`formdata-node`, `agentkeepalive`, `abort-controller`, `web-streams-polyfill`,
+`@types/node-fetch` and their dependencies, and a **nested**
+`openai/node_modules/@types/node` + `undici-types` (full lockfile paths
+checked). Root `@types/node` 22.20.1 and `undici-types` 6.21.0 remain
+installed and declared. No application import of any removed package
+(searched `app lib services types tests`, root configs).
+`node_modules/@eslint/eslintrc` still present through `eslint`. npm
+printed an `allow-scripts` notice for `unrs-resolver` (pre-existing
+install scripts; unrelated). `tsc --noEmit` exit 0 (after waiting for
+memory); `npm run test:lowmem` 1801: 1794 pass, 0 fail, 7 todo
+(unchanged from P2-C); ESLint exit 0 on `eslint.config.mjs` and
+`app/api/canvas/route.ts`. Production build: at the final gate.
+**RESULT:** three packages removed from `package.json`; lockfile −263
+lines.
+
 ### Later groups
 
-Recorded as each batch is prepared: dependencies (P2-D), fabricated UI
-(P2-E), duplicate authorities (P2-F), routes (P2-G), documentation (P2-H).
+Recorded as each batch is prepared: fabricated UI (P2-E), duplicate
+authorities (P2-F), routes (P2-G), documentation (P2-H).

@@ -33,7 +33,7 @@ The other columns are filled as batches land; blank means not yet done.
 | Mock persistence | 2 FAKE-PERSISTENCE (`/chat/[id]` localStorage; settings localStorage, disclosed) · 1 DURABILITY-GAP (dead `lib/security/audit.ts`) | | | | P2-A02, P2-E |
 | Duplicate types | plan ids 4 copies outside `lib/plans.ts`; `AgentStatus` 4 vocabularies; `services/action-types.ts` 410 lines behind one type-only import | | | | P2-B, P2-F |
 | Legacy routes | 11 routes with no UI consumer + 1 retired (`/api/tasks/execute`) · 3 orphan pages | | | | P2-G |
-| Unused dependencies | 3 candidates (`openai`, `@eslint/eslintrc`, `clsx`) | | | | P2-D |
+| Unused dependencies | 3 candidates (`openai`, `@eslint/eslintrc`, `clsx`) | 3 declared (23 installed packages) | — | 0 known; `server-only` is used but undeclared (noted, not changed) | P2-D |
 | Fake UI | 10 findings (app inventory pass) | | | | P2-E |
 | Obsolete docs | to be counted in P2-H | | | | P2-H |
 | Security-risk dead code | 5 (`validation.ts`, `audit.ts`, `billing/permissions.ts`, `data/client.ts`, `observability/logger.ts`) | | | | P2-A |
