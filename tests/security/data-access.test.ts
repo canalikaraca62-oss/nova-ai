@@ -331,44 +331,11 @@ void describe("projects ownership model", () => {
   });
 });
 
-/* -------------------------------------------------------------------------- */
-/*                    lib/data/client.ts INVARIANTS                           */
-/* -------------------------------------------------------------------------- */
-
-void describe("lib/data/client.ts invariants", () => {
-  const source = readFileSync(
-    join(process.cwd(), "lib", "data", "client.ts"),
-    "utf8",
-  );
-
-  void test("is server-only", () => {
-    assert.match(source, /import\s+["']server-only["']/);
-  });
-
-  void test("elevated access requires a written justification", () => {
-    assert.match(
-      source,
-      /justification[\s\S]{0,200}?throw new Error/,
-      "elevatedClient must reject a bare reason code with no explanation, " +
-        "otherwise 'documented' decays into a rubber stamp.",
-    );
-  });
-
-  void test("the reason codes stay a closed set", () => {
-    for (const reason of [
-      "NO_CALLER_IDENTITY",
-      "UNFORGEABLE_RECORD",
-      "STORAGE_OPERATION",
-      "RLS_PREDICATE_MISMATCH",
-    ]) {
-      assert.match(
-        source,
-        new RegExp(`"${reason}"`),
-        `ElevatedAccessReason must include ${reason}.`,
-      );
-    }
-  });
-});
+/*
+ * lib/data/client.ts was deleted in Phase 2 (PURIFICATION_EVIDENCE.md
+ * P2-A12): nothing imported it. The elevated-access boundary it described
+ * is enforced by the service-role allowlist earlier in this suite.
+ */
 
 /* -------------------------------------------------------------------------- */
 /*                  ORPHANED SERVICES STAY DISCONNECTED                       */
