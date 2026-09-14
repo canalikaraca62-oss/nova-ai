@@ -29,7 +29,14 @@ type ChatApiResponse = {
   message?: ApiMessage;
   response?: string;
   content?: string;
-  error?: string;
+  /*
+    A string from /api/chat's own errors; an object { code, message }
+    from the shared route boundary (withAuth, usageGuard, aiPolicy),
+    which answers every auth, quota and policy denial. Treating it as a
+    string displayed "[object Object]"
+    (docs/engineering/PURIFICATION_EVIDENCE.md P2-F01).
+  */
+  error?: string | { code?: string; message?: string };
 };
 
 const STARTER_MESSAGES: ChatMessage[] = [
@@ -335,8 +342,13 @@ export default function ChatPage() {
       }
 
       if (!response.ok) {
+        const reason =
+          typeof data.error === "string"
+            ? data.error
+            : data.error?.message;
+
         throw new Error(
-          data.error ||
+          reason ||
             "The message could not be sent."
         );
       }

@@ -13,6 +13,14 @@ import {
   useSearchParams,
 } from "next/navigation";
 
+import {
+  DEFAULT_PLAN,
+  getIncludedFeatures,
+  getPlan,
+  isPlanId,
+  type PlanId,
+} from "@/lib/plans";
+
 /* ==================================================
  * TYPES
  * ================================================== */
@@ -23,37 +31,27 @@ type SyncStatus =
   | "pending"
   | "error";
 
-type Plan =
-  | "free"
-  | "premium"
-  | "pro"
-  | "business"
-  | "enterprise";
-
 type BillingResponse = {
-  plan?: Plan | string | null;
+  plan?: string | null;
   subscription_status?: string | null;
   status?: string | null;
 };
 
 /* ==================================================
  * PLAN CONFIG
+ *
+ * The canonical vocabulary from lib/plans.ts. This page used to carry
+ * its own (free, premium, pro, business, enterprise), with no `starter`,
+ * so a Starter subscriber was told they were on Free on the page that
+ * confirms their purchase (PURIFICATION_EVIDENCE.md P2-F04).
  * ================================================== */
 
-const PLAN_LABELS: Record<Plan, string> = {
-  free: "Free",
-  premium: "Premium",
-  pro: "Pro",
-  business: "Business",
-  enterprise: "Enterprise",
-};
-
-const PLAN_DESCRIPTIONS: Record<Plan, string> = {
+const PLAN_DESCRIPTIONS: Record<PlanId, string> = {
   free:
     "Your SYRAVEN workspace is ready to use.",
 
-  premium:
-    "Premium intelligence and expanded capabilities are now available.",
+  starter:
+    "Your Starter plan is active.",
 
   pro:
     "Advanced AI, agents, workflows and higher limits are now available.",
@@ -205,27 +203,16 @@ function AgentIcon() {
  * HELPERS
  * ================================================== */
 
+/*
+  An unknown value shows the default plan rather than being guessed at:
+  /api/billing already reduces the stored plan to a PlanId.
+*/
 function normalizePlan(
   value: string | null | undefined,
-): Plan {
-  switch (value?.trim().toLowerCase()) {
-    case "premium":
-    case "plus":
-      return "premium";
+): PlanId {
+  const normalized = value?.trim().toLowerCase();
 
-    case "pro":
-    case "vip":
-      return "pro";
-
-    case "business":
-      return "business";
-
-    case "enterprise":
-      return "enterprise";
-
-    default:
-      return "free";
-  }
+  return isPlanId(normalized) ? normalized : DEFAULT_PLAN;
 }
 
 function getBillingStatus(
@@ -267,7 +254,7 @@ function BillingSuccessContent() {
     useState<SyncStatus>("checking");
 
   const [plan, setPlan] =
-    useState<Plan>("free");
+    useState<PlanId>(DEFAULT_PLAN);
 
   const [
     subscriptionStatus,
@@ -456,28 +443,17 @@ function BillingSuccessContent() {
     syncStatus,
   ]);
 
-  const activatedFeatures = useMemo(() => {
-    const features = [
-      "Advanced SYRAVEN intelligence",
-      "Expanded workspace capabilities",
-      "AI agents and intelligent workflows",
-      "Priority access to premium tools",
-    ];
-
-    if (plan === "business") {
-      features.push(
-        "Business collaboration and shared workflows",
-      );
-    }
-
-    if (plan === "enterprise") {
-      features.push(
-        "Enterprise controls and advanced organization features",
-      );
-    }
-
-    return features;
-  }, [plan]);
+  /*
+    What the plan actually includes, from lib/plans.ts -- the list the
+    pricing page sells. It was four generic lines shown for every plan.
+  */
+  const activatedFeatures = useMemo(
+    () =>
+      getIncludedFeatures(plan)
+        .slice(0, 6)
+        .map((feature) => feature.name),
+    [plan],
+  );
 
   /* ==================================================
    * RENDER
@@ -977,7 +953,7 @@ function BillingSuccessContent() {
                         tracking-tight
                       "
                     >
-                      {PLAN_LABELS[plan]}
+                      {getPlan(plan).name}
                     </h2>
                   </div>
 

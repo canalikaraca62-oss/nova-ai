@@ -1,8 +1,6 @@
-import type { NextRequest} from "next/server";
-import { NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 
 import { withAuth } from "@/lib/api/withAuth";
-import { createClient } from "@supabase/supabase-js";
 
 export const runtime = "nodejs";
 
@@ -32,23 +30,6 @@ const VALID_PLANS: BillingPlan[] = [
   "business",
 ];
 
-const VALID_INTERVALS = ["monthly", "yearly"] as const;
-
-function getSupabaseServer() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!url || !key) {
-    return null;
-  }
-
-  return createClient(url, key, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-    },
-  });
-}
 
 function getBaseUrl(request: NextRequest) {
   const origin =
@@ -147,19 +128,11 @@ function getPriceId(
 
 export const POST = withAuth(async (request, session) => {
   try {
-    const supabase = getSupabaseServer();
-
-    if (!supabase) {
-      return NextResponse.json(
-        {
-          error: "The server is not fully configured.",
-          code: "SUPABASE_NOT_CONFIGURED",
-        },
-        {
-          status: 500,
-        }
-      );
-    }
+    /*
+      An anon Supabase client was built and null-checked here and never
+      queried, so a deployment without the anon env answered 500 to a
+      route that reads no data (PURIFICATION_EVIDENCE.md P2-F03).
+    */
 
     /*
       Authentication is performed by withAuth (lib/api/withAuth.ts)
@@ -306,21 +279,25 @@ export const POST = withAuth(async (request, session) => {
     const stripeData = await stripeResponse.json();
 
     if (!stripeResponse.ok) {
+      /*
+        Stripe's message stays in the server log: it can name prices,
+        account settings or the customer, none of which is the caller's
+        to read.
+      */
       console.error(
-        "SYRAVEN CHECKOUT HATASI:",
+        "SYRAVEN CHECKOUT ERROR:",
         stripeData
       );
 
       return NextResponse.json(
         {
           error:
-            stripeData?.error?.message ||
             "The checkout session could not be created.",
 
           code: "STRIPE_CHECKOUT_ERROR",
         },
         {
-          status: stripeResponse.status || 500,
+          status: 502,
         }
       );
     }

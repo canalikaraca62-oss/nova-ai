@@ -1,26 +1,19 @@
-import type { NextRequest} from "next/server";
-import { NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 
 import { withAuth } from "@/lib/api/withAuth";
-import { createClient } from "@supabase/supabase-js";
 
 export const runtime = "nodejs";
 
-function getSupabaseServer() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+/*
+  The Stripe customer id is read from the caller's own profile, through
+  the caller's RLS-scoped client -- the row the webhook writes it to and
+  the same read /api/billing makes.
 
-  if (!url || !key) {
-    return null;
-  }
-
-  return createClient(url, key, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-    },
-  });
-}
+  This route used to build its own anon client and read a
+  `subscriptions` table that does not exist, so every call ended in a
+  500 and the "Manage subscription" button never opened the portal
+  (docs/engineering/PURIFICATION_EVIDENCE.md P2-F02).
+*/
 
 function getBaseUrl(request: NextRequest) {
   const configuredUrl = process.env.NEXT_PUBLIC_APP_URL;
@@ -31,28 +24,12 @@ function getBaseUrl(request: NextRequest) {
 
 export const POST = withAuth(async (request, session) => {
   try {
-    const supabase = getSupabaseServer();
-
-    if (!supabase) {
-      return NextResponse.json(
-        {
-          error: "The server is not fully configured.",
-          code: "SUPABASE_NOT_CONFIGURED",
-        },
-        { status: 500 }
-      );
-    }
-
     /*
       Authentication is performed by withAuth (lib/api/withAuth.ts)
       before this handler runs. The inline Bearer check this replaced
       accepted Bearer only, so a browser cookie session could not reach
       this route; withAuth accepts both.
     */
-    const user = {
-      id: session.userId,
-    };
-
     const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
 
     if (!stripeSecretKey) {
@@ -77,9 +54,8 @@ export const POST = withAuth(async (request, session) => {
     const baseUrl = getBaseUrl(request);
 
     /*
-     * Güvenlik:
-     * Kullanıcının portal dönüş adresini tamamen dışarıdan
-     * kontrol etmesine izin vermiyoruz.
+     * SECURITY: the caller does not control where the portal returns
+     * to. Only a URL on this application's own origin is accepted.
      */
     let returnUrl = `${baseUrl}/billing`;
 
@@ -90,28 +66,17 @@ export const POST = withAuth(async (request, session) => {
       returnUrl = requestedReturnUrl;
     }
 
-    /*
-     * Stripe customer ID'yi Supabase'deki billing/subscription
-     * kaydından buluyoruz.
-     *
-     * Webhook route'u tamamlandığında subscription kayıtları
-     * Stripe customer ID ile güncellenecek.
-     */
-    const { data: subscription, error: subscriptionError } =
-      await supabase
-        .from("subscriptions")
+    const { data: profile, error: profileError } =
+      await session.supabase
+        .from("profiles")
         .select("stripe_customer_id")
-        .eq("user_id", user.id)
-        .order("updated_at", {
-          ascending: false,
-        })
-        .limit(1)
+        .eq("id", session.userId)
         .maybeSingle();
 
-    if (subscriptionError) {
+    if (profileError) {
       console.error(
-        "SYRAVEN PORTAL SUBSCRIPTION LOOKUP ERROR:",
-        subscriptionError
+        "SYRAVEN PORTAL PROFILE LOOKUP ERROR:",
+        { userId: session.userId, code: profileError.code }
       );
 
       return NextResponse.json(
@@ -125,7 +90,7 @@ export const POST = withAuth(async (request, session) => {
     }
 
     const stripeCustomerId =
-      subscription?.stripe_customer_id;
+      profile?.stripe_customer_id;
 
     if (!stripeCustomerId) {
       return NextResponse.json(
@@ -159,21 +124,25 @@ export const POST = withAuth(async (request, session) => {
     const portalData = await portalResponse.json();
 
     if (!portalResponse.ok) {
+      /*
+        Stripe's message stays in the server log. It can name the
+        customer, the configuration or the account, none of which is the
+        caller's to read.
+      */
       console.error(
-        "SYRAVEN BILLING PORTAL HATASI:",
+        "SYRAVEN BILLING PORTAL ERROR:",
         portalData
       );
 
       return NextResponse.json(
         {
           error:
-            portalData?.error?.message ||
             "The subscription management page could not be opened.",
 
           code: "STRIPE_PORTAL_ERROR",
         },
         {
-          status: portalResponse.status || 500,
+          status: 502,
         }
       );
     }
@@ -202,7 +171,7 @@ export const POST = withAuth(async (request, session) => {
     );
   } catch (error) {
     console.error(
-      "SYRAVEN BILLING PORTAL BEKLENMEYEN HATASI:",
+      "SYRAVEN BILLING PORTAL UNEXPECTED ERROR:",
       error
     );
 

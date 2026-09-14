@@ -1,9 +1,5 @@
 import { NextResponse } from "next/server";
 
-import type {
-  ActionRequest,
-} from "@/services/action-types";
-
 import { withAuth } from "@/lib/api/withAuth";
 import { enforceUsage } from "@/lib/api/usageGuard";
 import {
@@ -28,6 +24,16 @@ type ActionResult = {
   message: string;
   data?: Record<string, unknown>;
 };
+
+/*
+  The request this route reads: an action `type`, with an optional
+  payload. It was imported from services/action-types.ts, 410 lines of
+  contracts nothing else used (PURIFICATION_EVIDENCE.md P2-F05).
+*/
+interface ActionRequest {
+  type: string;
+  input?: unknown;
+}
 
 /*
  * ActionRequest ana tipini değiştirmeden,

@@ -196,7 +196,13 @@ void describe("RLS did not replace the explicit ownership filters", () => {
     "app/api/notifications/route.ts",
     "app/api/projects/route.ts",
     "app/api/tasks/route.ts",
-    "app/api/usage/route.ts",
+    /*
+     * app/api/usage/route.ts counted usage with its own query. It now
+     * reports through the meter (PURIFICATION_EVIDENCE.md P2-F06), so the
+     * ownership filter is pinned where the query lives. The route stays
+     * on the MIGRATED list above: it must still pass session.supabase.
+     */
+    "lib/usage/meter.ts",
   ];
 
   for (const id of OWNERSHIP_FILTERED) {
