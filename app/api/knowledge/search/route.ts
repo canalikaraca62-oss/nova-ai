@@ -1,5 +1,4 @@
-import type { NextRequest} from "next/server";
-import { NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 
 /*
   DATA ACCESS (Phase 4):
@@ -18,6 +17,7 @@ import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { withAuth } from "@/lib/api/withAuth";
+import { RETRIEVABLE_STATUSES } from "@/lib/memory/hierarchy";
 import type { Database } from "@/types/database";
 import {
   requireOptionalProjectAccess,
@@ -715,10 +715,14 @@ async function searchKnowledge({
         still returned — and, because search results feed AI context,
         deleted content could silently re-enter a prompt. "Deleted"
         must mean unreachable, not merely hidden from a list view.
+
+        The allowlist is the memory hierarchy's own constant: these
+        results are AI context, so they follow the retrieval rule, not
+        a copy of it (PURIFICATION_EVIDENCE.md P2-F07).
       */
-      .eq(
+      .in(
         "status",
-        "active"
+        [...RETRIEVABLE_STATUSES]
       );
 
   /* ================================================

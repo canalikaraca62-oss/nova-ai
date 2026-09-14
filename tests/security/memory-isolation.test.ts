@@ -328,11 +328,23 @@ void describe("Deleted and archived knowledge cannot re-enter context", () => {
       read("app", "api", "knowledge", "search", "route.ts"),
     );
 
+    /*
+     * This pinned a literal .eq("status", "active") -- a copy of the
+     * hierarchy rule that could drift from it. The search route now
+     * filters with the hierarchy's own constant (P2-F07); the constant's
+     * value is pinned in the hierarchy invariants below.
+     */
     assert.match(
       code,
-      /\.eq\(\s*\n?\s*"status",\s*\n?\s*"active"\s*\n?\s*\)/,
-      "Knowledge search must exclude non-active records; its results feed " +
-        "AI context.",
+      /\.in\(\s*"status",\s*\[\.\.\.RETRIEVABLE_STATUSES\]\s*\)/,
+      "Knowledge search must exclude non-retrievable records; its results " +
+        "feed AI context.",
+    );
+
+    assert.match(
+      code,
+      /import \{ RETRIEVABLE_STATUSES \} from "@\/lib\/memory\/hierarchy"/,
+      "The status allowlist must be the hierarchy's constant, not a copy.",
     );
   });
 });
@@ -500,7 +512,15 @@ void describe("lib/memory/retrieval.ts invariants", () => {
   });
 
   void test("the query filters status at the database level", () => {
-    assert.match(code, /\.eq\("status",\s*"active"\)/);
+    /*
+     * With the same constant canRetrieve() re-checks (P2-F07), so the
+     * query and the in-code check cannot disagree.
+     */
+    assert.match(code, /\.in\("status",\s*\[\.\.\.RETRIEVABLE_STATUSES\]\)/);
+    assert.ok(
+      !/\.eq\("status"/.test(code),
+      "A literal status filter is a second copy of the retrieval rule.",
+    );
   });
 
   void test("every row is re-authorized in code", () => {

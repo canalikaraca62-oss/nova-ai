@@ -39,6 +39,7 @@ import { isUuid } from "@/lib/auth/authorization";
 import {
   type MemoryAccessContext,
   type MemoryRecordDescriptor,
+  RETRIEVABLE_STATUSES,
   canRetrieve,
   compareByPrecedence,
   scopeOf,
@@ -187,9 +188,10 @@ export async function assembleContext(
     )
     /*
      * STATUS FILTER — the control that stops deleted or archived
-     * knowledge silently re-entering an AI prompt.
+     * knowledge silently re-entering an AI prompt. The same constant
+     * canRetrieve() re-checks, so the two layers cannot drift apart.
      */
-    .eq("status", "active")
+    .in("status", [...RETRIEVABLE_STATUSES])
     .order("updated_at", { ascending: false })
     /*
      * Over-fetch modestly relative to the item budget: authorization

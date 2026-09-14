@@ -102,6 +102,16 @@ export type Visibility = (typeof VISIBILITY_VALUES)[number];
  *
  * Anything else — archived, deleted, draft — is excluded. This is the
  * control that stops deleted knowledge silently re-entering a prompt.
+ *
+ * THE ONE COPY. The retrieval query (retrieval.ts) and
+ * /api/knowledge/search filter with this constant; each used to carry
+ * its own literal (PURIFICATION_EVIDENCE.md P2-F07).
+ *
+ * KNOWN LIMITATION. The knowledge route writes "ready" by default, so
+ * no current record is retrievable and AI context receives no
+ * knowledge. Widening this set changes what the model sees in
+ * production; the founder decided (2026-09-14) that Phase 2 does not
+ * make that change.
  */
 export const RETRIEVABLE_STATUSES = ["active"] as const;
 
