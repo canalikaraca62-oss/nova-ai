@@ -16,6 +16,7 @@ import {
   CreditCard,
   FolderKanban,
   Grid2X2,
+  History,
   Home,
   MessageSquare,
   PanelLeft,
@@ -119,6 +120,13 @@ const DEFAULT_SECTIONS: MobileNavSection[] = [
         href: "/approvals",
         icon: (
           <ShieldCheck className="h-5 w-5" />
+        ),
+      },
+      {
+        label: "Activity",
+        href: "/activity",
+        icon: (
+          <History className="h-5 w-5" />
         ),
       },
       {

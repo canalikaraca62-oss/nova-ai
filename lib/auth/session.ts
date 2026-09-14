@@ -263,6 +263,23 @@ export async function resolveSession(
     );
 
     if (error || !data.user) {
+      /*
+       * A missing credential is the ordinary unauthenticated case and is
+       * not logged. A credential the auth server REJECTED, or could not
+       * be asked about, is: without this line a transient verification
+       * failure and an expired session produce the same silent 401.
+       *
+       * Name and status only. The error message can echo request
+       * context, and the credential itself is never written anywhere.
+       */
+      if (error) {
+        console.error("SYRAVEN AUTH: credential verification failed.", {
+          name: error.name,
+          status: error.status ?? null,
+          via: token !== null ? "bearer" : "cookie",
+        });
+      }
+
       return {
         success: false,
         code: "UNAUTHORIZED",

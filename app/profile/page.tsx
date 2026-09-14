@@ -14,89 +14,103 @@ import {
   User,
   UserCircle2,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+
+import { getCurrentUser } from "@/lib/supabase";
+
+/*
+  SYRAVEN — Profile
+
+  WHAT THIS PAGE SHOWS
+
+  The signed-in account's email, read with auth.getUser() -- verified by
+  the auth server, not taken from local storage. That is the only
+  personal field the product actually stores.
+
+  WHAT IT USED TO SHOW
+
+  A form pre-filled with "SYRAVEN User", "user@syraven.ai", the handle
+  "syraven-user" and the bio "Building the future with artificial
+  intelligence." -- presented, editable, as the caller's own profile.
+  None of it was anybody's data. And three notification switches that
+  flipped in memory and were forgotten on reload, while looking like
+  saved preferences.
+
+  WHAT IS DELIBERATELY ABSENT
+
+  Profile storage. public.profiles holds billing columns only, and
+  public.user_settings a single memory_enabled flag -- there is no name,
+  username, bio, avatar or notification-preference column anywhere in
+  the schema. The fields stay visible, empty and disabled, with the
+  reason beside them, until a migration gives them a home.
+*/
 
 type TabId = "profile" | "security" | "notifications";
-
-interface ProfileForm {
-  fullName: string;
-  email: string;
-  username: string;
-  bio: string;
-}
 
 const tabs: {
   id: TabId;
   label: string;
   icon: typeof User;
 }[] = [
+  { id: "profile", label: "Profile", icon: User },
+  { id: "security", label: "Security", icon: ShieldCheck },
+  { id: "notifications", label: "Notifications", icon: Bell },
+];
+
+/**
+ * Email as the auth server reports it.
+ *
+ * "loading" and "unavailable" are kept distinct from an address so the
+ * page never fills the gap with a placeholder that reads like data.
+ */
+type AccountEmail =
+  | { state: "loading" }
+  | { state: "known"; email: string }
+  | { state: "unavailable" };
+
+const NOTIFICATION_TOPICS: { title: string; description: string }[] = [
   {
-    id: "profile",
-    label: "Profile",
-    icon: User,
+    title: "Email notifications",
+    description: "Important account and workspace updates by email.",
   },
   {
-    id: "security",
-    label: "Security",
-    icon: ShieldCheck,
+    title: "Product updates",
+    description: "News about SYRAVEN capabilities.",
   },
   {
-    id: "notifications",
-    label: "Notifications",
-    icon: Bell,
+    title: "Security alerts",
+    description: "Notifications related to account security.",
   },
 ];
 
 export default function ProfilePage() {
-  const [activeTab, setActiveTab] =
-    useState<TabId>("profile");
+  const [activeTab, setActiveTab] = useState<TabId>("profile");
+  const [account, setAccount] = useState<AccountEmail>({ state: "loading" });
 
-  const [form, setForm] =
-    useState<ProfileForm>({
-      fullName: "SYRAVEN User",
-      email: "user@syraven.ai",
-      username: "syraven-user",
-      bio: "Building the future with artificial intelligence.",
-    });
+  useEffect(() => {
+    let cancelled = false;
 
-  const [emailNotifications, setEmailNotifications] =
-    useState(true);
+    getCurrentUser()
+      .then((user) => {
+        if (cancelled) return;
 
-  const [productUpdates, setProductUpdates] =
-    useState(true);
+        setAccount(
+          user?.email
+            ? { state: "known", email: user.email }
+            : { state: "unavailable" },
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setAccount({ state: "unavailable" });
+      });
 
-  const [securityAlerts, setSecurityAlerts] =
-    useState(true);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-  function updateForm(
-    field: keyof ProfileForm,
-    value: string
-  ) {
-    setForm((current) => ({
-      ...current,
-      [field]: value,
-    }));
-  }
-
-  /*
-    Profile editing has no storage.
-
-    public.profiles holds billing columns only -- id, plan,
-    subscription_status, the Stripe ids and trial dates. There is no
-    name, bio, avatar, role, location or timezone column anywhere in
-    the schema, and public.user_settings holds a single
-    memory_enabled flag.
-
-    This handler used to await a 700ms timeout and then report
-    "Changes saved successfully." Nothing was written -- not even to
-    localStorage -- so every edit vanished on reload while the UI
-    claimed success.
-
-    Giving these fields a home needs a migration, which is out of
-    scope for this pass. Until then the form states plainly that it
-    cannot save, which is the one behaviour that does not mislead.
-  */
-  const profileStorageAvailable = false;
+  const initial =
+    account.state === "known" ? account.email.charAt(0).toUpperCase() : "";
 
   return (
     /*
@@ -105,7 +119,6 @@ export default function ProfilePage() {
     */
     <div className="bg-background">
       <div className="mx-auto w-full max-w-6xl px-6 py-10 lg:px-8">
-        {/* Header */}
         <section className="border-b border-border pb-8">
           <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
             <div>
@@ -119,13 +132,13 @@ export default function ProfilePage() {
               </h1>
 
               <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
-                Manage your personal information, account security and
-                notification preferences.
+                Your account, its security, and what can and cannot be
+                changed here yet.
               </p>
             </div>
 
             <Link
-              href="/pricing"
+              href="/billing"
               className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted"
             >
               <CreditCard className="h-4 w-4" />
@@ -135,21 +148,21 @@ export default function ProfilePage() {
         </section>
 
         <div className="mt-8 grid gap-8 lg:grid-cols-[220px_1fr]">
-          {/* Sidebar */}
           <aside>
-            <nav className="flex gap-2 overflow-x-auto lg:flex-col">
+            <nav
+              aria-label="Profile sections"
+              className="flex gap-2 overflow-x-auto lg:flex-col"
+            >
               {tabs.map((tab) => {
                 const Icon = tab.icon;
-                const isActive =
-                  activeTab === tab.id;
+                const isActive = activeTab === tab.id;
 
                 return (
                   <button
                     key={tab.id}
                     type="button"
-                    onClick={() =>
-                      setActiveTab(tab.id)
-                    }
+                    onClick={() => setActiveTab(tab.id)}
+                    aria-pressed={isActive}
                     className={`flex shrink-0 items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-medium transition-colors ${
                       isActive
                         ? "bg-primary text-primary-foreground"
@@ -162,212 +175,136 @@ export default function ProfilePage() {
                 );
               })}
             </nav>
-
-            <div className="mt-8 hidden rounded-2xl border border-border bg-card p-5 lg:block">
-              <ShieldCheck className="h-5 w-5 text-primary" />
-
-              <h3 className="mt-4 text-sm font-semibold text-foreground">
-                Account security
-              </h3>
-
-              <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                Review your security settings and keep your account
-                protected.
-              </p>
-
-              <Link
-                href="/privacy/activity"
-                className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
-              >
-                View activity
-                <ChevronRight className="h-4 w-4" />
-              </Link>
-            </div>
           </aside>
 
-          {/* Content */}
           <section className="min-w-0">
-            {/* Profile Tab */}
             {activeTab === "profile" && (
-              <div className="space-y-6">
-                <div className="rounded-3xl border border-border bg-card p-6 sm:p-8">
-                  <div>
-                    <h2 className="text-xl font-semibold text-foreground">
-                      Personal information
-                    </h2>
+              <div className="rounded-3xl border border-border bg-card p-6 sm:p-8">
+                <h2 className="text-xl font-semibold text-foreground">
+                  Personal information
+                </h2>
 
-                    <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                      Update the information associated with your SYRAVEN
-                      account.
-                    </p>
-                  </div>
-
-                  {/* Avatar */}
-                  <div className="mt-8 flex flex-col gap-5 sm:flex-row sm:items-center">
-                    <div className="relative">
-                      <div className="flex h-24 w-24 items-center justify-center rounded-3xl bg-primary/10 text-3xl font-semibold text-primary">
-                        {form.fullName
-                          .split(" ")
-                          .filter(Boolean)
-                          .slice(0, 2)
-                          .map((name) =>
-                            name.charAt(0).toUpperCase()
-                          )
-                          .join("") || "N"}
-                      </div>
-
-                      <button
-                        type="button"
-                        disabled
-                        aria-label="Change profile picture"
-                        aria-describedby="profile-photo-availability"
-                        className="absolute -bottom-2 -right-2 flex h-9 w-9 cursor-not-allowed items-center justify-center rounded-xl border border-border bg-card text-foreground opacity-60 shadow-sm"
-                      >
-                        <Camera className="h-4 w-4" />
-                      </button>
+                <div className="mt-8 flex flex-col gap-5 sm:flex-row sm:items-center">
+                  <div className="relative">
+                    <div
+                      aria-hidden="true"
+                      className="flex h-24 w-24 items-center justify-center rounded-3xl bg-primary/10 text-3xl font-semibold text-primary"
+                    >
+                      {initial || <User className="h-8 w-8" />}
                     </div>
-
-                    <div>
-                      <h3 className="font-semibold text-foreground">
-                        Profile photo
-                      </h3>
-
-                      <p
-                        id="profile-photo-availability"
-                        className="mt-1 text-sm text-muted-foreground"
-                      >
-                        Photo upload is not available yet. Your initials
-                        stand in for now.
-                      </p>
-
-                      <button
-                        type="button"
-                        disabled
-                        aria-describedby="profile-photo-availability"
-                        className="mt-3 cursor-not-allowed text-sm font-medium text-primary opacity-60"
-                      >
-                        Upload new photo
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Form */}
-                  <div className="mt-10 grid gap-5 sm:grid-cols-2">
-                    <div className="space-y-2">
-                      <label
-                        htmlFor="fullName"
-                        className="text-sm font-medium text-foreground"
-                      >
-                        Full name
-                      </label>
-
-                      <input
-                        id="fullName"
-                        type="text"
-                        value={form.fullName}
-                        onChange={(event) =>
-                          updateForm(
-                            "fullName",
-                            event.target.value
-                          )
-                        }
-                        className="h-11 w-full rounded-xl border border-border bg-background px-4 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-primary"
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <label
-                        htmlFor="username"
-                        className="text-sm font-medium text-foreground"
-                      >
-                        Username
-                      </label>
-
-                      <input
-                        id="username"
-                        type="text"
-                        value={form.username}
-                        onChange={(event) =>
-                          updateForm(
-                            "username",
-                            event.target.value
-                          )
-                        }
-                        className="h-11 w-full rounded-xl border border-border bg-background px-4 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-primary"
-                      />
-                    </div>
-
-                    <div className="space-y-2 sm:col-span-2">
-                      <label
-                        htmlFor="email"
-                        className="text-sm font-medium text-foreground"
-                      >
-                        Email address
-                      </label>
-
-                      <div className="relative">
-                        <Mail className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-
-                        <input
-                          id="email"
-                          type="email"
-                          value={form.email}
-                          onChange={(event) =>
-                            updateForm(
-                              "email",
-                              event.target.value
-                            )
-                          }
-                          className="h-11 w-full rounded-xl border border-border bg-background pl-11 pr-4 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-primary"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="space-y-2 sm:col-span-2">
-                      <label
-                        htmlFor="bio"
-                        className="text-sm font-medium text-foreground"
-                      >
-                        Bio
-                      </label>
-
-                      <textarea
-                        id="bio"
-                        rows={4}
-                        value={form.bio}
-                        onChange={(event) =>
-                          updateForm(
-                            "bio",
-                            event.target.value
-                          )
-                        }
-                        className="w-full resize-none rounded-xl border border-border bg-background px-4 py-3 text-sm leading-6 text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-primary"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="mt-8 flex items-center justify-between border-t border-border pt-6">
-                    <p className="text-sm text-muted-foreground">
-                      {profileStorageAvailable
-                        ? "Your changes will be saved to your account."
-                        : "Profile editing is not available yet — these fields cannot be saved."}
-                    </p>
 
                     <button
                       type="button"
                       disabled
-                      title="Profile editing is not available yet."
-                      className="inline-flex h-11 cursor-not-allowed items-center justify-center gap-2 rounded-xl bg-primary px-5 text-sm font-semibold text-primary-foreground opacity-60"
+                      aria-label="Change profile picture"
+                      aria-describedby="profile-photo-availability"
+                      className="absolute -bottom-2 -right-2 flex h-9 w-9 cursor-not-allowed items-center justify-center rounded-xl border border-border bg-card text-foreground opacity-60 shadow-sm"
                     >
-                      <Save className="h-4 w-4" />
-                      Save changes
+                      <Camera className="h-4 w-4" />
                     </button>
                   </div>
+
+                  <div>
+                    <h3 className="font-semibold text-foreground">
+                      Profile photo
+                    </h3>
+
+                    <p
+                      id="profile-photo-availability"
+                      className="mt-1 text-sm text-muted-foreground"
+                    >
+                      Photo upload is not available yet.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-10 space-y-2">
+                  <label
+                    htmlFor="email"
+                    className="text-sm font-medium text-foreground"
+                  >
+                    Email address
+                  </label>
+
+                  <div className="relative">
+                    <Mail className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+
+                    <input
+                      id="email"
+                      type="email"
+                      readOnly
+                      value={account.state === "known" ? account.email : ""}
+                      placeholder={
+                        account.state === "loading"
+                          ? "Loading..."
+                          : account.state === "unavailable"
+                            ? "Your email could not be loaded."
+                            : undefined
+                      }
+                      aria-describedby="profile-email-note"
+                      className="h-11 w-full rounded-xl border border-border bg-muted/40 pl-11 pr-4 text-sm text-foreground outline-none placeholder:text-muted-foreground"
+                    />
+                  </div>
+
+                  <p
+                    id="profile-email-note"
+                    className="text-xs text-muted-foreground"
+                  >
+                    The address you sign in with. Changing it here is not
+                    available yet.
+                  </p>
+                </div>
+
+                <div className="mt-6 grid gap-5 sm:grid-cols-2">
+                  {(
+                    [
+                      ["fullName", "Full name"],
+                      ["username", "Username"],
+                    ] as const
+                  ).map(([id, label]) => (
+                    <div key={id} className="space-y-2">
+                      <label
+                        htmlFor={id}
+                        className="text-sm font-medium text-foreground"
+                      >
+                        {label}
+                      </label>
+
+                      <input
+                        id={id}
+                        type="text"
+                        disabled
+                        value=""
+                        aria-describedby="profile-storage-availability"
+                        className="h-11 w-full cursor-not-allowed rounded-xl border border-border bg-muted/40 px-4 text-sm opacity-60"
+                      />
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-8 flex flex-col gap-4 border-t border-border pt-6 sm:flex-row sm:items-center sm:justify-between">
+                  <p
+                    id="profile-storage-availability"
+                    className="text-sm text-muted-foreground"
+                  >
+                    Profile editing is not available yet: there is nowhere
+                    to store a name or username, so these fields stay empty
+                    rather than pretend.
+                  </p>
+
+                  <button
+                    type="button"
+                    disabled
+                    aria-describedby="profile-storage-availability"
+                    className="inline-flex h-11 shrink-0 cursor-not-allowed items-center justify-center gap-2 rounded-xl bg-primary px-5 text-sm font-semibold text-primary-foreground opacity-60"
+                  >
+                    <Save className="h-4 w-4" />
+                    Save changes
+                  </button>
                 </div>
               </div>
             )}
 
-            {/* Security Tab */}
             {activeTab === "security" && (
               <div className="space-y-6">
                 <div className="rounded-3xl border border-border bg-card p-6 sm:p-8">
@@ -376,16 +313,9 @@ export default function ProfilePage() {
                       <KeyRound className="h-5 w-5" />
                     </div>
 
-                    <div>
-                      <h2 className="text-xl font-semibold text-foreground">
-                        Password & security
-                      </h2>
-
-                      <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                        Keep your account secure by reviewing your login
-                        and authentication settings.
-                      </p>
-                    </div>
+                    <h2 className="text-xl font-semibold text-foreground">
+                      Password & security
+                    </h2>
                   </div>
 
                   <div className="mt-8 divide-y divide-border rounded-2xl border border-border">
@@ -448,12 +378,13 @@ export default function ProfilePage() {
                         </h3>
 
                         <p className="mt-1 text-sm text-muted-foreground">
-                          Review recent account and security activity.
+                          What happened across your projects, tasks,
+                          knowledge and approvals.
                         </p>
                       </div>
 
                       <Link
-                        href="/privacy/activity"
+                        href="/activity"
                         className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-border px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted"
                       >
                         View activity
@@ -474,10 +405,6 @@ export default function ProfilePage() {
                         Privacy controls
                       </h2>
 
-                      <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                        Review privacy information and workspace activity.
-                      </p>
-
                       <Link
                         href="/privacy"
                         className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
@@ -491,42 +418,42 @@ export default function ProfilePage() {
               </div>
             )}
 
-            {/* Notifications Tab */}
             {activeTab === "notifications" && (
               <div className="rounded-3xl border border-border bg-card p-6 sm:p-8">
-                <div>
-                  <h2 className="text-xl font-semibold text-foreground">
-                    Notification preferences
-                  </h2>
+                <h2 className="text-xl font-semibold text-foreground">
+                  Notification preferences
+                </h2>
 
-                  <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                    Choose how SYRAVEN communicates important workspace
-                    updates to you.
-                  </p>
-                </div>
+                <p
+                  id="profile-notifications-availability"
+                  className="mt-2 text-sm leading-6 text-muted-foreground"
+                >
+                  Choosing notifications is not available yet: no
+                  preference is stored, so none is shown as on or off.
+                </p>
 
-                <div className="mt-8 divide-y divide-border rounded-2xl border border-border">
-                  <NotificationPreference
-                    title="Email notifications"
-                    description="Receive important account and workspace updates by email."
-                    enabled={emailNotifications}
-                    onChange={setEmailNotifications}
-                  />
+                <ul className="mt-8 divide-y divide-border rounded-2xl border border-border">
+                  {NOTIFICATION_TOPICS.map((topic) => (
+                    <li
+                      key={topic.title}
+                      className="flex items-center justify-between gap-6 p-5"
+                    >
+                      <div>
+                        <h3 className="font-medium text-foreground">
+                          {topic.title}
+                        </h3>
 
-                  <NotificationPreference
-                    title="Product updates"
-                    description="Stay informed about new SYRAVEN capabilities and platform improvements."
-                    enabled={productUpdates}
-                    onChange={setProductUpdates}
-                  />
+                        <p className="mt-1 max-w-xl text-sm leading-6 text-muted-foreground">
+                          {topic.description}
+                        </p>
+                      </div>
 
-                  <NotificationPreference
-                    title="Security alerts"
-                    description="Receive important notifications related to account security."
-                    enabled={securityAlerts}
-                    onChange={setSecurityAlerts}
-                  />
-                </div>
+                      <span className="shrink-0 text-xs text-muted-foreground">
+                        Not configurable yet
+                      </span>
+                    </li>
+                  ))}
+                </ul>
 
                 <Link
                   href="/notifications"
@@ -541,52 +468,6 @@ export default function ProfilePage() {
           </section>
         </div>
       </div>
-    </div>
-  );
-}
-
-function NotificationPreference({
-  title,
-  description,
-  enabled,
-  onChange,
-}: {
-  title: string;
-  description: string;
-  enabled: boolean;
-  onChange: (value: boolean) => void;
-}) {
-  return (
-    <div className="flex items-center justify-between gap-6 p-5">
-      <div>
-        <h3 className="font-medium text-foreground">
-          {title}
-        </h3>
-
-        <p className="mt-1 max-w-xl text-sm leading-6 text-muted-foreground">
-          {description}
-        </p>
-      </div>
-
-      <button
-        type="button"
-        role="switch"
-        aria-checked={enabled}
-        onClick={() => onChange(!enabled)}
-        className={`relative h-7 w-12 shrink-0 rounded-full transition-colors ${
-          enabled
-            ? "bg-primary"
-            : "bg-muted"
-        }`}
-      >
-        <span
-          className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${
-            enabled
-              ? "translate-x-6"
-              : "translate-x-1"
-          }`}
-        />
-      </button>
     </div>
   );
 }

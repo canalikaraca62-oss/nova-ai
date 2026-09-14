@@ -474,6 +474,16 @@ export const RATE_LIMITS: Record<string, RateLimitRule> = {
    * ceilings that sit alongside this burst limit.
    */
   "embedding:ingest": { max: 5, windowSeconds: 60 },
+
+  /*
+   * Search by meaning (app/api/knowledge/semantic).
+   *
+   * Each query embeds the query text, so every call reaches a PAID
+   * provider -- one short input, far cheaper than ingestion, but not
+   * free. Interactive, so looser than ingestion; paid, so well below
+   * keyword search, which calls no provider at all.
+   */
+  "embedding:query": { max: 20, windowSeconds: 60 },
 };
 
 export type RateLimitDecision =

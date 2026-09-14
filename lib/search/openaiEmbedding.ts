@@ -246,6 +246,21 @@ export function createOpenAiEmbeddingClient(
   };
 }
 
+/**
+ * Whether a client COULD be constructed, without constructing one.
+ *
+ * For surfaces that only need to say whether search by meaning is
+ * available on this deployment. Same two conditions as
+ * `createOpenAiEmbeddingClient`, no network, no log line per request.
+ */
+export function isEmbeddingConfigured(
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
+  return (
+    assertApprovedModelEnv(env).ok && providerApiKey("openai", env) !== null
+  );
+}
+
 /* -------------------------------------------------------------------------- */
 /*                              POLICY RE-EXPORT                              */
 /* -------------------------------------------------------------------------- */

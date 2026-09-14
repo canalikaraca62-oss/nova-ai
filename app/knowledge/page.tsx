@@ -5,6 +5,7 @@ import {
   useEffect,
   useMemo,
   useState,
+  type FormEvent,
 } from "react";
 
 import Link from "next/link";
@@ -27,6 +28,17 @@ import {
   session. public.knowledge is owner-scoped by RLS (auth.uid() =
   user_id), so somebody else's rows are not filtered out here -- they
   are never returned.
+
+  SEARCH BY MEANING
+
+  "Ask by meaning" embeds the question with the real provider and ranks
+  the caller's indexed passages in the database. A record is searchable
+  that way only once it has been indexed, and each card says whether it
+  has -- from GET /api/knowledge/index, never assumed. The match figure
+  is the similarity the database computed; when ranking was unavailable
+  no figure is shown and the page says the results are unranked. When
+  the deployment has no provider configured, the page says that instead
+  of offering a search that cannot run.
 
   WHAT IT USED TO SHOW
 
@@ -70,6 +82,23 @@ interface KnowledgeRow {
   type: string | null;
   tags: string[] | null;
   updated_at: string | null;
+}
+
+/** Index state exactly as /api/knowledge/index reports it. */
+type IndexStatus = "indexed" | "partial" | "failed";
+
+/** One answer from /api/knowledge/semantic. */
+interface SemanticResult {
+  knowledgeId: string;
+  title: string;
+  excerpt: string;
+  /** The database's cosine similarity, or null when ranking was unavailable. */
+  similarity: number | null;
+}
+
+interface SemanticAnswer {
+  results: SemanticResult[];
+  degraded: boolean;
 }
 
 const TYPE_LABELS: Record<KnowledgeType, string> = {
@@ -122,6 +151,13 @@ function formatUpdated(value: string | null): string {
   }).format(parsed);
 }
 
+function indexLabel(status: IndexStatus | undefined): string {
+  if (status === "partial") return "Continue indexing";
+  if (status === "failed") return "Retry indexing";
+
+  return "Index for meaning";
+}
+
 /* -------------------------------------------------------------------------- */
 /*                                    PAGE                                    */
 /* -------------------------------------------------------------------------- */
@@ -135,14 +171,61 @@ export default function KnowledgePage() {
   const [selectedType, setSelectedType] =
     useState<KnowledgeType | "all">("all");
 
+  /*
+   * null = the index state could not be read, so nothing is claimed
+   * either way: no "not configured", no "nothing indexed".
+   */
+  const [semanticAvailable, setSemanticAvailable] =
+    useState<boolean | null>(null);
+  const [indexStatus, setIndexStatus] =
+    useState<Record<string, IndexStatus>>({});
+  const [indexing, setIndexing] = useState<Record<string, boolean>>({});
+  const [indexNotes, setIndexNotes] = useState<Record<string, string>>({});
+
+  const [question, setQuestion] = useState("");
+  const [asking, setAsking] = useState(false);
+  const [answer, setAnswer] = useState<SemanticAnswer | null>(null);
+  const [askError, setAskError] = useState<string | null>(null);
+
   const load = useCallback(async () => {
     setIsLoading(true);
     setLoadError(null);
 
+    const [listResult, indexResult] = await Promise.allSettled([
+      fetch("/api/knowledge?limit=100", { cache: "no-store" }),
+      fetch("/api/knowledge/index", { cache: "no-store" }),
+    ]);
+
+    /* Index state first: its failure must not blank the list. */
     try {
-      const response = await fetch("/api/knowledge?limit=100", {
-        cache: "no-store",
-      });
+      if (indexResult.status === "fulfilled" && indexResult.value.ok) {
+        const payload = (await indexResult.value.json().catch(() => null)) as {
+          data?: {
+            available?: boolean;
+            records?: { knowledgeId: string; status: IndexStatus }[];
+          };
+        } | null;
+
+        setSemanticAvailable(payload?.data?.available === true);
+        setIndexStatus(
+          Object.fromEntries(
+            (payload?.data?.records ?? []).map((record) => [
+              record.knowledgeId,
+              record.status,
+            ]),
+          ),
+        );
+      } else {
+        setSemanticAvailable(null);
+      }
+    } catch {
+      setSemanticAvailable(null);
+    }
+
+    try {
+      if (listResult.status === "rejected") throw new Error("failed");
+
+      const response = listResult.value;
 
       if (response.status === 401) {
         setItems([]);
@@ -177,6 +260,126 @@ export default function KnowledgePage() {
     };
   }, [load]);
 
+  /**
+   * Indexes one record. The card's state changes only from the server's
+   * answer -- "indexed" appears when the server reports no passage left
+   * without a vector, not when the request was sent.
+   */
+  const indexRecord = useCallback(async (knowledgeId: string) => {
+    setIndexing((current) => ({ ...current, [knowledgeId]: true }));
+    setIndexNotes((current) => {
+      const next = { ...current };
+      delete next[knowledgeId];
+      return next;
+    });
+
+    try {
+      const response = await fetch("/api/knowledge/index", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ knowledgeId }),
+      });
+
+      const payload = (await response.json().catch(() => null)) as {
+        data?: {
+          state?: "indexed" | "partial";
+          remaining?: number | null;
+          embeddedNow?: number;
+          failed?: number;
+        };
+        error?: { message?: string };
+      } | null;
+
+      const progress = payload?.data;
+
+      if (!response.ok || !progress?.state) {
+        setIndexNotes((current) => ({
+          ...current,
+          [knowledgeId]: payload?.error?.message ?? "Indexing failed.",
+        }));
+        return;
+      }
+
+      const failed = progress.failed ?? 0;
+      const nothingSucceeded = failed > 0 && (progress.embeddedNow ?? 0) === 0;
+
+      setIndexStatus((current) => ({
+        ...current,
+        [knowledgeId]:
+          progress.state === "indexed"
+            ? "indexed"
+            : nothingSucceeded
+              ? "failed"
+              : "partial",
+      }));
+
+      if (progress.state === "partial") {
+        const remaining = progress.remaining;
+
+        setIndexNotes((current) => ({
+          ...current,
+          [knowledgeId]:
+            typeof remaining === "number"
+              ? `${remaining} passage${remaining === 1 ? "" : "s"} still to index.${failed > 0 ? ` ${failed} failed this time.` : ""}`
+              : "Partly indexed.",
+        }));
+      }
+    } catch {
+      setIndexNotes((current) => ({
+        ...current,
+        [knowledgeId]: "Indexing failed. Check your connection.",
+      }));
+    } finally {
+      setIndexing((current) => {
+        const next = { ...current };
+        delete next[knowledgeId];
+        return next;
+      });
+    }
+  }, []);
+
+  const ask = useCallback(
+    async (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+
+      const trimmed = question.trim();
+      if (!trimmed) return;
+
+      setAsking(true);
+      setAskError(null);
+
+      try {
+        const response = await fetch("/api/knowledge/semantic", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query: trimmed }),
+        });
+
+        const payload = (await response.json().catch(() => null)) as {
+          data?: { results?: SemanticResult[]; degraded?: boolean };
+          error?: { message?: string };
+        } | null;
+
+        if (!response.ok || !payload?.data) {
+          setAnswer(null);
+          setAskError(payload?.error?.message ?? "Search by meaning failed.");
+          return;
+        }
+
+        setAnswer({
+          results: payload.data.results ?? [],
+          degraded: payload.data.degraded === true,
+        });
+      } catch {
+        setAnswer(null);
+        setAskError("Search by meaning failed. Check your connection.");
+      } finally {
+        setAsking(false);
+      }
+    },
+    [question],
+  );
+
   const filteredItems = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
 
@@ -206,6 +409,11 @@ export default function KnowledgePage() {
     () =>
       items.filter((item) => typeOf(item.type) === "document").length,
     [items],
+  );
+
+  const indexedCount = useMemo(
+    () => items.filter((item) => indexStatus[item.id] === "indexed").length,
+    [items, indexStatus],
   );
 
   return (
@@ -295,6 +503,105 @@ export default function KnowledgePage() {
           </div>
         </section>
 
+        <section
+          aria-labelledby="knowledge-ask-heading"
+          className="mt-8 rounded-2xl border border-border bg-card p-5"
+        >
+          <h2
+            id="knowledge-ask-heading"
+            className="text-base font-semibold text-foreground"
+          >
+            Ask by meaning
+          </h2>
+
+          <p className="mt-1 text-sm leading-6 text-muted-foreground">
+            {semanticAvailable === false
+              ? "Search by meaning is not configured on this deployment."
+              : semanticAvailable === null
+                ? "Finds records close in meaning, not only in wording."
+                : `Finds records close in meaning, not only in wording. ${indexedCount} of ${items.length} indexed.`}
+          </p>
+
+          <form
+            onSubmit={(event) => void ask(event)}
+            className="mt-4 flex flex-col gap-3 sm:flex-row"
+          >
+            <input
+              value={question}
+              onChange={(event) => setQuestion(event.target.value)}
+              placeholder="What did we decide about pricing?"
+              aria-label="Ask your knowledge by meaning"
+              maxLength={500}
+              disabled={semanticAvailable === false}
+              className="h-11 w-full rounded-xl border border-border bg-background px-4 text-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-primary disabled:cursor-not-allowed disabled:opacity-60"
+            />
+
+            <button
+              type="submit"
+              disabled={
+                semanticAvailable === false ||
+                asking ||
+                question.trim().length === 0
+              }
+              className="inline-flex h-11 shrink-0 items-center justify-center rounded-xl bg-primary px-5 text-sm font-medium text-primary-foreground transition-opacity disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {asking ? "Searching..." : "Ask"}
+            </button>
+          </form>
+
+          {askError ? (
+            <p role="alert" className="mt-3 text-sm text-destructive">
+              {askError}
+            </p>
+          ) : null}
+
+          {answer ? (
+            <div className="mt-4" aria-live="polite">
+              {answer.degraded && answer.results.length > 0 ? (
+                <p className="mb-3 text-xs text-muted-foreground">
+                  These results are not ranked: similarity ranking was
+                  unavailable.
+                </p>
+              ) : null}
+
+              {answer.results.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  {semanticAvailable !== null && indexedCount === 0
+                    ? "Nothing is indexed yet. Index a record below to search it by meaning."
+                    : "No indexed record is close enough in meaning."}
+                </p>
+              ) : (
+                <ol className="space-y-3">
+                  {answer.results.map((result) => (
+                    <li key={result.knowledgeId}>
+                      <Link
+                        href={`/knowledge/${result.knowledgeId}`}
+                        className="block rounded-xl border border-border p-4 transition-colors hover:border-primary/40"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <span className="font-medium text-foreground">
+                            {result.title}
+                          </span>
+
+                          {typeof result.similarity === "number" ? (
+                            <span className="shrink-0 text-xs text-muted-foreground">
+                              {Math.round(result.similarity * 100)}% match
+                            </span>
+                          ) : null}
+                        </div>
+
+                        <p className="mt-1 line-clamp-2 text-sm leading-6 text-muted-foreground">
+                          {result.excerpt}
+                        </p>
+                      </Link>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </div>
+          ) : null}
+        </section>
+
         <section className="mt-8">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="relative w-full lg:max-w-md">
@@ -360,12 +667,19 @@ export default function KnowledgePage() {
                 const type = typeOf(item.type);
                 const Icon = getTypeIcon(type);
                 const updated = formatUpdated(item.updated_at);
+                const status = indexStatus[item.id];
+                const note = indexNotes[item.id];
 
+                /*
+                  The whole card still opens the record: the title link
+                  is stretched over it. The index control sits above
+                  that layer as its own button -- a button nested inside
+                  a link is invalid HTML and unreachable by keyboard.
+                */
                 return (
-                  <Link
+                  <article
                     key={item.id}
-                    href={`/knowledge/${item.id}`}
-                    className="group rounded-2xl border border-border bg-card p-6 transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-lg"
+                    className="group relative rounded-2xl border border-border bg-card p-6 transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-lg"
                   >
                     <div className="flex items-start justify-between gap-4">
                       <div className="rounded-xl bg-primary/10 p-3 text-primary">
@@ -378,7 +692,12 @@ export default function KnowledgePage() {
                     </div>
 
                     <h2 className="mt-5 text-lg font-semibold text-foreground">
-                      {item.title}
+                      <Link
+                        href={`/knowledge/${item.id}`}
+                        className="rounded-sm outline-none after:absolute after:inset-0 after:rounded-2xl focus-visible:after:ring-2 focus-visible:after:ring-primary"
+                      >
+                        {item.title}
+                      </Link>
                     </h2>
 
                     {item.description ? (
@@ -405,7 +724,32 @@ export default function KnowledgePage() {
                         Updated {updated}
                       </div>
                     ) : null}
-                  </Link>
+
+                    {semanticAvailable !== false ? (
+                      <div className="relative z-10 mt-4 flex flex-wrap items-center gap-2 text-xs">
+                        {status === "indexed" ? (
+                          <span className="rounded-full bg-success/10 px-2.5 py-1 font-medium text-success">
+                            Searchable by meaning
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => void indexRecord(item.id)}
+                            disabled={indexing[item.id] === true}
+                            className="rounded-lg border border-border bg-card px-2.5 py-1 font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {indexing[item.id] ? "Indexing..." : indexLabel(status)}
+                          </button>
+                        )}
+
+                        {note ? (
+                          <span role="status" className="text-muted-foreground">
+                            {note}
+                          </span>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </article>
                 );
               })}
             </div>

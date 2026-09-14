@@ -18,6 +18,7 @@ import { NextResponse } from "next/server";
 import { toJson } from "@/lib/supabase/json";
 import { withAuth } from "@/lib/api/withAuth";
 import { requireOptionalWorkspaceAccess } from "@/lib/api/tenantGuard";
+import { removeKnowledgeIndex } from "@/lib/search/knowledgeBridge";
 import type { Database } from "@/types/database";
 
 export const runtime = "nodejs";
@@ -863,10 +864,27 @@ export const PATCH = withAuth(async (
       );
     }
 
+    /*
+     * Changed text makes any index of this record stale. It is removed
+     * rather than left to answer with passages the record no longer
+     * contains; the record is indexed again on request. If removal
+     * fails the edit still stands, and the response says the index is
+     * stale instead of implying it was refreshed.
+     */
+    const textChanged =
+      "title" in updateData ||
+      "content" in updateData ||
+      "description" in updateData;
+
+    const indexCleared = textChanged
+      ? (await removeKnowledgeIndex(session, id)).ok
+      : true;
+
     return NextResponse.json(
       {
         success: true,
         data,
+        ...(indexCleared ? {} : { indexStale: true }),
       },
       {
         status: 200,
@@ -912,6 +930,22 @@ export const DELETE = withAuth(async (
       return jsonError(
         "Knowledge id is required.",
         400
+      );
+    }
+
+    /*
+     * The search index goes first. If it cannot be removed the record is
+     * kept, so the two never disagree: a deleted record whose passages
+     * still answered a search would be a deletion that did not happen.
+     * Removal is scoped to the caller's own bases, so naming someone
+     * else's id here removes nothing.
+     */
+    const unindexed = await removeKnowledgeIndex(session, id);
+
+    if (!unindexed.ok) {
+      return jsonError(
+        "Knowledge record could not be deleted.",
+        500
       );
     }
 

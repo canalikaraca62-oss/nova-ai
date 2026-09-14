@@ -125,8 +125,18 @@ export const RETRIEVAL_CONTRACT = {
    */
   available: true,
   dimensions: EMBEDDING_DIMENSIONS,
-  /** Default cosine-similarity floor. Clamped to [0,1] by the function. */
-  defaultThreshold: 0.5,
+  /**
+   * Default cosine-similarity floor. Clamped to [0,1] by the function.
+   *
+   * 0.3, not the earlier 0.5, from a live measurement (2026-09-13, test
+   * project, text-embedding-3-small): "what did we decide about
+   * billing?" scored 0.542 against a passage about annual-only pricing
+   * and 0.217 against an unrelated hiring plan. At 0.5 the right answer
+   * cleared the floor by 0.04, so a slightly different wording would
+   * have been reported as nothing close in meaning. A test holds the
+   * floor between those two measured values.
+   */
+  defaultThreshold: 0.3,
 } as const;
 
 /* -------------------------------------------------------------------------- */

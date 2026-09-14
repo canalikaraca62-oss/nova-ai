@@ -15,6 +15,7 @@ import {
   CreditCard,
   FolderKanban,
   Grid2X2,
+  History,
   Home,
   MessageSquare,
   PanelLeft,
@@ -155,6 +156,13 @@ const DEFAULT_SECTIONS: SidebarSection[] = [
         href: "/approvals",
         icon: (
           <ShieldCheck className="h-4 w-4" />
+        ),
+      },
+      {
+        label: "Activity",
+        href: "/activity",
+        icon: (
+          <History className="h-4 w-4" />
         ),
       },
       {

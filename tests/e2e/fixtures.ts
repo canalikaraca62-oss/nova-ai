@@ -263,8 +263,14 @@ export class Seeded {
       `seeding a task failed: ${await response.text()}`,
     ).toBe(201);
 
-    const body = (await response.json()) as { task?: { id?: string } };
-    const id = body.task?.id;
+    /*
+     * POST /api/tasks answers { success, data: { task } } -- the task is
+     * nested one level deeper than a project. Reading `body.task` found
+     * nothing after a real 201, and the row it had just created was then
+     * never registered for cleanup.
+     */
+    const body = (await response.json()) as { data?: { task?: { id?: string } } };
+    const id = body.data?.task?.id;
 
     expect(id, "created task returned no id").toBeTruthy();
 
@@ -347,9 +353,22 @@ export class Seeded {
           continue;
         }
 
-        const body = (await response.json()) as { deleted?: boolean };
+        /*
+         * The confirmation lives in a different place per route: tasks
+         * answer { success, data: { id, deleted } }, projects and
+         * knowledge { success, deleted, id }. Each is read where its
+         * route puts it -- accepting either shape for every route would
+         * let a wrong shape from one of them pass as a confirmation.
+         */
+        const body = (await response.json()) as {
+          deleted?: boolean;
+          data?: { deleted?: boolean };
+        };
 
-        if (body.deleted !== true) {
+        const confirmed =
+          row.kind === "task" ? body.data?.deleted : body.deleted;
+
+        if (confirmed !== true) {
           failures.push(
             `${row.kind} "${row.label}" (${row.id}) reported no deletion`,
           );
