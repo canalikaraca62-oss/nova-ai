@@ -124,10 +124,10 @@ const TURKISH_ONLY = {
 /**
  * A string literal: single, double, or template.
  *
- * Backticks were missing, and that was not academic.
- * app/components/activity/ActivityFeed.tsx builds its relative
- * timestamps as `${minutes} dk önce` — text rendered on every activity
- * row, invisible to a pattern that only knew about " and '.
+ * Backticks were missing, and that was not academic: an activity
+ * component (since deleted in Phase 2) built its relative timestamps as
+ * `${minutes} dk önce` — text rendered on every activity row, invisible
+ * to a pattern that only knew about " and '.
  */
 const QUOTED = /"[^"\n]*"|'[^'\n]*'|`[^`\n]{0,400}`/g;
 

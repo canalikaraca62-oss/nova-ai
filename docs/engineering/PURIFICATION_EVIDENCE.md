@@ -113,6 +113,18 @@ KEEP (reachable): `ui/AiActivity.tsx`, `ui/CapabilityUnavailable.tsx`,
 direct importer is `ui/Modal.tsx`, but `react-dom` stays — required peer of
 `next`. USER none (never rendered).
 
+**VERIFICATION (P2-C):** first combined run was killed by the OS for low
+memory after the suite passed; recovered per `RESOURCE_POLICY.md` (no
+orphan processes; tree unchanged; each step re-run alone). `tsc --noEmit`
+exit 0; `npm run test:lowmem` 1801 tests: 1794 pass, 0 fail, 7 todo;
+ESLint exit 0 on the three edited tests. **Test-count delta accounted:**
+HEAD (`232c62a`, extracted with `git archive`) vs working tree over the
+11 suites that generate tests per file: 435 → 422, 0 added, 0 failing.
+The 13 removed are exactly the generated tests for deleted files — 3
+dialog tests each for `UpgradeModal`, `ShareChatDialog`, `Dialog`, `Modal`
+(12) and the `PlanCard` billing-surface test (1). **RESULT:** 23 files
+(13,903 lines) deleted; exemptions and list entries for them removed.
+
 ### Later groups
 
 Recorded as each batch is prepared: dependencies (P2-D), fabricated UI

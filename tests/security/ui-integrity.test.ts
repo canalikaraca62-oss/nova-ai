@@ -312,7 +312,6 @@ void describe("Billing controls state both colours explicitly", () => {
     join("app", "billing", "page.tsx"),
     join("app", "pricing", "page.tsx"),
     join("app", "contact", "page.tsx"),
-    join("app", "components", "billing", "PlanCard.tsx"),
   ];
 
   for (const relative of BILLING_SURFACES) {

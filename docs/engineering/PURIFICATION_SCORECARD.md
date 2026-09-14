@@ -27,7 +27,7 @@ The other columns are filled as batches land; blank means not yet done.
 |---|---|---|---|---|---|
 | Dead code — `lib/` | 14 files / 8,258 lines (2 kept: logger, queue) | 12 files / 7,525 lines | — | 2 kept by decision (`observability/logger.ts` designated logger; `autopilot/queue.ts` blocked substrate) | P2-A |
 | Dead code — `types/` | 12 files / 9,474 lines | 12 files / 9,474 lines | — | 0 | P2-B |
-| Dead code — components | 23 files / 13,903 lines | | | | P2-C |
+| Dead code — components | 23 files / 13,903 lines | 23 files / 13,903 lines | — | 0 | P2-C |
 | Duplicate architecture | AI transport 5 routes + 1 dead client; keyword search 2 endpoints + 1 dead engine; agent concepts 4; plan vocabularies 3; error-response shapes ~28 route-local helpers | | | | P2-F |
 | Fake implementations | 9 FAKE-PRODUCTION findings (fake-behaviour pass) | | | | P2-E |
 | Mock persistence | 2 FAKE-PERSISTENCE (`/chat/[id]` localStorage; settings localStorage, disclosed) · 1 DURABILITY-GAP (dead `lib/security/audit.ts`) | | | | P2-A02, P2-E |

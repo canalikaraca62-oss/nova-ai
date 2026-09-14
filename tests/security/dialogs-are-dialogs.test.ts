@@ -114,28 +114,18 @@ function pagesDeclaringDialogs(
   Components excused from the useDialogBehaviour requirement, each for
   a stated reason rather than because it was inconvenient.
 
-  Dialog.tsx and Modal.tsx ARE the primitives: Modal implements the
-  same focus trap this hook extracted, and requiring a component to
-  call a hook carved out of itself is circular.
-
   CommandPalette owns its own keyboard model -- it is opened BY a key,
   moves selection with arrows, and manages its own focus and Escape. It
   also names itself with aria-label rather than aria-labelledby, which
   is equally valid and which an early version of my own browser probe
   wrongly reported as unlabelled.
 
-  UpgradeModal, ShareChatDialog and TopBar have no importers. They are
-  excused from the behaviour requirement, not from existing: if one is
-  ever mounted, it fails this guard the same day.
+  Dialog, Modal, UpgradeModal, ShareChatDialog and TopBar were exempt
+  here while they existed unmounted; Phase 2 deleted them
+  (PURIFICATION_EVIDENCE.md P2-C). Every dialog now in app/ owes the
+  full behaviour.
 */
-const BEHAVIOUR_EXEMPT = new Set([
-  "Dialog.tsx",
-  "Modal.tsx",
-  "CommandPalette.tsx",
-  "UpgradeModal.tsx",
-  "ShareChatDialog.tsx",
-  "TopBar.tsx",
-]);
+const BEHAVIOUR_EXEMPT = new Set(["CommandPalette.tsx"]);
 
 const DIALOG_PAGES = pagesDeclaringDialogs(join(ROOT, "app")).map(
   (path) => ({
