@@ -496,7 +496,13 @@ export const POST = withAuth(async (
     const response: UploadResponse = {
       success: true,
       file: {
-        id: crypto.randomUUID(),
+        /*
+          The storage path is the only identifier this upload has: the
+          route writes to storage, not to public.files. A random UUID
+          here named a row that did not exist
+          (docs/engineering/PURIFICATION_EVIDENCE.md P2-E06).
+        */
+        id: storagePath,
         name: sanitizeFileName(
           file.name
         ),

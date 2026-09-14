@@ -29,11 +29,11 @@ The other columns are filled as batches land; blank means not yet done.
 | Dead code — `types/` | 12 files / 9,474 lines | 12 files / 9,474 lines | — | 0 | P2-B |
 | Dead code — components | 23 files / 13,903 lines | 23 files / 13,903 lines | — | 0 | P2-C |
 | Duplicate architecture | AI transport 5 routes + 1 dead client; keyword search 2 endpoints + 1 dead engine; agent concepts 4; plan vocabularies 3; error-response shapes ~28 route-local helpers | | | | P2-F |
-| Fake implementations | 9 FAKE-PRODUCTION findings (fake-behaviour pass) | | | | P2-E |
+| Fake implementations | 9 FAKE-PRODUCTION findings (fake-behaviour pass) | 2 fabricated API responses corrected (`/api/files/upload` id, `/api/canvas` GET status and empty-canvas success) | — | Re-counted by the final fake re-scan; the `/api/usage`, billing and `/api/stream` findings belong to P2-F | P2-E06, P2-E07 |
 | Mock persistence | 2 FAKE-PERSISTENCE (`/chat/[id]` localStorage; settings localStorage, disclosed) · 1 DURABILITY-GAP (dead `lib/security/audit.ts`) | | | | P2-A02, P2-E |
 | Duplicate types | plan ids 4 copies outside `lib/plans.ts`; `AgentStatus` 4 vocabularies; `services/action-types.ts` 410 lines behind one type-only import | | | | P2-B, P2-F |
 | Legacy routes | 11 routes with no UI consumer + 1 retired (`/api/tasks/execute`) · 3 orphan pages | | | | P2-G |
 | Unused dependencies | 3 candidates (`openai`, `@eslint/eslintrc`, `clsx`) | 3 declared (23 installed packages) | — | 0 known; `server-only` is used but undeclared (noted, not changed) | P2-D |
-| Fake UI | 10 findings (app inventory pass) | | | | P2-E |
+| Fake UI | 10 findings (app inventory pass) | 1 page deleted (`/projects/search`, 584 lines); 4 pages stripped of sample data (`/knowledge/[id]`, `/agents/[id]`, `/projects/[id]`, `/projects/new`); 3 copy surfaces corrected (`/apps`, `/marketplace/[id]`, command palette) | `/knowledge/[id]` now reads `GET /api/knowledge?id=` | Re-counted by the final fake re-scan | P2-E01–E05, P2-E08 |
 | Obsolete docs | to be counted in P2-H | | | | P2-H |
 | Security-risk dead code | 5 (`validation.ts`, `audit.ts`, `billing/permissions.ts`, `data/client.ts`, `observability/logger.ts`) | | | | P2-A |

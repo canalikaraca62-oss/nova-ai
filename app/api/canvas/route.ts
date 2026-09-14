@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { withAuth } from "@/lib/api/withAuth";
 import { enforceUsage } from "@/lib/api/usageGuard";
 import { chatCompletion } from "@/lib/ai/provider";
-import { selectModel } from "@/lib/ai/registry";
+import { providerApiKey, selectModel } from "@/lib/ai/registry";
 import { clampMaxTokens } from "@/lib/usage/entitlements";
 
 export const runtime = "nodejs";
@@ -413,6 +413,24 @@ ${sourceText}
         parsed
       );
 
+    /*
+      A reply that parses into no blocks is not a canvas. It used to be
+      returned as success: true with an empty "Untitled Canvas"
+      (docs/engineering/PURIFICATION_EVIDENCE.md P2-E07). The call was
+      still made, so it stays metered above.
+    */
+    if (canvas.blocks.length === 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "The model did not return a usable canvas.",
+        },
+        {
+          status: 502,
+        }
+      );
+    }
+
     return NextResponse.json(
       {
         success: true,
@@ -447,13 +465,27 @@ ${sourceText}
 ================================================== */
 
 export async function GET() {
+  /*
+    Reports what this deployment can do, from the same registry the POST
+    path uses. It used to answer "operational" unconditionally while POST
+    answered 503 whenever no provider was configured
+    (docs/engineering/PURIFICATION_EVIDENCE.md P2-E07).
+  */
+  const model = selectModel(null, "chat", "free");
+
+  const configured =
+    model.ok &&
+    providerApiKey(model.model.provider) !== null;
+
   return NextResponse.json(
     {
       service:
         "SYRAVEN Canvas API",
 
       status:
-        "operational",
+        configured
+          ? "operational"
+          : "not_configured",
 
       capabilities: [
         "document",
