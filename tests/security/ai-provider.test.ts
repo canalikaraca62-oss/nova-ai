@@ -278,6 +278,12 @@ void describe("Routes accepting a model validate it", () => {
      * a 410 (PURIFICATION_EVIDENCE.md P2-G05).
      */
     "app/api/voice/speak/route.ts",
+    /*
+     * Added when transcription moved onto the registry
+     * (PURIFICATION_EVIDENCE.md P2-G07): it now resolves a caller's model
+     * and must return the refusal.
+     */
+    "app/api/voice/transcribe/route.ts",
   ];
 
   for (const id of MODEL_ACCEPTING) {

@@ -1253,7 +1253,143 @@ deleted or staged.
 **RESULT (P2-G05 / G-B5):** implemented and verified — all steps PASS.
 **Not committed**; awaiting founder instruction.
 
+#### P2-G07 — consolidate the voice routes onto the registry (founder decision 2026-09-15: "Consolidate onto the registry", G-B6)
+
+| ID | Route | Duplicate and its drift (file:line at `6d67a48`) | Consumers | Tests that pin it | Canonical owner | Decision |
+|---|---|---|---|---|---|---|
+| P2-G07a | `POST /api/voice/transcribe` | Chooses its model from its own `ALLOWED_MODELS` (`:46-50`) — including `gpt-4o-transcribe`, which is **not in the registry** — with no plan check, and silently substitutes `gpt-4o-mini-transcribe` for anything it does not recognise (`getRequestedModel`, `:160-175`). Reads `process.env.OPENAI_API_KEY` directly (`:338-339`) and posts to a hardcoded URL (`OPENAI_TRANSCRIPT_URL`, `:14-15`) | None in the product (the `/apps` voice card says "Coming soon") | `usage-enforcement` (metered), `api-auth-boundary` (AI-spending), `middleware-gate` (protected), `purification-authorities` P2-F09 (error mapping) | `lib/ai/registry.ts` — `selectModel(…, "transcription", plan)` (`whisper-1`, `gpt-4o-mini-transcribe`), `providerApiKey`, `PROVIDER_ENDPOINTS` | CONSOLIDATE |
+| P2-G07b | `POST` / `GET /api/voice/speak` | Already validates the model with `selectModel(…, "speech", effectivePlan)` (`:423-441`), but its default is env `OPENAI_TTS_MODEL` (`:31-33`, also reported by the public `GET`, `:247-248`); reads `process.env.OPENAI_API_KEY` directly in `GET` (`:238`) and `POST` (`:298-299`); posts to a hardcoded URL (`OPENAI_TTS_URL`, `:28-29`) | None in the product; `GET` is a public status probe (`middleware.ts`) | `ai-provider` (`MODEL_ACCEPTING`: model resolved + denial returned), `usage-enforcement`, `api-auth-boundary`, `middleware-gate` (public status GET), `purification-authorities` P2-F09 | Same — `selectModel(…, "speech", plan)` (`gpt-4o-mini-tts`) | CONSOLIDATE |
+
+**Plan (as approved):**
+1. Transcribe: delete `ALLOWED_MODELS`, `getRequestedModel` and
+   `OPENAI_TRANSCRIPT_URL`. The model is `selectModel(requested,
+   "transcription", guard.entitlement.effectivePlan)`; an unknown or
+   plan-excluded model answers 400 instead of being silently replaced. The
+   key is `providerApiKey(model.provider)` (503 "Voice transcription is not
+   configured." when absent); the URL is
+   `PROVIDER_ENDPOINTS[model.provider].baseUrl + "/audio/transcriptions"`.
+2. Speak: delete the env default and `OPENAI_TTS_URL`. The default is the
+   registry's (`selectModel(null, "speech", …)`); key and URL from the
+   registry in `POST`; the public `GET` reports configuration and the
+   default model from the registry (no `process.env`).
+3. Unchanged: auth, usage enforcement and order, `guard.record`, file / text
+   validation, the P2-F09 error mapping, timeouts, success response shapes,
+   the public status `GET` exemption for speak.
+
+**Behaviour changes, recorded:** transcribe's default model becomes the
+registry default, `whisper-1` (was `gpt-4o-mini-transcribe`); a request
+naming `gpt-4o-transcribe` or any unregistered model now answers 400 (it
+was silently served by the default); a deployment that set
+`OPENAI_TTS_MODEL` no longer changes speak's default. Neither route has a
+product caller.
+
+**Guards planned:** a P2-G07 block in `purification-authorities` for both
+routes — no `process.env`, no hardcoded vendor URL, key from
+`providerApiKey(<model>.provider)`, URL from `PROVIDER_ENDPOINTS[…]`,
+plan-aware `selectModel` for the right capability; transcribe keeps no
+private model list and no `gpt-4o-transcribe`. `ai-provider`
+`MODEL_ACCEPTING` gains transcribe (it now resolves a model and must return
+the denial).
+
+**Mutations planned:** transcribe — hardcoded URL; direct key read; plan
+check dropped (`"enterprise"`); unregistered model re-added; denial not
+returned. Speak — env default model; hardcoded URL; direct key read in
+`GET`.
+
+#### What changed (uncommitted at `6d67a48`)
+
+- `app/api/voice/transcribe/route.ts` — `ALLOWED_MODELS`, `getRequestedModel`,
+  `OPENAI_TRANSCRIPT_URL` and the early `process.env.OPENAI_API_KEY` read
+  deleted. The model is `selectModel(requestedModel, "transcription",
+  guard.entitlement.effectivePlan)` (refusal → 400 "The requested
+  transcription model is not available."); the key is
+  `providerApiKey(transcriptionModel.model.provider)` (absent → 503 "Voice
+  transcription is not configured."); `requestTranscription` takes the
+  registry URL
+  `PROVIDER_ENDPOINTS[transcriptionModel.model.provider].baseUrl +
+  "/audio/transcriptions"`.
+- `app/api/voice/speak/route.ts` — `OPENAI_TTS_URL`, the env
+  `OPENAI_TTS_MODEL` default and the early key read deleted. `POST` keeps
+  `selectModel(requestedModel, "speech", guard.entitlement.effectivePlan)`,
+  then reads the key with `providerApiKey(speechModel.model.provider)`
+  (absent → the same 503 as before) and posts to
+  `PROVIDER_ENDPOINTS[…].baseUrl + "/audio/speech"`. The public `GET` reports
+  `configured`, `provider` and `model` from `selectModel(null, "speech",
+  "free")` and `providerApiKey`.
+- `tests/security/ai-provider.test.ts` — `MODEL_ACCEPTING` gains
+  `app/api/voice/transcribe/route.ts`.
+- `tests/security/purification-authorities.test.ts` — P2-G07 block: 6 tests
+  (per route: no `process.env`; endpoint and key from the registry; plus
+  plan-aware `selectModel` for each capability, and no private model list /
+  `gpt-4o-transcribe` in transcribe).
+- Leftover sweep of `app/api/voice`: `process.env`, vendor URLs,
+  `OPENAI_TTS_URL`, `OPENAI_TRANSCRIPT_URL`, `DEFAULT_MODEL`,
+  `ALLOWED_MODELS`, `getRequestedModel`, `gpt-4o-transcribe` — none left;
+  `OPENAI_TTS_MODEL` appears only in speak's explanatory comment.
+- Totals (`git diff --stat HEAD`): code and tests 4 files, +162 / −81; with
+  this file 5 files, +208 / −82.
+
+#### Verification (each step alone, 300 MB gate before launch)
+
+| # | Step | Command | Result | Free RAM before → after |
+|---|---|---|---|---|
+| 1 | Affected guard suites | `node --test --test-concurrency=1 …` `purification-authorities`, `ai-provider`, `usage-enforcement`, `api-auth-boundary`, `architecture-invariants`, `middleware-gate`, `observability-redaction` | **PASS** — exit 0; 448 tests, 61 suites: 441 pass, 0 fail, 7 todo (the P2-F09 error-mapping blocks for both routes still pass) | 352 → 376 MB |
+| 2 | Mutations | 8 mutations, below | **PASS** — 8 of 8 caught; both routes restored to their original hash | 501 … 548 MB per mutation |
+| 3 | Regression suites | `node --test --test-concurrency=1 …` `data-access`, `api-reference-integrity`, `defect-remediation`, `model-routing`, `authorization-boundary`, `fabricated-results` | **PASS** — exit 0; 160 tests, 39 suites: 160 pass, 0 fail | 471 → 486 MB |
+| 4 | Typecheck | `npx tsc --noEmit -p tsconfig.json` (`--max-old-space-size=1536`) | **PASS** — exit 0, 0 `error TS` lines | 450 → 819 MB |
+| 5 | Full suite | `npm run test:lowmem` | **PASS** — exit 0; 1,841 tests, 348 suites: 1,834 pass, 0 fail, 0 skipped, 7 todo (64.7 s) | 716 → 665 MB |
+| 6 | Lint | `npx eslint app/api/voice/transcribe/route.ts app/api/voice/speak/route.ts tests/security/ai-provider.test.ts tests/security/purification-authorities.test.ts` (`--max-old-space-size=768`) | **PASS** — exit 0, 0 errors, 0 warnings | 658 → 815 MB |
+
+**Test-count delta accounted:** 1,841 vs 1,833 (after G-B5) = +6 (P2-G07
+block) +2 (`ai-provider` `MODEL_ACCEPTING` generates 2 tests per route;
+transcribe added). Suites 348 vs 347 = the new P2-G07 `describe`. The 7
+todos are the documented limitations; "failing tests:" in steps 1 and 5
+lists only those.
+
+#### Mutation testing
+
+Each mutation re-created one defect, ran the guard that owns it, and
+restored the original bytes in a `finally` block; both routes were backed
+up to the scratchpad first. SHA-256, first 12 hex.
+
+| # | Defect re-created | Route | Result | Hash before = after |
+|---|---|---|---|---|
+| M1 | Hardcoded vendor URL (`https://api.openai.com/v1` in place of `PROVIDER_ENDPOINTS[…].baseUrl`) | transcribe | **Caught** — `purification-authorities` 53 / 1: "transcribe takes its endpoint and key from the registry" | `D16F1385F11E` ✔ |
+| M2 | Key read from the environment (`process.env.OPENAI_API_KEY ?? null`) | transcribe | **Caught** — 52 / 2: "transcribe reads no environment variable directly", "… takes its endpoint and key from the registry" | `D16F1385F11E` ✔ |
+| M3 | Plan check dropped (`"enterprise"` for `guard.entitlement.effectivePlan`; 1 occurrence) | transcribe | **Caught** — 53 / 1: "transcribe resolves its model through the registry, plan-aware" | `D16F1385F11E` ✔ |
+| M4 | Unregistered model re-added (`["gpt-4o-transcribe"]`) | transcribe | **Caught** — 53 / 1: same test | `D16F1385F11E` ✔ |
+| M5 | Model refusal not returned (`if (false)` for `if (!transcriptionModel.ok)`) | transcribe | **Caught** — `ai-provider` 38 / 1: "app/api/voice/transcribe/route.ts returns the policy denial" | `D16F1385F11E` ✔ |
+| M6 | Env default model re-added (`requestedModel ?? process.env.OPENAI_TTS_MODEL`) | speak | **Caught** — 52 / 2: "speak reads no environment variable directly", "speak resolves its model through the registry, plan-aware" | `3BDCA310C2E7` ✔ |
+| M7 | Hardcoded vendor URL | speak | **Caught** — 53 / 1: "speak takes its endpoint and key from the registry" | `3BDCA310C2E7` ✔ |
+| M8 | `GET` reads the key from the environment (`Boolean(process.env.OPENAI_API_KEY)`) | speak | **Caught** — 53 / 1: "speak reads no environment variable directly" | `3BDCA310C2E7` ✔ |
+
+`git status --short` identical before and after; `syraven-audit.zip` size
+and timestamp unchanged. All eight ran in one pass; no memory-gate block in
+this batch.
+
+#### Known limitations
+
+- Behaviour changes, as recorded in the plan: transcribe's default model is
+  now the registry default `whisper-1` (was `gpt-4o-mini-transcribe`);
+  `gpt-4o-transcribe` and any unregistered model answer 400; a plan-excluded
+  model answers 400 (not the 403 `resolveAiPolicy` uses). A deployment that
+  set `OPENAI_TTS_MODEL` no longer changes speak's default.
+- Transcribe still meters with `guard.record({})` (no model id), as before.
+- Both routes keep their own `fetch` rather than a shared provider adapter
+  for audio; the endpoint and key now come from the registry.
+- Neither route has a product caller; no live provider call was made and no
+  production build was run.
+
+#### Not done
+
+No commit, push, deploy, build, migration, or secret / OAuth change.
+G-B7 and P2-H not started. `syraven-audit.zip` not opened, moved, deleted
+or staged.
+
+**RESULT (P2-G07 / G-B6):** implemented and verified — all steps PASS.
+**Not committed**; awaiting founder instruction.
+
 ### Later groups
 
-Recorded as each batch is prepared: remaining P2-G batches (G-B6, G-B7),
+Recorded as each batch is prepared: remaining P2-G batch (G-B7),
 documentation (P2-H).

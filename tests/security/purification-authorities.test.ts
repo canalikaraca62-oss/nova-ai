@@ -377,3 +377,52 @@ void describe("P2-G: retired routes answer 410 and do nothing", () => {
     });
   }
 });
+
+/* -------------------------------------------------------------------------- */
+/*       P2-G07 — voice routes take model, key and endpoint from the registry */
+/* -------------------------------------------------------------------------- */
+
+void describe("P2-G07: voice routes take model, key and endpoint from the registry", () => {
+  const TRANSCRIBE = code("app", "api", "voice", "transcribe", "route.ts");
+  const SPEAK = code("app", "api", "voice", "speak", "route.ts");
+
+  for (const [name, source] of [
+    ["transcribe", TRANSCRIBE],
+    ["speak", SPEAK],
+  ] as const) {
+    void test(`${name} reads no environment variable directly`, () => {
+      assert.ok(
+        !/process\.env/.test(source),
+        `${name} reads a key or a model name from the environment again.`,
+      );
+    });
+
+    void test(`${name} takes its endpoint and key from the registry`, () => {
+      assert.ok(
+        !/api\.openai\.com|api\.groq\.com/.test(source),
+        `${name} hardcodes a vendor URL again.`,
+      );
+      assert.match(source, /PROVIDER_ENDPOINTS\[\s*\w+\.model\.provider\s*\]\.baseUrl/);
+      assert.match(source, /providerApiKey\(\s*\w+\.model\.provider\s*\)/);
+    });
+  }
+
+  void test("transcribe resolves its model through the registry, plan-aware", () => {
+    assert.match(
+      TRANSCRIBE,
+      /selectModel\(\s*requestedModel,\s*"transcription",\s*guard\.entitlement\.effectivePlan\s*\)/,
+      "CRITICAL: the transcription model is not checked against the caller's plan.",
+    );
+    assert.ok(
+      !/ALLOWED_MODELS|getRequestedModel|gpt-4o-transcribe/.test(TRANSCRIBE),
+      "A private model list -- or a model the registry does not approve -- is back.",
+    );
+  });
+
+  void test("speak resolves its model through the registry, plan-aware", () => {
+    assert.match(
+      SPEAK,
+      /selectModel\(\s*requestedModel,\s*"speech",\s*guard\.entitlement\.effectivePlan\s*\)/,
+    );
+  });
+});

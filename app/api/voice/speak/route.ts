@@ -2,7 +2,11 @@ import { NextResponse } from "next/server";
 
 import { withAuth } from "@/lib/api/withAuth";
 import { enforceUsage } from "@/lib/api/usageGuard";
-import { selectModel } from "@/lib/ai/registry";
+import {
+  PROVIDER_ENDPOINTS,
+  providerApiKey,
+  selectModel,
+} from "@/lib/ai/registry";
 import { normalizeHttpError } from "@/lib/ai/provider";
 
 export const runtime = "nodejs";
@@ -25,12 +29,12 @@ export const revalidate = 0;
    - Safe error handling
 ================================================== */
 
-const OPENAI_TTS_URL =
-  "https://api.openai.com/v1/audio/speech";
-
-const DEFAULT_MODEL =
-  process.env.OPENAI_TTS_MODEL?.trim() ||
-  "gpt-4o-mini-tts";
+/*
+  Model, key and endpoint come from lib/ai/registry.ts. This file used to
+  default its model from OPENAI_TTS_MODEL, read the key from the
+  environment and hardcode the endpoint (PURIFICATION_EVIDENCE.md
+  P2-G07).
+*/
 
 const DEFAULT_VOICE =
   "alloy";
@@ -233,19 +237,26 @@ function json(
 ================================================== */
 
 export async function GET() {
+  /*
+    Configuration as the registry reads it: the model and key the POST
+    path would use for a caller who names no model.
+  */
+  const defaultSpeech =
+    selectModel(null, "speech", "free");
+
   const configured =
-    Boolean(
-      process.env.OPENAI_API_KEY?.trim()
-    );
+    defaultSpeech.ok &&
+    providerApiKey(defaultSpeech.model.provider) !== null;
 
   return json({
     service: "voice-speak",
     endpoint:
       "/api/voice/speak",
     configured,
-    provider: "openai",
+    provider:
+      defaultSpeech.ok ? defaultSpeech.model.provider : null,
     model:
-      DEFAULT_MODEL,
+      defaultSpeech.ok ? defaultSpeech.model.id : null,
     capabilities: {
       textToSpeech: true,
       streaming: false,
@@ -295,22 +306,6 @@ export const POST = withAuth(async (
     Date.now();
 
   try {
-    const apiKey =
-      process.env.OPENAI_API_KEY?.trim();
-
-    if (!apiKey) {
-      return json(
-        {
-          error: {
-            code:
-              "OPENAI_NOT_CONFIGURED",
-            message:
-              "OPENAI_API_KEY is not configured.",
-          },
-        },
-        503
-      );
-    }
 
     let body:
       SpeakRequestBody = {};
@@ -443,6 +438,24 @@ export const POST = withAuth(async (
     const model =
       speechModel.model.id;
 
+    /* The key of the chosen model's own provider (P2-G07). */
+    const apiKey =
+      providerApiKey(speechModel.model.provider);
+
+    if (apiKey === null) {
+      return json(
+        {
+          error: {
+            code:
+              "OPENAI_NOT_CONFIGURED",
+            message:
+              "OPENAI_API_KEY is not configured.",
+          },
+        },
+        503
+      );
+    }
+
     const speed =
       clamp(
         getNumber(
@@ -470,7 +483,7 @@ export const POST = withAuth(async (
     try {
       response =
         await fetch(
-          OPENAI_TTS_URL,
+          `${PROVIDER_ENDPOINTS[speechModel.model.provider].baseUrl}/audio/speech`,
           {
             method:
               "POST",

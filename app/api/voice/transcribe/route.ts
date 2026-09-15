@@ -3,6 +3,11 @@ import { NextResponse } from "next/server";
 import { withAuth } from "@/lib/api/withAuth";
 import { enforceUsage } from "@/lib/api/usageGuard";
 import { normalizeHttpError } from "@/lib/ai/provider";
+import {
+  PROVIDER_ENDPOINTS,
+  providerApiKey,
+  selectModel,
+} from "@/lib/ai/registry";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -10,9 +15,6 @@ export const dynamic = "force-dynamic";
 /* ==================================================
    SYRAVEN VOICE TRANSCRIPTION API
 ================================================== */
-
-const OPENAI_TRANSCRIPT_URL =
-  "https://api.openai.com/v1/audio/transcriptions";
 
 const MAX_FILE_SIZE = 25 * 1024 * 1024;
 
@@ -41,12 +43,6 @@ const SUPPORTED_MIME_TYPES = new Set<string>([
   "audio/webm",
   "video/mp4",
   "video/webm",
-]);
-
-const ALLOWED_MODELS = new Set<string>([
-  "gpt-4o-mini-transcribe",
-  "gpt-4o-transcribe",
-  "whisper-1",
 ]);
 
 /* ==================================================
@@ -157,23 +153,6 @@ function isSupportedAudioFile(
    FORM DATA HELPERS
 ================================================== */
 
-function getRequestedModel(
-  value: FormDataEntryValue | null
-): string {
-  if (typeof value !== "string") {
-    return "gpt-4o-mini-transcribe";
-  }
-
-  const model =
-    value.trim();
-
-  if (!ALLOWED_MODELS.has(model)) {
-    return "gpt-4o-mini-transcribe";
-  }
-
-  return model;
-}
-
 function getOptionalString(
   value: FormDataEntryValue | null,
   maxLength: number
@@ -262,9 +241,12 @@ function parseOpenAIResponse(
 ================================================== */
 
 async function requestTranscription({
+  url,
   apiKey,
   formData,
 }: {
+  /* The registry's endpoint for the chosen model's provider (P2-G07). */
+  url: string;
   apiKey: string;
   formData: FormData;
 }): Promise<Response> {
@@ -279,7 +261,7 @@ async function requestTranscription({
 
   try {
     return await fetch(
-      OPENAI_TRANSCRIPT_URL,
+      url,
       {
         method: "POST",
 
@@ -331,29 +313,6 @@ export const POST = withAuth(async (
     crypto.randomUUID();
 
   try {
-    /* ==============================================
-       ENVIRONMENT
-    ============================================== */
-
-    const apiKey =
-      process.env.OPENAI_API_KEY?.trim();
-
-    if (!apiKey) {
-      console.error(
-        "SYRAVEN VOICE TRANSCRIBE: Missing OPENAI_API_KEY",
-        {
-          requestId,
-        }
-      );
-
-      return createErrorResponse(
-        "Voice transcription is not configured.",
-        503,
-        undefined,
-        requestId
-      );
-    }
-
     /* ==============================================
        CONTENT TYPE VALIDATION
     ============================================== */
@@ -467,10 +426,62 @@ export const POST = withAuth(async (
        REQUEST OPTIONS
     ============================================== */
 
-    const model =
-      getRequestedModel(
-        formData.get("model")
+    /*
+      The registry chooses the model, checked against the caller's plan,
+      and the key and endpoint belong to that model's provider
+      (PURIFICATION_EVIDENCE.md P2-G07). This used to be a private list --
+      including a model the registry does not approve -- that silently
+      served a default for anything it did not recognise, with a key read
+      straight from the environment and a hardcoded endpoint.
+    */
+    const requestedModel =
+      getOptionalString(
+        formData.get("model"),
+        100
       );
+
+    const transcriptionModel =
+      selectModel(
+        requestedModel,
+        "transcription",
+        guard.entitlement.effectivePlan
+      );
+
+    if (!transcriptionModel.ok) {
+      return createErrorResponse(
+        "The requested transcription model is not available.",
+        400,
+        undefined,
+        requestId
+      );
+    }
+
+    const model =
+      transcriptionModel.model.id;
+
+    const apiKey =
+      providerApiKey(transcriptionModel.model.provider);
+
+    if (apiKey === null) {
+      console.error(
+        "SYRAVEN VOICE TRANSCRIBE: provider not configured",
+        {
+          requestId,
+          provider:
+            transcriptionModel.model.provider,
+        }
+      );
+
+      return createErrorResponse(
+        "Voice transcription is not configured.",
+        503,
+        undefined,
+        requestId
+      );
+    }
+
+    const transcriptionUrl =
+      `${PROVIDER_ENDPOINTS[transcriptionModel.model.provider].baseUrl}/audio/transcriptions`;
 
     const requestedLanguage =
       getOptionalString(
@@ -535,6 +546,8 @@ export const POST = withAuth(async (
     try {
       response =
         await requestTranscription({
+          url:
+            transcriptionUrl,
           apiKey,
           formData:
             upstreamFormData,
