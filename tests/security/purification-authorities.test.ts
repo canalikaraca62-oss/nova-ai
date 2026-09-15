@@ -426,3 +426,49 @@ void describe("P2-G07: voice routes take model, key and endpoint from the regist
     );
   });
 });
+
+/* -------------------------------------------------------------------------- */
+/*          P2-G08 — /api/agents stores only a registry-approved model        */
+/* -------------------------------------------------------------------------- */
+
+void describe("P2-G08: /api/agents stores only a registry-approved model", () => {
+  const AGENTS = code("app", "api", "agents", "route.ts");
+
+  void test("no model comes from the environment or a hardcoded default", () => {
+    assert.ok(
+      !/process\.env/.test(AGENTS),
+      "An env-named model can reach the agents table again.",
+    );
+    assert.ok(
+      !/"(?:llama-[\w.-]+|gpt-[\w.-]+)"/.test(AGENTS),
+      "A hardcoded model id is a second copy of the registry's default.",
+    );
+  });
+
+  void test("a named model is validated against the registry and the caller's plan", () => {
+    assert.match(AGENTS, /resolveEntitlement\(\s*session\.supabase,\s*session\.userId\s*\)/);
+    assert.match(
+      AGENTS,
+      /selectModel\(\s*requestedModel,\s*"chat",\s*entitlement\.entitlement\.effectivePlan\s*\)/,
+      "CRITICAL: a stored model is not checked against the caller's plan.",
+    );
+    assert.match(
+      AGENTS,
+      /if \(!selection\.ok\)\s*\{\s*return errorResponse\(/,
+      "A refused model must be refused, not stored.",
+    );
+  });
+
+  void test("only the registry's choice is stored as the model", () => {
+    assert.match(AGENTS, /\bmodel\s*=\s*selection\.model\.id\b/);
+    assert.ok(
+      !/\bmodel\s*=\s*requestedModel\b/.test(AGENTS),
+      "The client's raw value is stored as the model again.",
+    );
+  });
+
+  void test("a UI preference label is kept as a preference, not a model", () => {
+    assert.match(AGENTS, /modelPreference\s*=\s*requestedModel/);
+    assert.match(AGENTS, /configuration:\s*\{[\s\S]{0,200}?modelPreference/);
+  });
+});

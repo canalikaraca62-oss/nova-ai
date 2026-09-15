@@ -1389,7 +1389,120 @@ or staged.
 **RESULT (P2-G07 / G-B6):** implemented and verified — all steps PASS.
 **Not committed**; awaiting founder instruction.
 
+#### P2-G08 — `/api/agents` stores a model only the registry approved (founder decision 2026-09-15: "Preference kept, model only if registry id", G-B7)
+
+| ID | Route | Drift (file:line at `dbac1d5`) | Consumers | Tests that pin it | Canonical owner | Decision |
+|---|---|---|---|---|---|---|
+| P2-G08 | `POST /api/agents` (agent catalogue create) | `model = body.model \|\| process.env.AI_DEFAULT_MODEL \|\| process.env.GROQ_MODEL \|\| "llama-3.3-70b-versatile"` (`route.ts:694-701`) is stored in `agents.model` with no registry or plan check: a client string, an env-named model or a hardcoded id. The only caller, `/agents/create` (`page.tsx:416-435`), sends a **preference label** — `"auto" \| "fast" \| "smart" \| "deep"` (`:47-51`, select `:1671-1704`) — so today every UI-created agent stores `"auto"` etc. as its "model", and `/agents` displays it (`app/agents/page.tsx:412-414`). Catalogue agents never run through a model (execution uses `lib/orchestration/registry.ts` agents); `agents.model` is nullable | `/agents/create` (POST), `/agents` (list shows `agent.model`) | None on model storage — `middleware-gate` (protected), `fabricated-results` (response shape `{ success, agents }`) | `lib/ai/registry.ts` `selectModel(…, "chat", plan)`; plan from `lib/usage/entitlements.ts` `resolveEntitlement` on the caller's RLS client | CONSOLIDATE — see below |
+
+**Decision (founder, 2026-09-15).** A registry chat model id is validated
+with `selectModel(requestedModel, "chat", effectivePlan)` — `effectivePlan`
+from `resolveEntitlement(session.supabase, session.userId)` — and stored in
+`model`; a refusal answers 400, an unreadable entitlement 503. A UI
+preference label (`auto`, `fast`, `smart`, `deep`) is stored as
+`configuration.modelPreference` with `model` null. Anything else answers 400.
+No env fallback and no hardcoded default: an agent with no model stays null.
+
+**Behaviour changes, recorded:** agents created from the UI now have
+`model` null and the label in `configuration.modelPreference` (was the
+label in `model`), so `/agents` shows no model for them; a request naming an
+unregistered or plan-excluded model is refused (was stored verbatim); a
+deployment's `AI_DEFAULT_MODEL` / `GROQ_MODEL` no longer reach the table.
+Existing rows are untouched (no data migration).
+
+**Guards planned:** a P2-G08 block in `purification-authorities` — the
+route reads no `process.env`; hardcodes no model id; stores `model` only
+from `selectModel(…, "chat", …effectivePlan)` with the plan from
+`resolveEntitlement(session.supabase, session.userId)`; returns the
+refusal; keeps the preference labels in `configuration.modelPreference`.
+
+**Mutations planned:** M1 env fallback re-added; M2 hardcoded default
+model re-added; M3 plan check dropped (`"enterprise"`); M4 the raw client
+value stored instead of the selection; M5 the refusal not returned.
+
+#### What changed (uncommitted at `dbac1d5`)
+
+- `app/api/agents/route.ts` — the `body.model || process.env.AI_DEFAULT_MODEL
+  || process.env.GROQ_MODEL || "llama-3.3-70b-versatile"` fallback is gone.
+  `requestedModel` (from `body.model`): a preference label (`auto`, `fast`,
+  `smart`, `deep`) sets `modelPreference` and leaves `model` null; any other
+  value is checked with `selectModel(requestedModel, "chat",
+  entitlement.entitlement.effectivePlan)`, the plan from
+  `resolveEntitlement(session.supabase, session.userId)` — unreadable
+  entitlement → 503 `ENTITLEMENT_UNAVAILABLE`, refusal → 400
+  `UNKNOWN_MODEL`, acceptance → `model = selection.model.id`. No value →
+  both null. `configuration` gains `modelPreference`. The duplicate
+  `next/server` import (present at HEAD) is merged, since the file was
+  touched.
+- `tests/security/purification-authorities.test.ts` — P2-G08 block: 4 tests
+  (no `process.env` and no hardcoded model id; plan-aware `selectModel`
+  after `resolveEntitlement` with the refusal returned; only
+  `selection.model.id` stored; preference kept in
+  `configuration.modelPreference`).
+- Leftover sweep of the route: `process.env`, `llama-`, `gpt-`,
+  `AI_DEFAULT_MODEL`, `GROQ_MODEL` — none left.
+- Totals (`git diff --stat HEAD`): code and tests 2 files, +113 / −7; with
+  this file 3 files, +148 / −9.
+
+#### Verification (each step alone, 300 MB gate before launch)
+
+| # | Step | Command | Result | Free RAM before → after |
+|---|---|---|---|---|
+| 1 | Affected guard suites | `node --test --test-concurrency=1 …` `purification-authorities`, `fabricated-results`, `middleware-gate`, `api-auth-boundary`, `architecture-invariants`, `usage-enforcement`, `ai-provider` | **PASS** — exit 0; 471 tests, 67 suites: 464 pass, 0 fail, 7 todo. First launch refused at the gate (246 MB) | 467 → 346 MB |
+| 2 | Mutations | 5 mutations, below | **PASS** — 5 of 5 caught; the route restored to its original hash | 362 … 478 MB per mutation |
+| 3 | Regression suites | `node --test --test-concurrency=1 …` `data-access`, `api-reference-integrity`, `defect-remediation`, `model-routing`, `agent-orchestration`, `authorization-boundary` | **PASS** — exit 0; 158 tests, 36 suites: 158 pass, 0 fail | 326 → 421 MB |
+| 4 | Typecheck | `npx tsc --noEmit -p tsconfig.json` (`--max-old-space-size=1536`) | **PASS** — exit 0, 0 `error TS` lines. First launch refused at the gate (294 MB) | 321 → 840 MB |
+| 5 | Full suite | `npm run test:lowmem` | **PASS** — exit 0; 1,845 tests, 349 suites: 1,838 pass, 0 fail, 0 skipped, 7 todo (68.5 s) | 587 → 530 MB |
+| 6 | Lint | `npx eslint app/api/agents/route.ts tests/security/purification-authorities.test.ts` (`--max-old-space-size=768`) | **PASS** — exit 0, 0 errors, 0 warnings | 502 → 977 MB |
+
+**Test-count delta accounted:** 1,845 vs 1,841 (after G-B6) = +4 (P2-G08
+block). Suites 349 vs 348 = the new P2-G08 `describe`. The 7 todos are the
+documented limitations; "failing tests:" in steps 1 and 5 lists only those.
+
+#### Mutation testing
+
+Each mutation re-created one defect in `app/api/agents/route.ts`, ran
+`purification-authorities`, and restored the original bytes in a `finally`
+block; the route was backed up to the scratchpad first. SHA-256, first 12
+hex.
+
+| # | Defect re-created | Result | Hash before = after |
+|---|---|---|---|
+| M1 | Env fallback re-added (`let model = process.env.GROQ_MODEL ?? null`) | **Caught** — 57 / 1: "no model comes from the environment or a hardcoded default" | `C5731EDD4C53` ✔ |
+| M2 | Hardcoded default re-added (`let model = "llama-3.3-70b-versatile"`) | **Caught** — 57 / 1: same test | `C5731EDD4C53` ✔ |
+| M3 | Plan check dropped (`"enterprise"` for `entitlement.entitlement.effectivePlan`; 1 occurrence) | **Caught** — 57 / 1: "a named model is validated against the registry and the caller's plan" | `C5731EDD4C53` ✔ |
+| M4 | Raw client value stored (`model = requestedModel`) | **Caught** — 57 / 1: "only the registry's choice is stored as the model" | `C5731EDD4C53` ✔ |
+| M5 | Refusal not returned (`if (false)` for `if (!selection.ok)`) | **Caught** — 57 / 1: "a named model is validated against the registry and the caller's plan" | `C5731EDD4C53` ✔ |
+
+`git status --short` identical before and after; `syraven-audit.zip` size
+and timestamp unchanged. **Memory:** step 1 and step 4 were each refused
+once at the gate (246 MB, 294 MB; nothing started); a memory-only watcher
+(ran nothing) reported headroom each time (340 MB, 396 MB) before the step
+ran at ≥ 300 MB. All five mutations ran in one pass.
+
+#### Known limitations
+
+- Behaviour changes, as recorded in the plan: UI-created agents now have
+  `model` null with the label in `configuration.modelPreference`, so
+  `/agents` shows no model for them; an unregistered or plan-excluded model
+  is refused; env `AI_DEFAULT_MODEL` / `GROQ_MODEL` no longer reach the
+  table. Existing rows are untouched.
+- The `/agents` list does not display `configuration.modelPreference` (UI
+  unchanged in this batch).
+- A named model costs one extra `profiles` read (`resolveEntitlement`);
+  preference labels and an absent model do not.
+- No live request against the route; no production build.
+
+#### Not done
+
+No commit, push, deploy, build, migration, data change, or secret / OAuth
+change. P2-H not started. `syraven-audit.zip` not opened, moved, deleted or
+staged.
+
+**RESULT (P2-G08 / G-B7):** implemented and verified — all steps PASS.
+**Not committed**; awaiting founder instruction.
+
 ### Later groups
 
-Recorded as each batch is prepared: remaining P2-G batch (G-B7),
-documentation (P2-H).
+Recorded as each batch is prepared: documentation (P2-H). All P2-G
+batches (G-B1 … G-B7) are now recorded.

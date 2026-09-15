@@ -1,7 +1,8 @@
-import type { NextRequest} from "next/server";
-import { NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 
 import { withAuth } from "@/lib/api/withAuth";
+import { selectModel } from "@/lib/ai/registry";
+import { resolveEntitlement } from "@/lib/usage/entitlements";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -691,14 +692,72 @@ export const POST = withAuth(async (
         ? rawStatus
         : "active";
 
-    const model =
+    /*
+      The registry decides which model an agent may carry
+      (PURIFICATION_EVIDENCE.md P2-G08). This used to store the client's
+      string, or else a model named by an environment variable, or else a
+      hardcoded id -- none of them checked against the registry or the
+      caller's plan.
+
+      The create page sends a PREFERENCE ("auto", "fast", "smart",
+      "deep"), not a model id. A preference is kept as a preference; a
+      catalogue agent does not run through a model, so none is invented
+      for it. A model id is stored only when the registry accepts it for
+      this caller's plan.
+    */
+    const MODEL_PREFERENCES = new Set([
+      "auto",
+      "fast",
+      "smart",
+      "deep",
+    ]);
+
+    const requestedModel =
       normalizeString(
         body.model,
         150
-      ) ||
-      process.env.AI_DEFAULT_MODEL ||
-      process.env.GROQ_MODEL ||
-      "llama-3.3-70b-versatile";
+      );
+
+    let model: string | null = null;
+
+    let modelPreference: string | null = null;
+
+    if (requestedModel) {
+      if (MODEL_PREFERENCES.has(requestedModel)) {
+        modelPreference = requestedModel;
+      } else {
+        const entitlement =
+          await resolveEntitlement(
+            session.supabase,
+            session.userId
+          );
+
+        if (!entitlement.ok) {
+          return errorResponse(
+            "Your plan could not be verified.",
+            503,
+            "ENTITLEMENT_UNAVAILABLE"
+          );
+        }
+
+        const selection =
+          selectModel(
+            requestedModel,
+            "chat",
+            entitlement.entitlement.effectivePlan
+          );
+
+        if (!selection.ok) {
+          return errorResponse(
+            "The requested model is not available.",
+            400,
+            "UNKNOWN_MODEL"
+          );
+        }
+
+        model = selection.model.id;
+      }
+    }
 
     const temperature =
       clampNumber(
@@ -772,6 +831,7 @@ export const POST = withAuth(async (
         */
         configuration: {
           category,
+          modelPreference,
           temperature,
           maxTokens,
           icon,
