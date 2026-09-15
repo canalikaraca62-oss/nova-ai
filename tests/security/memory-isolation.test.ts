@@ -323,29 +323,24 @@ void describe("Deleted and archived knowledge cannot re-enter context", () => {
     );
   });
 
-  void test("the search route filters status at the query level", () => {
+  void test("the retired knowledge search route queries nothing", () => {
     const code = stripComments(
       read("app", "api", "knowledge", "search", "route.ts"),
     );
 
     /*
-     * This pinned a literal .eq("status", "active") -- a copy of the
-     * hierarchy rule that could drift from it. The search route now
-     * filters with the hierarchy's own constant (P2-F07); the constant's
-     * value is pinned in the hierarchy invariants below.
+     * This pinned the search route's status filter to the hierarchy's
+     * constant (P2-F07). The route is retired to a 410 (P2-G04), so the
+     * status rule's only live reader is lib/memory/retrieval.ts, pinned in
+     * its invariants below. A retired route that started reading knowledge
+     * again would do so outside that rule.
      */
-    assert.match(
-      code,
-      /\.in\(\s*"status",\s*\[\.\.\.RETRIEVABLE_STATUSES\]\s*\)/,
-      "Knowledge search must exclude non-retrievable records; its results " +
-        "feed AI context.",
+    assert.ok(
+      !/\.from\(|\.rpc\(/.test(code),
+      "The retired knowledge search route reads knowledge again.",
     );
 
-    assert.match(
-      code,
-      /import \{ RETRIEVABLE_STATUSES \} from "@\/lib\/memory\/hierarchy"/,
-      "The status allowlist must be the hierarchy's constant, not a copy.",
-    );
+    assert.match(code, /status:\s*410\b/);
   });
 });
 

@@ -103,9 +103,10 @@ export type Visibility = (typeof VISIBILITY_VALUES)[number];
  * Anything else — archived, deleted, draft — is excluded. This is the
  * control that stops deleted knowledge silently re-entering a prompt.
  *
- * THE ONE COPY. The retrieval query (retrieval.ts) and
- * /api/knowledge/search filter with this constant; each used to carry
- * its own literal (PURIFICATION_EVIDENCE.md P2-F07).
+ * THE ONE COPY. The retrieval query (retrieval.ts) filters with this
+ * constant; it and /api/knowledge/search each used to carry their own
+ * literal (PURIFICATION_EVIDENCE.md P2-F07). That search route is now
+ * retired (P2-G04), so retrieval is the constant's only query reader.
  *
  * KNOWN LIMITATION. The knowledge route writes "ready" by default, so
  * no current record is retrievable and AI context receives no

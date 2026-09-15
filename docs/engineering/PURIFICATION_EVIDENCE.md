@@ -899,7 +899,131 @@ deleted or staged.
 **RESULT (P2-G02 / P2-G03 / G-B2):** implemented and verified — all steps
 PASS. **Not committed**; awaiting founder instruction.
 
+#### P2-G04 — retire `/api/knowledge/search` (founder-approved 2026-09-15, G-B3)
+
+| ID | Route | Evidence (file:line at `a8f3adb`) | Consumers | Tests that pin it | Canonical replacement | Decision |
+|---|---|---|---|---|---|---|
+| P2-G04 | `GET` / `POST /api/knowledge/search` (1,180 lines; `PUT` / `PATCH` / `DELETE` answer 405) | A second keyword search over `public.knowledge`, beside the canonical `/api/search` (`lib/search/query.ts`), which the `/search` page uses and which carries its own knowledge allowlist (`searchableStatuses` `["draft", "ready", "active"]`). Since P2-F07 this route filters on `RETRIEVABLE_STATUSES` = `["active"]` (`route.ts:719-730`), and production rows are written `ready`, so for real data it returns an empty list — a working-looking endpoint that finds nothing. It was never AI context itself: chat and orchestration read knowledge through `lib/memory/retrieval.ts` | **None** — the only mention outside `app/api`, `lib/memory/hierarchy.ts:107`, is a comment | `data-access` (`MIGRATED`: uses `session.supabase`, no `supabaseAdmin`), `authorization-boundary` (`TENANT_FILTERING_ROUTES`: tenant guard before the query), `defect-remediation` D2 (no phantom columns; every selected column exists; caller's client; tenant guards), `memory-isolation` ("the search route filters status at the query level" — the P2-F07 pin), `middleware-gate` (protected list) | `/api/search` (`lib/search/query.ts`) | RETIRE: `withAuth` 410 on `GET` and `POST` naming `/api/search` |
+
+**Pins reworked — only those that require the search implementation:**
+- `data-access` `MIGRATED` and `authorization-boundary`
+  `TENANT_FILTERING_ROUTES`: the route removed (it runs no query and filters
+  nothing), each with a note.
+- `defect-remediation` D2 (4 tests on the query's columns and guards):
+  replaced by one test — the retired route queries nothing, so the phantom-
+  column 500 cannot return.
+- `memory-isolation` "the search route filters status at the query level":
+  becomes "the retired knowledge search route queries nothing" — the status
+  rule's only live reader is `lib/memory/retrieval.ts`, whose own pins
+  (`.in("status", [...RETRIEVABLE_STATUSES])`, no literal status filter)
+  are unchanged.
+- `lib/memory/hierarchy.ts` comment "THE ONE COPY" names this route as a
+  reader of the constant — corrected to say it is retired (comment only; the
+  pinned value `["active"]` is untouched).
+
+**Unchanged:** `middleware-gate` (still protected), the retrieval and
+hierarchy invariants, `/api/search` and its `search-isolation` suite.
+
+**Retired-route guard:** `RETIRED_ROUTES` gains `/api/knowledge/search`.
+
+**Mutations planned:** M1 re-add a database read (`.from("knowledge")`)
+— must fail the retired-route guard and the reworked `memory-isolation`
+test; M2 410 → 200; M3 remove `withAuth`; M4 point the `/search` page at
+`/api/knowledge/search`.
+
+#### What changed (uncommitted at `a8f3adb`)
+
+- `app/api/knowledge/search/route.ts` — implementation removed (1,180 lines,
+  1,008 non-blank → 55 lines, 44 non-blank). `GET` and `POST` are each
+  `withAuth(async () => retired())`, answering 410 `ROUTE_RETIRED` "This
+  endpoint is retired. Search knowledge through /api/search." The 405
+  `PUT` / `PATCH` / `DELETE` exports are gone.
+- `lib/memory/hierarchy.ts` — comment only: "THE ONE COPY" now says
+  retrieval is the constant's only query reader (the route is retired).
+  `RETRIEVABLE_STATUSES = ["active"]` unchanged.
+- `tests/security/data-access.test.ts`, `authorization-boundary.test.ts` —
+  the route removed from `MIGRATED` and `TENANT_FILTERING_ROUTES`, each with
+  a note.
+- `tests/security/defect-remediation.test.ts` — D2 (4 tests on the query's
+  columns, client and guards) replaced by "D2: /api/knowledge/search can no
+  longer 500 on phantom columns" (1 test: no `.select(` / `.from(` / `.rpc(`,
+  phantom column names or `supabaseAdmin`; answers 410).
+- `tests/security/memory-isolation.test.ts` — "the search route filters
+  status at the query level" became "the retired knowledge search route
+  queries nothing" (no `.from(` / `.rpc(`; answers 410).
+- `tests/security/purification-authorities.test.ts` — `RETIRED_ROUTES` gains
+  `/api/knowledge/search`.
+- Totals (`git diff --stat HEAD`): code, lib and tests 7 files,
+  +72 / −1,221; with this file 8 files, +107 / −1,222.
+
+#### Verification (each step alone, 300 MB gate before launch)
+
+| # | Step | Command | Result | Free RAM before → after |
+|---|---|---|---|---|
+| 1 | Affected guard suites | `node --test --test-concurrency=1 …` `purification-authorities`, `data-access`, `authorization-boundary`, `defect-remediation`, `memory-isolation`, `middleware-gate`, `search-isolation` | **PASS** — exit 0; 288 tests, 49 suites: 288 pass, 0 fail | 348 → 461 MB |
+| 2 | Mutations | 4 mutations, below | **PASS** — 4 of 4 caught; both files restored to their original hash | 445 … 497 MB per mutation |
+| 3 | Regression suites | `node --test --test-concurrency=1 …` `api-auth-boundary`, `architecture-invariants`, `api-reference-integrity`, `usage-enforcement`, `ai-provider`, `observability-redaction` | **PASS** — exit 0; 329 tests, 48 suites: 322 pass, 0 fail, 7 todo | 444 → 434 MB |
+| 4 | Typecheck | `npx tsc --noEmit -p tsconfig.json` (`--max-old-space-size=1536`) | **PASS** — exit 0, 0 `error TS` lines | 352 → 795 MB |
+| 5 | Full suite | `npm run test:lowmem` | **PASS** — exit 0; 1,827 tests, 347 suites: 1,820 pass, 0 fail, 0 skipped, 7 todo (44.1 s) | 681 → 530 MB |
+| 6 | Lint | `npx eslint` on the route, `lib/memory/hierarchy.ts` and the five changed test files (`--max-old-space-size=768`) | **PASS** — exit 0, 0 errors, 0 warnings | 588 → 858 MB |
+
+**Test-count delta accounted:** 1,827 vs 1,834 (after G-B2) = +3 (retired-
+route guard, 3 per route), −2 (`data-access` `MIGRATED`, 2 per route), −2
+(`authorization-boundary` `TENANT_FILTERING_ROUTES`, 2 per route), −3
+(`defect-remediation` D2, 4 → 1), −3 (`api-auth-boundary` generates one
+"<METHOD> is authenticated" test per exported mutating method: the old
+route exported `POST` + plain `PUT` / `PATCH` / `DELETE`, the retired one
+only `POST`), 0 (`memory-isolation` test replaced one-for-one). Suites
+unchanged (347). The 7 todos are the documented limitations.
+
+#### Mutation testing
+
+Each mutation re-created one defect, ran the guards that own it, and
+restored the original bytes in a `finally` block; both files were backed up
+to the scratchpad first. SHA-256, first 12 hex.
+
+| # | Defect re-created | File | Result | Hash before = after |
+|---|---|---|---|---|
+| M1 | Database read re-added (`await session.supabase.from("knowledge").select("id")`) | `app/api/knowledge/search/route.ts` | **Caught** by three guards — `purification-authorities` 41 / 1: "/api/knowledge/search reads, writes and spends nothing"; `memory-isolation` 54 / 1: "the retired knowledge search route queries nothing"; `defect-remediation` 20 / 1: "the retired route queries nothing" | `84D98F3C25B3` ✔ |
+| M2 | 410 → 200 | same | **Caught** by three — `purification-authorities` 41 / 1: "requires a session and answers 410"; `memory-isolation` 54 / 1; `defect-remediation` 20 / 1 | `84D98F3C25B3` ✔ |
+| M3 | `withAuth` removed from `POST` (`export const POST = (async () => …)`) | same | **Caught** by `purification-authorities` 41 / 1: "requires a session and answers 410". **Not caught** by `api-auth-boundary` (133 / 0) — see finding below | `84D98F3C25B3` ✔ |
+| M4 | The `/search` page pointed at `/api/knowledge/search` | `app/search/page.tsx` | **Caught** — 41 / 1: "nothing in the product calls /api/knowledge/search" | `5BDA196C0467` ✔ |
+
+`git status --short` identical before and after; `syraven-audit.zip` size
+and timestamp unchanged. All four ran in one pass; no memory-gate block in
+this batch.
+
+**Finding (M3) — `api-auth-boundary` per-method sweep has a blind shape.**
+It generates "<route> <METHOD> is authenticated" only for handlers written
+as `export const METHOD = withAuth(` or `export (async) function
+METHOD(` (`api-auth-boundary.test.ts:168-177`). A handler written as
+`export const POST = (async () => …)` matches neither and is skipped
+(`continue`), so an unwrapped arrow-function handler anywhere under
+`app/api` produces no test and no failure. For this route the gap is
+covered twice — the retired-route guard caught M3, and `middleware.ts`
+rejects anonymous `/api/*` requests — but the sweep itself should fail on
+an exported handler it cannot classify. **Not fixed here** (outside G-B3's
+approved scope); recorded for a separate, founder-approved guard fix.
+
+#### Known limitations
+
+- An external client of `/api/knowledge/search`, if one exists, now receives
+  410; `/api/search` takes `q` / `entities` query parameters rather than this
+  route's body and scope options.
+- The `api-auth-boundary` blind shape above stands until fixed.
+- No live request against the retired route; no production build.
+
+#### Not done
+
+No commit, push, deploy, build, migration, or secret / OAuth change.
+G-B4 … G-B7 and P2-H not started. `syraven-audit.zip` not opened, moved,
+deleted or staged.
+
+**RESULT (P2-G04 / G-B3):** implemented and verified — all steps PASS,
+with one guard-coverage finding recorded. **Not committed**; awaiting
+founder instruction.
+
 ### Later groups
 
-Recorded as each batch is prepared: remaining P2-G batches (G-B3 … G-B7),
+Recorded as each batch is prepared: remaining P2-G batches (G-B4 … G-B7),
 documentation (P2-H).

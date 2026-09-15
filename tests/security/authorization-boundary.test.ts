@@ -227,7 +227,10 @@ void describe("Client-supplied tenant keys are proven before use", () => {
     "app/api/projects/route.ts",
     "app/api/knowledge/route.ts",
     "app/api/tasks/route.ts",
-    "app/api/knowledge/search/route.ts",
+    /*
+     * app/api/knowledge/search/route.ts left this list when it was retired
+     * to a 410 (PURIFICATION_EVIDENCE.md P2-G04): it filters nothing.
+     */
   ];
 
   for (const id of TENANT_FILTERING_ROUTES) {

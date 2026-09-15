@@ -143,48 +143,20 @@ void describe("D1: knowledge search matches the statuses actually written", () =
 /*                    D2 — knowledge/search must not 500                      */
 /* -------------------------------------------------------------------------- */
 
-void describe("D2: /api/knowledge/search queries columns that exist", () => {
-  /** Columns on public.knowledge, read from the live schema. */
-  const REAL = new Set([
-    "id", "user_id", "workspace_id", "project_id", "team_id", "title",
-    "description", "content", "type", "status", "visibility", "source_url",
-    "file_name", "file_path", "file_type", "file_size", "metadata", "tags",
-    "embedding", "created_at", "updated_at",
-  ]);
-
-  void test("no phantom columns are selected", () => {
-    for (const phantom of ["source_type", "source_id"]) {
-      assert.ok(
-        !new RegExp(`\\b${phantom}\\b`).test(KSEARCH),
-        `CRITICAL: ${phantom} does not exist on public.knowledge; ` +
-          `selecting it makes Postgres reject the query with 42703, ` +
-          `which the handler reports as a generic 500.`,
-      );
-    }
-  });
-
-  void test("every selected column exists", () => {
-    const at = KSEARCH.indexOf(".select(");
-
-    assert.ok(at > 0, "select call not found.");
-
-    const block = KSEARCH.slice(at, KSEARCH.indexOf("`", KSEARCH.indexOf("`", at) + 1));
-
-    for (const col of [...block.matchAll(/^\s*([a-z_]+),\s*$/gm)].map((m) => m[1]!)) {
-      assert.ok(REAL.has(col), `"${col}" is not a column on public.knowledge.`);
-    }
-  });
-
-  void test("it still runs on the caller's client", () => {
+void describe("D2: /api/knowledge/search can no longer 500 on phantom columns", () => {
+  /*
+   * D2 was a query selecting `source_type` and `source_id`, which
+   * public.knowledge does not have. The route is retired to a 410
+   * (PURIFICATION_EVIDENCE.md P2-G04) and queries nothing, so that failure
+   * cannot return. Keyword search over knowledge is /api/search, whose
+   * columns and filters are pinned in search-isolation.test.ts.
+   */
+  void test("the retired route queries nothing", () => {
     assert.ok(
-      !/supabaseAdmin|SUPABASE_SERVICE_ROLE/.test(KSEARCH),
-      "CRITICAL: knowledge search must not bypass RLS.",
+      !/\.select\(|\.from\(|\.rpc\(|source_type|source_id|supabaseAdmin/.test(KSEARCH),
+      "CRITICAL: the retired knowledge search route is querying again.",
     );
-  });
-
-  void test("tenant guards are still applied", () => {
-    assert.match(KSEARCH, /requireOptionalWorkspaceAccess/);
-    assert.match(KSEARCH, /requireOptionalProjectAccess/);
+    assert.match(KSEARCH, /status:\s*410\b/);
   });
 });
 

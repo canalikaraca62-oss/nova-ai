@@ -139,7 +139,11 @@ void describe("Migrated routes use the caller's RLS-enforced client", () => {
    */
   const MIGRATED = [
     "app/api/knowledge/route.ts",
-    "app/api/knowledge/search/route.ts",
+    /*
+     * app/api/knowledge/search/route.ts left this list when it was retired
+     * to a 410 (PURIFICATION_EVIDENCE.md P2-G04): it reads no data, so there
+     * is no client to bind.
+     */
     "app/api/tasks/route.ts",
     /*
      * app/api/tasks/execute/route.ts left this list when it stopped
