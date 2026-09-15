@@ -126,7 +126,7 @@ function expect(name, ok, detail) {
 const tag = `probe-b1-${randomUUID().slice(0, 8)}`;
 const A = await signIn(users.A);
 const B = await signIn(users.B);
-const created = { orgs: [], workspaces: [], tasks: [] };
+const created = { orgs: [], workspaces: [], tasks: [], bOrgs: [], bWorkspaces: [] };
 
 try {
   // A's own organization, owner membership and two workspaces.
@@ -188,6 +188,42 @@ try {
   if (ownTask.data?.[0]?.id) created.tasks.push({ owner: "A", id: ownTask.data[0].id });
   const ownDelete = await rest(A, "DELETE", `workspaces?id=eq.${ws2Id}`);
   expect("a workspace holding only the caller's own data can be deleted", allowed(ownDelete), ownDelete);
+
+  const ws3 = await rest(A, "POST", "workspaces", { organization_id: orgId, name: `${tag}-3`, slug: `${tag}-3`, created_by: A.id });
+  const ws3Id = ws3.data?.[0]?.id;
+  created.workspaces.push(ws3Id);
+  const emptyDelete = await rest(A, "DELETE", `workspaces?id=eq.${ws3Id}`);
+  expect("an empty workspace can be deleted", Boolean(ws3Id) && allowed(emptyDelete), emptyDelete);
+
+  // I5: the victim still resolves only to an organization it owns. The
+  // query below is the one resolveOrganizationId runs, issued as B.
+  const bOrg = await rest(B, "POST", "organizations", { name: `${tag}-b`, slug: `${tag}-b`, owner_id: B.id });
+  const bOrgId = bOrg.data?.[0]?.id;
+  created.bOrgs.push(bOrgId);
+  await rest(B, "POST", "organization_members", {
+    organization_id: bOrgId, user_id: B.id, role: "owner", status: "active",
+  });
+
+  const resolved = await rest(
+    B,
+    "GET",
+    `organization_members?select=organization_id,organizations!inner(owner_id)` +
+      `&user_id=eq.${B.id}&status=eq.active&role=eq.owner` +
+      `&organizations.owner_id=eq.${B.id}&order=created_at.asc&limit=1`,
+  );
+  const resolvedOrg = Array.isArray(resolved.data) ? resolved.data[0]?.organization_id : undefined;
+  expect(
+    "the victim resolves to its own organization, never the attacker's",
+    Boolean(bOrgId) && resolvedOrg === bOrgId && resolvedOrg !== orgId,
+    resolved,
+  );
+
+  const intoAttacker = await rest(B, "POST", "workspaces", { organization_id: orgId, name: `${tag}-x`, slug: `${tag}-x`, created_by: B.id });
+  expect("the victim cannot create a workspace in the attacker's organization", denied(intoAttacker), intoAttacker);
+
+  const intoOwn = await rest(B, "POST", "workspaces", { organization_id: bOrgId, name: `${tag}-b1`, slug: `${tag}-b1`, created_by: B.id });
+  if (intoOwn.data?.[0]?.id) created.bWorkspaces.push(intoOwn.data[0].id);
+  expect("the victim's workspace lands in its own organization", allowed(intoOwn) && intoOwn.data?.[0]?.organization_id === bOrgId, intoOwn);
 } finally {
   // Cleanup: each user removes only rows it created.
   for (const task of created.tasks) {
@@ -198,6 +234,12 @@ try {
   }
   for (const id of created.orgs.filter(Boolean)) {
     await rest(A, "DELETE", `organizations?id=eq.${id}`);
+  }
+  for (const id of created.bWorkspaces.filter(Boolean)) {
+    await rest(B, "DELETE", `workspaces?id=eq.${id}`);
+  }
+  for (const id of created.bOrgs.filter(Boolean)) {
+    await rest(B, "DELETE", `organizations?id=eq.${id}`);
   }
 }
 
