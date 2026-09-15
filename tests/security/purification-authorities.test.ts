@@ -297,6 +297,7 @@ const RETIRED_ROUTES: Record<string, string> = {
   "app/api/action/route.ts": "/api/action",
   "app/api/knowledge/search/route.ts": "/api/knowledge/search",
   "app/api/files/upload/route.ts": "/api/files/upload",
+  "app/api/files/analyze/route.ts": "/api/files/analyze",
 };
 
 /** Every .ts/.tsx file beneath a directory. */

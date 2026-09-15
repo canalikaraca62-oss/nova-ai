@@ -1127,7 +1127,133 @@ moved, deleted or staged.
 **RESULT (P2-G06 / G-B4):** implemented and verified — all steps PASS.
 **Not committed**; awaiting founder instruction.
 
+#### P2-G05 — retire `/api/files/analyze` (founder decision 2026-09-15: "Retire to 410", G-B5)
+
+| ID | Route | Evidence (file:line at `1656629`) | Consumers | Tests that pin it | Canonical replacement | Decision |
+|---|---|---|---|---|---|---|
+| P2-G05 | `POST /api/files/analyze` (1,115 lines) + public `GET` status | The provider logic P2-F08 removed from `/api/chat`, still live here: `body.provider` (`:48-51`), env default models `OPENAI_MODEL` / `GROQ_MODEL` (`:101-107`), its own `getProvider` / `getFallbackProvider` with direct `process.env.*_API_KEY` reads and hardcoded vendor URLs (`:238-352`), a fallback on any failed status (`:874-896`), and a `GET` that reads the keys directly (`:1085`). It also echoes a client `workspaceId` / `projectId` it never proves (`architecture-invariants` `ECHO_ONLY`, the suite's only exception). Its `GET` is exempt from the session gate in `middleware.ts` `PUBLIC_STATUS_GET_ROUTES`. Last changed `7dae7e9` (2026-09-07) | **None** — no reference outside `app/api` except `middleware.ts` (the public-GET list) | `ai-provider` (`MODEL_ACCEPTING`; policy-after-guard list), `usage-enforcement` (`METERED_ROUTES`), `api-auth-boundary` (`AI_SPENDING_ROUTES`: exists + `POST = withAuth(`), `architecture-invariants` (`ECHO_ONLY`; "every route taking a tenant id proves access to it" requires the unguarded set to equal `ECHO_ONLY`), `observability-redaction` ("files/analyze no longer logs analysis content verbatim" `:506`; "files/analyze truncates the provider error body" `:532`; provider-body sweep `:552`), `middleware-gate` (`PUBLIC_STATUS_GET_ROUTES` mirror) | None needed today; file analysis, when a surface needs it, is built on `/api/chat`'s registry path | RETIRE: `withAuth` 410; drop the public GET |
+
+**Pins reworked — only those that require the old implementation:**
+- `ai-provider` `MODEL_ACCEPTING` and the policy-after-guard list;
+  `usage-enforcement` `METERED_ROUTES`: the route removed, each with a note.
+- `architecture-invariants` `ECHO_ONLY`: the entry removed — the retired
+  route reads no tenant id, and the suite requires the unguarded set to
+  equal `ECHO_ONLY` exactly. `ECHO_ONLY` becomes empty: every route that
+  takes a tenant id now proves access, with no exceptions. The companion
+  "an unguarded echo cannot reach data" then iterates nothing (kept, so a
+  future exception is still checked).
+- `observability-redaction` `:506` and `:532`: replaced one-for-one by "the
+  retired files/analyze route logs no document content" and "… logs no
+  provider body" (no `console.*`, no `errorText`, no provider call).
+- `middleware.ts` `PUBLIC_STATUS_GET_ROUTES` and its `middleware-gate`
+  mirror: `/api/files/analyze` removed (a public exception for a GET that no
+  longer exists); the path added to the protected list.
+
+**Unchanged:** `api-auth-boundary` (still pins `POST = withAuth(`),
+`observability-redaction` `:210` (tests `sanitizeFields`, not the route) and
+the provider-body sweep list (a file with no provider body passes), the
+paid-call and metering sweeps.
+
+**Retired-route guard:** `RETIRED_ROUTES` gains `/api/files/analyze`.
+
+**Mutations planned:** M1 re-add a provider call (`fetch` to a vendor URL);
+M2 410 → 200; M3 remove `withAuth`; M4 add a product caller; M5 re-add
+`/api/files/analyze` to `middleware.ts` `PUBLIC_STATUS_GET_ROUTES` (the
+mirror must fail); M6 re-add an unproven `body.workspaceId` read to the
+route — "every route taking a tenant id proves access to it" must fail now
+that `ECHO_ONLY` is empty.
+
+#### What changed (uncommitted at `1656629`)
+
+- `app/api/files/analyze/route.ts` — implementation removed (1,115 lines, 939
+  non-blank → 47 lines, 38 non-blank). Only `POST = withAuth(async () => …)`
+  remains, answering 410 `ROUTE_RETIRED` "This endpoint is retired. File
+  analysis is not available." No provider call, env read, logging or tenant
+  id; the public `GET` is gone.
+- `middleware.ts` — `/api/files/analyze` removed from
+  `PUBLIC_STATUS_GET_ROUTES` (note in its place, no quoted path). The list
+  is now `/api/chat`, `/api/canvas`, `/api/voice/speak`.
+- `tests/security/middleware-gate.test.ts` — mirror list matches;
+  `/api/files/analyze` added to the protected-routes list.
+- `tests/security/architecture-invariants.test.ts` — `ECHO_ONLY` is empty
+  (note in its place).
+- `tests/security/ai-provider.test.ts`, `usage-enforcement.test.ts` — the
+  route removed from `MODEL_ACCEPTING`, the policy-after-guard list and
+  `METERED_ROUTES`, each with a note.
+- `tests/security/observability-redaction.test.ts` — the two log-site pins
+  replaced one-for-one by "the retired files/analyze route logs no document
+  content" and "… logs no provider body".
+- `tests/security/purification-authorities.test.ts` — `RETIRED_ROUTES` gains
+  `/api/files/analyze`.
+- Leftover sweep: `/api/files/analyze` appears in `app/`, `lib/` and
+  `middleware.ts` only in the retired route's own header;
+  `OPENAI_MODEL` / `GROQ_MODEL` remain only in the `lib/ai/registry.ts:19`
+  comment (P2-H) and `app/api/agents/route.ts:700` (G-B7).
+- Totals (`git diff --stat HEAD`): code, middleware and tests 8 files,
+  +67 / −1,129; with this file 9 files, +106 / −1,130.
+
+#### Verification (each step alone, 300 MB gate before launch)
+
+| # | Step | Command | Result | Free RAM before → after |
+|---|---|---|---|---|
+| 1 | Affected guard suites | `node --test --test-concurrency=1 …` `purification-authorities`, `ai-provider`, `usage-enforcement`, `api-auth-boundary`, `architecture-invariants`, `observability-redaction`, `middleware-gate` | **PASS** — exit 0; 440 tests, 60 suites: 433 pass, 0 fail, 7 todo. First launch refused at the gate (295 MB) | 461 → 487 MB |
+| 2 | Mutations | 6 mutations, below | **PASS** — 6 of 6 caught; every file restored to its original hash | 486 … 585 MB per mutation |
+| 3 | Regression suites | `node --test --test-concurrency=1 …` `data-access`, `api-reference-integrity`, `authorization-boundary`, `defect-remediation`, `memory-isolation`, `search-isolation` | **PASS** — exit 0; 183 tests, 37 suites: 183 pass, 0 fail | 441 → 403 MB |
+| 4 | Typecheck | `npx tsc --noEmit -p tsconfig.json` (`--max-old-space-size=1536`) | **PASS** — exit 0, 0 `error TS` lines | 418 → 601 MB |
+| 5 | Full suite | `npm run test:lowmem` | **PASS** — exit 0; 1,833 tests, 347 suites: 1,826 pass, 0 fail, 0 skipped, 7 todo (29.6 s) | 453 → 397 MB |
+| 6 | Lint | `npx eslint` on the route, `middleware.ts` and the six changed test files (`--max-old-space-size=768`) | **PASS** — exit 0, 0 errors, 0 warnings | 335 → 890 MB |
+
+**Test-count delta accounted:** 1,833 vs 1,830 (after G-B4) = +3 (retired-
+route guard, 3 per route), −2 (`ai-provider` `MODEL_ACCEPTING`, 2 per
+route), −2 (`usage-enforcement` `METERED_ROUTES`, 2 per route), +4
+(`middleware-gate` protected list, 4 methods), 0 (`observability-redaction`
+two tests replaced one-for-one; `ECHO_ONLY` tests iterate inside single
+tests; `api-auth-boundary` still generates one `POST` test). Suites
+unchanged (347). The 7 todos are the documented limitations; "failing
+tests:" in steps 1 and 5 lists only those.
+
+#### Mutation testing
+
+Each mutation re-created one defect, ran the guards that own it, and
+restored the original bytes in a `finally` block; the three files were
+backed up to the scratchpad first. SHA-256, first 12 hex.
+
+| # | Defect re-created | File | Result | Hash before = after |
+|---|---|---|---|---|
+| M1 | Provider call re-added (`await fetch("https://api.openai.com/…")`) | `app/api/files/analyze/route.ts` | **Caught** by two guards — `purification-authorities` 47 / 1: "/api/files/analyze reads, writes and spends nothing"; `observability-redaction` 37 / 1: "the retired files/analyze route logs no provider body" | `0C6A5EDA6764` ✔ |
+| M2 | 410 → 200 | same | **Caught** — 47 / 1: "/api/files/analyze requires a session and answers 410" | `0C6A5EDA6764` ✔ |
+| M3 | `withAuth` removed | same | **Caught** by two — `purification-authorities` 47 / 1; `api-auth-boundary` 132 / 1: "app/api/files/analyze/route.ts exists and wraps POST in withAuth" | `0C6A5EDA6764` ✔ |
+| M4 | Product caller added (the `/search` page pointed at `/api/files/analyze`) | `app/search/page.tsx` | **Caught** — 47 / 1: "nothing in the product calls /api/files/analyze" | `5BDA196C0467` ✔ |
+| M5 | `/api/files/analyze` re-added to `PUBLIC_STATUS_GET_ROUTES` (1 target occurrence) | `middleware.ts` | **Caught** — `middleware-gate` 82 / 1: "the public status GET list matches" | `71E606F5AA1E` ✔ |
+| M6 | Unproven `body.workspaceId` read re-added | `app/api/files/analyze/route.ts` | **Caught** — `architecture-invariants` 44 / 1: "every route taking a tenant id proves access to it" (now enforcing zero exceptions) | `0C6A5EDA6764` ✔ |
+
+`git status --short` identical before and after; `syraven-audit.zip` size
+and timestamp unchanged. **Memory:** the first step 1 launch was refused at
+the gate (295 MB, nothing started); a memory-only watcher (ran nothing)
+reported 529 MB, and every later step and mutation ran at ≥ 300 MB.
+
+#### Known limitations
+
+- An external client of `/api/files/analyze`, if one exists, now receives
+  410; there is no replacement file-analysis route.
+- `architecture-invariants` "an unguarded echo cannot reach data" iterates
+  an empty `ECHO_ONLY` and so checks nothing until an exception is added;
+  kept deliberately.
+- The `api-auth-boundary` blind shape recorded in G-B3 still stands (here
+  M3 was also caught by `AI_SPENDING_ROUTES`, which pins `POST =
+  withAuth(` directly).
+- No live request against the retired route; no production build.
+
+#### Not done
+
+No commit, push, deploy, build, migration, or secret / OAuth change.
+G-B6, G-B7 and P2-H not started. `syraven-audit.zip` not opened, moved,
+deleted or staged.
+
+**RESULT (P2-G05 / G-B5):** implemented and verified — all steps PASS.
+**Not committed**; awaiting founder instruction.
+
 ### Later groups
 
-Recorded as each batch is prepared: remaining P2-G batches (G-B5 … G-B7),
+Recorded as each batch is prepared: remaining P2-G batches (G-B6, G-B7),
 documentation (P2-H).

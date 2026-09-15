@@ -81,7 +81,11 @@ const PUBLIC_STATUS_GET_ROUTES: readonly string[] = [
    * exempt.
    */
   "/api/voice/speak",
-  "/api/files/analyze",
+  /*
+   * /api/files/analyze is retired to a 410 behind the session gate
+   * (PURIFICATION_EVIDENCE.md P2-G05); it has no status GET left to
+   * exempt.
+   */
 ];
 
 function isPublicApiRoute(

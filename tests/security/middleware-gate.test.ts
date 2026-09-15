@@ -38,7 +38,7 @@ const PUBLIC_STATUS_GET_ROUTES: readonly string[] = [
   "/api/canvas",
   /* /api/action: retired to a 410 (P2-G03); no public status GET. */
   "/api/voice/speak",
-  "/api/files/analyze",
+  /* /api/files/analyze: retired to a 410 (P2-G05); no public status GET. */
 ];
 
 function isPublicApiRoute(pathname: string, method: string): boolean {
@@ -119,6 +119,8 @@ void describe("Middleware rejects anonymous traffic to protected API routes", ()
     "/api/tasks/execute",
     /* Retired to a 410 (P2-G03); its GET is no longer a public probe. */
     "/api/action",
+    /* Retired to a 410 (P2-G05); its GET is no longer a public probe. */
+    "/api/files/analyze",
     "/api/usage",
     "/api/agents",
     "/api/agents/execute",

@@ -273,7 +273,10 @@ void describe("Routes accepting a model validate it", () => {
      * (PURIFICATION_EVIDENCE.md P2-G01): it accepts no model and calls no
      * provider. purification-authorities.test.ts pins that it stays so.
      */
-    "app/api/files/analyze/route.ts",
+    /*
+     * app/api/files/analyze/route.ts left this list when it was retired to
+     * a 410 (PURIFICATION_EVIDENCE.md P2-G05).
+     */
     "app/api/voice/speak/route.ts",
   ];
 
@@ -599,7 +602,7 @@ void describe("Phase 1-6 guarantees still hold", () => {
      */
     for (const id of [
       "app/api/chat/route.ts",
-      "app/api/files/analyze/route.ts",
+      /* app/api/files/analyze/route.ts: retired (P2-G05) -- no guard, no policy, no call. */
       /* app/api/stream/route.ts: retired (P2-G01) -- no guard, no policy, no call. */
       /* app/api/agents/execute/route.ts: retired (P2-G02) -- likewise. */
     ]) {

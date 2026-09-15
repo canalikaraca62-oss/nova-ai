@@ -120,8 +120,13 @@ void describe("2. The client cannot define tenant truth", () => {
    * in a response and touches no data, so the id scopes nothing.
    */
   const ECHO_ONLY: Readonly<Record<string, string>> = {
-    "app/api/files/analyze/route.ts":
-      "echoes body.workspaceId/projectId in response metadata; runs no query",
+    /*
+     * app/api/files/analyze/route.ts was the one exception: it echoed an
+     * unproven workspace / project id and ran no query. It is retired to a
+     * 410 (PURIFICATION_EVIDENCE.md P2-G05) and reads no tenant id, so the
+     * list is empty -- every route that takes a tenant id proves access.
+     * A new entry needs a written reason, as before.
+     */
   };
 
   const readsTenantId =

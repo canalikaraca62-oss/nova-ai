@@ -381,7 +381,10 @@ void describe("Every AI-spending route enforces and records usage", () => {
      * (PURIFICATION_EVIDENCE.md P2-G01): it spends nothing, so there is
      * nothing to meter. purification-authorities.test.ts pins that.
      */
-    "app/api/files/analyze/route.ts",
+    /*
+     * app/api/files/analyze/route.ts left this list when it was retired to
+     * a 410 (PURIFICATION_EVIDENCE.md P2-G05): it spends nothing.
+     */
     "app/api/voice/speak/route.ts",
     "app/api/voice/transcribe/route.ts",
     "app/api/canvas/route.ts",

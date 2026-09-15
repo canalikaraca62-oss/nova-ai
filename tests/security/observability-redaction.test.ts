@@ -503,41 +503,29 @@ void describe("MUTATION — removing redaction leaks", () => {
 /* -------------------------------------------------------------------------- */
 
 void describe("The audited log leaks remain fixed", () => {
-  void test("files/analyze no longer logs analysis content verbatim", () => {
+  void test("the retired files/analyze route logs no document content", () => {
+    /*
+     * files/analyze logged the model's analysis of a user's document
+     * verbatim, then a bounded prefix of it. The route is retired to a 410
+     * (PURIFICATION_EVIDENCE.md P2-G05) and analyses nothing, so there is
+     * no content to log; the retired-route guard in
+     * purification-authorities.test.ts pins that it stays that way.
+     */
     const code = read("app", "api", "files", "analyze", "route.ts");
 
-    /*
-     * The unparseable-payload site. Anchored on its own message so this
-     * cannot accidentally inspect the earlier provider-error log — which
-     * is exactly how the SECOND leak in this file was found.
-     */
-    const site = code.slice(
-      code.indexOf("SYRAVEN FILE ANALYSIS: unparseable"),
-    );
-
     assert.ok(
-      !/console\.error\(\s*"[^"]*",\s*\n?\s*content\s*\n?\s*\)/.test(
-        site.slice(0, 400),
-      ),
-      "The document-content log leak has returned.",
-    );
-
-    assert.match(
-      site.slice(0, 400),
-      /content\.slice\(0,\s*\d+\)/,
-      "The bounded prefix is missing.",
+      !/console\.(?:error|log|warn|info)\(/.test(code),
+      "The retired files/analyze route is logging again.",
     );
   });
 
-  void test("files/analyze truncates the provider error body", () => {
+  void test("the retired files/analyze route logs no provider body", () => {
+    /* It also truncated a provider error body; it now calls no provider. */
     const code = read("app", "api", "files", "analyze", "route.ts");
 
-    const site = code.slice(code.indexOf("SYRAVEN FILE ANALYSIS ERROR"));
-
-    assert.match(
-      site.slice(0, 400),
-      /errorText\.slice\(0,\s*\d+\)/,
-      "The provider body is logged untruncated.",
+    assert.ok(
+      !/errorText|\bfetch\s*\(/.test(code),
+      "The retired files/analyze route calls or logs a provider again.",
     );
   });
 
