@@ -167,7 +167,7 @@ Also in scope:
 
 **Reason:** §6/§7 — all 31 `services/` files (~37,000 lines) plus 14 `lib/` modules are orphaned, while routes re-implement the same concerns inline, producing 1,000–2,000-line route files. This is not merely waste: it is *two divergent implementations* of every domain, and the worse one is the one running.
 
-**Current state:** Only `@/services/action-types` (types) is imported. `services/search.ts` appears solely in a comment.
+**Current state:** Only `@/services/action-types` (types) is imported. `services/search.ts` appears solely in a comment. _(Superseded: `services/action-types.ts` was deleted in Phase 2 — `docs/engineering/PURIFICATION_EVIDENCE.md` P2-F05.)_
 
 **Target state:** Routes validate, authorize, delegate to services, and shape responses. Domain logic lives in `services/`.
 

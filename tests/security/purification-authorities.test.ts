@@ -536,3 +536,105 @@ void describe("P2-P: orphan pages are linked or retired", () => {
     );
   });
 });
+
+/* -------------------------------------------------------------------------- */
+/*          P2-H — the architecture documents say what the code does          */
+/* -------------------------------------------------------------------------- */
+
+void describe("P2-H: architecture documents match the code", () => {
+  const productFiles = [
+    ...sourceFiles(join(ROOT, "app")),
+    ...sourceFiles(join(ROOT, "lib")),
+  ];
+
+  /** Files in app/ or lib/ that import `target` (by @/ alias or relative path). */
+  function importersOf(target: string): string[] {
+    const modulePath = target.replace(/\.(?:ts|tsx)$/, "");
+
+    return productFiles
+      .filter((file) => {
+        const rel = relative(file);
+        if (rel === target) return false;
+
+        const dir = rel.slice(0, rel.lastIndexOf("/"));
+        const source = readFileSync(file, "utf8");
+
+        for (const match of source.matchAll(/(?:\bfrom|\bimport)\s*\(?\s*["']([^"']+)["']/g)) {
+          const specifier = match[1] ?? "";
+          const resolved = specifier.startsWith("@/")
+            ? specifier.slice(2)
+            : specifier.startsWith(".")
+              ? join(dir, specifier).replace(/\\/g, "/")
+              : null;
+
+          if (resolved === modulePath || resolved === `${modulePath}/index`) return true;
+        }
+
+        return false;
+      })
+      .map(relative);
+  }
+
+  void test("P2-H01: MEMORY_ARCHITECTURE names the one retrievable-status authority", () => {
+    const memory = read("MEMORY_ARCHITECTURE.md");
+
+    assert.match(memory, /RETRIEVABLE_STATUSES/, "The doc must point at the constant, not restate a value.");
+    assert.ok(
+      !/`status = 'active'`/.test(memory),
+      "MEMORY_ARCHITECTURE states a status literal as the retrieval rule again; " +
+        "records created through the product are written 'ready' and are not retrievable.",
+    );
+  });
+
+  void test("P2-H07: every row of the North Star dead-module table is true", () => {
+    const northStar = read("ARCHITECTURE_NORTH_STAR.md");
+    const section = /### DEAD[\s\S]*?(?=\n#{2,3} )/.exec(northStar)?.[0] ?? "";
+    const rows = [...section.matchAll(/^\| `([^`]+)` \| ([^|\n]+) \|/gm)];
+
+    assert.ok(rows.length >= 14, `Expected the 14-module table, found ${rows.length} rows.`);
+
+    for (const [, file = "", status = ""] of rows) {
+      const exists = existsSync(join(ROOT, ...file.split("/")));
+
+      if (/^Deleted\b/.test(status)) {
+        assert.ok(!exists, `${file} is recorded as deleted but exists.`);
+      } else if (/^Kept\b/.test(status)) {
+        assert.ok(exists, `${file} is recorded as kept but is gone.`);
+        assert.deepEqual(importersOf(file), [], `${file} is recorded as having no importer.`);
+      } else if (/^Not dead\b/.test(status)) {
+        assert.ok(exists && importersOf(file).length > 0, `${file} is recorded as live but nothing imports it.`);
+      } else {
+        assert.fail(`Unrecognised status for ${file}: ${status.trim()}`);
+      }
+    }
+
+    const hierarchy = rows.find(([, file]) => file === "lib/memory/hierarchy.ts");
+    assert.match(hierarchy?.[2] ?? "", /^Not dead\b/, "lib/memory/hierarchy.ts is live; it may not be listed as dead.");
+  });
+
+  void test("P2-H04b: the provider adapter does not claim to be the only provider transport", () => {
+    const header = /^\/\*\*[\s\S]*?\*\//.exec(read("lib", "ai", "provider.ts"))?.[0] ?? "";
+
+    const directCallers = productFiles
+      .filter((file) => relative(file) !== "lib/ai/provider.ts")
+      .filter((file) => {
+        const source = code(...relative(file).split("/"));
+        return /\bPROVIDER_ENDPOINTS\b/.test(source) && /\bfetch\s*\(/.test(source);
+      })
+      .map(relative);
+
+    assert.ok(directCallers.length > 0, "Expected the direct provider callers the header names.");
+    assert.ok(
+      !/single place that talks to an AI provider/i.test(header),
+      `lib/ai/provider.ts claims to be the only provider transport, but ${directCallers.join(", ")} fetch a provider directly.`,
+    );
+
+    for (const caller of directCallers) {
+      const name = /^app\/api\/(.+)\/route\.ts$/.exec(caller)?.[1];
+      assert.ok(
+        header.includes(name ? `/api/${name}` : caller),
+        `${caller} fetches a provider directly and the adapter header does not say so.`,
+      );
+    }
+  });
+});

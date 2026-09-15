@@ -26,23 +26,24 @@
 
 ```text
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
-Claude-Session: https://claude.ai/code/session_012BWaE3rGTPbozg3Nuqnai5
+Claude-Session: <the URL of the session that made the change>
 ```
 
-## Pending commits (as of 2026-09-13)
+## Commit record
 
-The working tree holds three efforts. Recommended split, **awaiting
-founder instruction**:
+Nothing from the 2026-09-13 working tree is pending. Its three efforts
+were committed on 2026-09-14, in the recommended split:
 
-| # | Commit | Files |
-|---|---|---|
-| 1 | Brain semantic bridge, profile honesty, nav, session logging, E2E fixture fix | `lib/search/knowledge*.ts`, `app/api/knowledge/**`, `app/knowledge/page.tsx`, `app/profile/page.tsx`, nav files, `lib/auth/session.ts`, `lib/search/{semantic,openaiEmbedding}.ts`, `lib/usage/meter.ts`, `tests/e2e/fixtures.ts`, `tests/security/{brain-semantic-bridge,profile-is-real}.test.ts` |
-| 2 | Phase 1 — North Star (PARTIAL) | `lib/orchestration/{approvalStore,orchestrator}.ts`, `app/api/{action,agents/execute,agents/run,tasks/execute}/route.ts`, `tests/security/{architecture-invariants,approval-lifecycle,data-access}.test.ts`, `ARCHITECTURE_NORTH_STAR.md`, `docs/architecture/`, `AGENT_ARCHITECTURE.md`, `MIGRATION_APPROVAL_REQUIRED.md` |
-| 3 | Engineering control plane | `CLAUDE.md`, `docs/engineering/`, `.mcp.json`, `.claude/agents/`, `specs/`, `.gitignore`, `package.json`, `playwright.config.ts`, `tests/e2e/README.md`, `tests/security/engineering-control-plane.test.ts` |
+| Commit | Effort |
+|---|---|
+| `9837f30` | Brain semantic bridge, an honest profile, credential-failure logging |
+| `a4e052d` | Phase 1 — North Star architecture, database write boundaries, approval gate |
+| `3314baa` | Engineering control plane |
 
-Caveats: `app/api/knowledge/route.ts` is touched only by commit 1;
-`tests/security/data-access.test.ts` only by commit 2. Stage by path
-(`git add <paths>`), never `git add -A`.
+Phase 2 is committed batch by batch after `3314baa`, locally only and
+never pushed. The per-batch record is `PURIFICATION_EVIDENCE.md`; the
+current state is `PHASE_STATE.md` and `PROJECT_STATE.md`. Stage by path
+(`git add <paths>`), never the whole tree.
 
 ## Hooks
 

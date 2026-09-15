@@ -329,7 +329,7 @@ void describe("4. An agent cannot bypass the action engine", () => {
     assert.deepEqual(importers, ["lib/orchestration/orchestrator.ts"]);
   });
 
-  void test("/api/action classifies; it neither runs work nor claims it ran", () => {
+  void test("the retired /api/action neither runs work nor claims it ran", () => {
     const source = code("app/api/action/route.ts");
 
     assert.ok(!/executeTool\(|\.from\(|\.rpc\(/.test(source), "/api/action must not execute or write.");

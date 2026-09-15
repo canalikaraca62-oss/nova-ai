@@ -11,9 +11,10 @@
  *
  * WHY THIS EXISTS
  *
- * ARCHITECTURE_AUDIT.md §14: `/api/agents/execute` is a single stateless
- * LLM call. It has no tools, no planning, no permission model, and it
- * never consulted the persona definitions that lived in `lib/agents/`
+ * ARCHITECTURE_AUDIT.md §14: `/api/agents/execute` was a single
+ * stateless LLM call (it is now retired to a 410 —
+ * PURIFICATION_EVIDENCE.md P2-G02). It had no tools, no planning, no
+ * permission model, and it never consulted the persona definitions that lived in `lib/agents/`
  * — they were decorative, and have since been deleted.
  *
  * Worse, `/api/action` decided whether an action needed confirmation

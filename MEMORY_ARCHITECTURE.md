@@ -135,7 +135,7 @@ and framed as a *style preference* that cannot override the rules above.
 
 | Event | Behaviour |
 |---|---|
-| Create / update | `status = 'active'` — retrievable |
+| Create / update | Stored with the status its writer sets: `/api/knowledge` defaults to `ready`, the semantic bridge writes `processing`. A record is retrievable only while its status is in `RETRIEVABLE_STATUSES` (`lib/memory/hierarchy.ts`), today `["active"]` — so **records created through the product are not retrieved** (known limitation; founder decision 2026-09-14, `PURIFICATION_EVIDENCE.md` P2-F07) |
 | Archive / soft delete | Status changes → **immediately unretrievable**, including for the owner |
 | Project deleted | `project_id` → NULL (`on delete set null`); record survives as workspace/org memory |
 | Workspace deleted | `workspace_id` → NULL; record survives as org memory |
@@ -155,7 +155,9 @@ vector infrastructure.
 
 1. Return a `MemoryRecordDescriptor` — owner, workspace, project,
    visibility, status.
-2. Filter by tenant **and** `status = 'active'` in the query.
+2. Filter by tenant **and** by `.in("status", [...RETRIEVABLE_STATUSES])`
+   in the query. The constant in `lib/memory/hierarchy.ts` is the one
+   authority for what is retrievable; never write a status literal.
 3. Pass every row through `canRetrieve()` — do not assume the query was
    sufficient.
 4. Emit `ContextItem`s and let `buildBoundedContext()` render them.

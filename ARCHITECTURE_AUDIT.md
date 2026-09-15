@@ -74,7 +74,7 @@ Across `app/`, `lib/`, `services/` and `types/`, the complete set of internal `@
 @/lib/plans              → imported only by app/pricing/page.tsx
 @/lib/supabase/json
 @/lib/supabaseAdmin
-@/services/action-types  → types only, by app/api/action/route.ts
+@/services/action-types  → types only, by app/api/action/route.ts   [superseded: file deleted in Phase 2, PURIFICATION_EVIDENCE.md P2-F05]
 @/services/search        → appears ONLY inside a comment (app/api/search/route.ts:269)
 @/types/database
 ```
@@ -174,7 +174,7 @@ One structural anomaly: a file literally named
 
 ### 6.1 Orphaned `services/` — 31 of 31 files (~37,000 lines)
 
-Every file under `services/` is unreferenced except `action-types.ts` (types only). This includes:
+Every file under `services/` is unreferenced except `action-types.ts` (types only). _(Superseded: `action-types.ts` was deleted in Phase 2 — `docs/engineering/PURIFICATION_EVIDENCE.md` P2-F05.)_ This includes:
 
 `action-executor.ts`, `action-parser.ts`, `agents.ts`, `ai.server.ts`, `ai.ts`, `billing.ts`, `canvas.ts`, `chats.ts`, `file.ts`, `knowledge.ts`, `messages.ts`, `notifications.ts`, `projects.ts`, `search.ts`, `storage.ts`, `tasks.ts`, `usage.server.ts` (2,520 lines), `usage.ts`, `vision.server.ts`, `voice.ts`, all 5 `document-reader/*`, all 6 `integrations/*` (Slack, GitHub, Gmail, Notion, Calendar — ~6,000 lines of integration code reachable by nothing).
 

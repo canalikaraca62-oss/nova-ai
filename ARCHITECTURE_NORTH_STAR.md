@@ -159,7 +159,7 @@ Status, entry points and problems for every subsystem, as found.
 | **Connectors** | PARTIAL · BLOCKED | `lib/integrations/capabilities.ts` (declared capabilities, availability); `/connectors` page | `integration_connections` (migration **unapplied**) | Capability gate in `executeTool` | No OAuth credentials; no connection can exist |
 | **Billing** | PARTIAL **[corrected]** | Stripe checkout/portal/webhook; `lib/billing/planResolution.ts`; `lib/usage/entitlements.ts` | `profiles` (plan), billing idempotency | In code, only the verified webhook writes a plan. **In the database, the user could too:** `profiles_update_own` + the blanket DML grant let a signed-in user set their own `plan`, `subscription_status`, `trial_ends_at` via PostgREST — the three columns entitlement reads | Closed by `20260913120000` (**not applied**). Rows already edited are not detected by it. Not re-verified live |
 | **Notifications** | PARTIAL | `/api/notifications` — user CRUD on own rows (insert via service role, `user_id` from the session) | `notifications` | Owner-scoped; no client insert policy | Confirmed: nothing else inserts a notification; no trigger |
-| **Observability** | PARTIAL | 201 `console.*` calls; derived activity feed (`lib/activity/events.ts`) | `audit_logs` — **[corrected]** one writer: `/api/auth/register` (`account.created`) | Logs redact provider bodies | `lib/observability/logger.ts` unused; `lib/security/audit.ts` is unused **and** in-memory only (never reaches the database); Sentry/PostHog env names exist, no SDK is installed |
+| **Observability** | PARTIAL | 201 `console.*` calls; derived activity feed (`lib/activity/events.ts`) | `audit_logs` — **[corrected]** one writer: `/api/auth/register` (`account.created`) | Logs redact provider bodies | `lib/observability/logger.ts` unused (kept by decision); `lib/security/audit.ts` was unused **and** in-memory only (never reached the database) and was deleted in Phase 2 (`232c62a`); Sentry/PostHog env names exist, no SDK is installed |
 | **UX** | PARTIAL | Home command center, nav, command palette, approvals, activity, graph, knowledge (incl. ask-by-meaning), Canvas, Studio | `canvases` | — | Inspected in full this pass. **Studio hub was FAKE** — hardcoded "recent projects" dated Today/Yesterday shown as the user's work, "Recent Generations" counting them, every tool "Ready" — removed; image/video/audio show CapabilityUnavailable and are now marked Unavailable; presentation is real (adapter, metered) but not persisted. **Canvas** is persisted (`/api/canvases`, owner-scoped RLS, autosave). Command palette only navigates (no mutation, no AI); mislabels: "Dashboard" → `/apps`, "New project" navigates only. Nav: no broken links. Middleware gates `/api` by credential *presence*; verification is `withAuth`. Pages are not gated server-side |
 
 **Goal and Context**, which are not rows in the table above:
@@ -169,23 +169,40 @@ disappears with the request. **Context** is IMPLEMENTED —
 `lib/memory/retrieval.ts` assembles authorized knowledge within a token
 budget, and `sanitizeUntrusted()` fences it before a model sees it.
 
-### DEAD — no importer (verified by grep, 2026-09-13)
+### DEAD — no importer (verified by grep, 2026-09-13; status updated in Phase 2)
 
-`lib/security/audit.ts` (945 lines), `lib/security/validation.ts` (1,480),
-`lib/observability/logger.ts` (408), `lib/memory/hierarchy.ts`,
-`lib/ai/context.ts` (574; the only user of `lib/agents/types.ts`),
-`lib/knowledge/search.ts` (673), `lib/knowledge/types.ts` (548),
-`lib/data/client.ts`, `lib/billing/permissions.ts` (514),
-`lib/ai/prompts.ts` (881), `lib/ai/groq.ts` (591), `lib/constants.ts`,
-`app/components/layout/TopBar.tsx` (617). `/api/canvas` has no UI caller
-(the editor uses `/api/canvases`); its fabricated fallback was removed
-this pass, and it remains a duplicate AI transport.
+**[corrected]** The 2026-09-13 list named `lib/memory/hierarchy.ts`,
+which was never dead: `lib/memory/retrieval.ts` imported it that day
+(tree `6de7dd0`) and still does. Phase 1 recorded these modules and
+removed none; Phase 2 removed the dead ones. Status of every listed
+module (`docs/engineering/PURIFICATION_EVIDENCE.md` P2-A, P2-C, P2-H07;
+pinned by `purification-authorities` P2-H):
 
-Several were kept by founder decision ("digerlerine dokunma"). Phase 1
-records them and removes none: deleting them is cleanup, not architecture.
-The ones that matter architecturally are the unused **logger** and
-**audit** modules — Observability's target lives in them or replaces them
-(§10).
+| Module | Status after Phase 2 |
+|---|---|
+| `lib/security/audit.ts` | Deleted — `232c62a` (P2-A) |
+| `lib/security/validation.ts` | Deleted — `232c62a` (P2-A) |
+| `lib/observability/logger.ts` | Kept by decision — the designated logger; still no importer |
+| `lib/memory/hierarchy.ts` | Not dead **[corrected]** — imported by `lib/memory/retrieval.ts` |
+| `lib/ai/context.ts` | Deleted — `232c62a` (P2-A) |
+| `lib/agents/types.ts` | Deleted — `232c62a` (P2-A) |
+| `lib/knowledge/search.ts` | Deleted — `232c62a` (P2-A) |
+| `lib/knowledge/types.ts` | Deleted — `232c62a` (P2-A) |
+| `lib/data/client.ts` | Deleted — `232c62a` (P2-A) |
+| `lib/billing/permissions.ts` | Deleted — `232c62a` (P2-A) |
+| `lib/ai/prompts.ts` | Deleted — `232c62a` (P2-A) |
+| `lib/ai/groq.ts` | Deleted — `232c62a` (P2-A) |
+| `lib/constants.ts` | Deleted — `232c62a` (P2-A) |
+| `app/components/layout/TopBar.tsx` | Deleted — `1447998` (P2-C) |
+
+`/api/canvas` still has no UI caller (the editor uses `/api/canvases`);
+its fabricated fallback was removed in Phase 1, when it moved onto the
+registry and the adapter.
+
+What matters architecturally is unchanged: the unused **logger** is where
+Observability's target lives or is replaced (§10), and the **audit**
+durability gap remains — `audit_logs` has one writer and no route
+exposes it.
 
 ---
 

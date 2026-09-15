@@ -4,7 +4,15 @@
  *
  * Phase 7 (see IMPLEMENTATION_PLAN.md).
  *
- * The single place that talks to an AI provider over the wire.
+ * The shared transport for chat completions: one timeout, one retry
+ * policy, one error normalisation.
+ *
+ * It is NOT the only code that reaches a provider. Four callers fetch a
+ * provider directly, each taking its endpoint and key from the registry
+ * (PROVIDER_ENDPOINTS, providerApiKey) rather than from a copy of its
+ * own: /api/chat (its own streaming SSE), /api/voice/transcribe,
+ * /api/voice/speak and lib/search/openaiEmbedding.ts
+ * (PURIFICATION_EVIDENCE.md P2-H04b).
  *
  * WHY
  *

@@ -1689,4 +1689,128 @@ unchanged by every attempt; the canonical checkout was never built.
 | P2-P06 (Phase 2 status, guard and docs) | Implemented and verified |
 | P2-P07 (production build) | **BLOCKED** (resources) |
 
-**Not committed**; awaiting the founder's instruction. P2-H not started.
+Committed as `f566757` on the founder's instruction (2026-09-15); not pushed.
+
+### P2-H — documentation and architecture consistency (founder-approved 2026-09-15)
+
+Scope: the seven stale statements named by the preflight. Each one was
+checked against the code at `f566757` before it was classified. A
+historical statement that is still accurate about its own date is left
+alone. A dated, point-in-time document gets an annotation, not a rewrite.
+Only present-tense claims that are false are corrected.
+
+| ID | Target (file:line at `f566757`) | Claim | Reality (evidence) | Classification | Decision |
+|---|---|---|---|---|---|
+| P2-H01 | `MEMORY_ARCHITECTURE.md:138`, `:158` | Lifecycle: "Create / update \| `status = 'active'` — retrievable"; a new memory source filters "`status = 'active'`" | `app/api/knowledge/route.ts:156-168` `normalizeStatus` defaults to `"ready"`, and `lib/search/knowledgeBridge.ts:187,265` writes `"processing"`. `RETRIEVABLE_STATUSES = ["active"]` (`lib/memory/hierarchy.ts:117`, founder decision 2026-09-14), so created records are **not** retrievable. The rule has one authority: the constant | **STALE (false)** | Correct §6 and §7: name `RETRIEVABLE_STATUSES` as the authority and state the known limitation. §2 ("anything not `active` is refused") is true; unchanged |
+| P2-H02 | `ARCHITECTURE_AUDIT.md:77`, `:177` | `@/services/action-types` is imported (types only) by `/api/action`; every `services/` file is unreferenced "except `action-types.ts`" | Deleted in P2-F05 (`services/action-types.ts`, 411 lines); `purification-authorities` P2-F05 pins its absence | **DATED** — Phase 0 audit of `68f468c` (2026-09-03); true on its date | Annotate both lines as superseded (Phase 2, P2-F05). No rewrite |
+| P2-H03 | `IMPLEMENTATION_PLAN.md:170` | "Only `@/services/action-types` (types) is imported" | Same as P2-H02 | **DATED** — plan written from `68f468c` | Annotate as superseded |
+| P2-H04a | `lib/orchestration/registry.ts:14` | "`/api/agents/execute` **is** a single stateless LLM call" | Retired to a `withAuth` 410 (P2-G02, G-B2); `RETIRED_ROUTES` guard | **STALE (present tense)** | Past tense + retirement reference. `:19` ("`/api/action` decided …") is past tense and accurate; unchanged |
+| P2-H04b | `lib/ai/provider.ts:7` | "The single place that talks to an AI provider over the wire" | Four other callers fetch providers directly, each taking its endpoint and key from the registry: `/api/chat` (`route.ts:392,440`, own SSE: the P2-F08 known limitation), `/api/voice/transcribe` (`:263,484`), `/api/voice/speak` (`:485-486`), `lib/search/openaiEmbedding.ts:189` | **STALE (false architectural claim)** | Correct the header: the adapter is the chat-completion transport; name the four direct callers and the registry as the single source of endpoints and keys. `:14`, `:49-51` ("Before Phase 7 … `/api/agents/execute` passed `request.signal`") are dated history; unchanged |
+| P2-H04c | `lib/usage/entitlements.ts:292-294`, `lib/ai/registry.ts:14-22` | "Before Phase 5 … 32,768 on `/api/agents/execute`"; "Before Phase 7, model identifiers were scattered …" | Both are explicitly dated history and accurate | **NOT STALE** | No change |
+| P2-H05 | `tests/security/architecture-invariants.test.ts:332` | Test title "/api/action classifies; it neither runs work nor claims it ran" | `/api/action` no longer classifies. It is a retired 410 (P2-G03); the two assertions (no `executeTool` / `.from` / `.rpc`; no `"Done."`) still hold | **STALE (test description)** | Retitle; assertions unchanged |
+| P2-H06 | `docs/engineering/GIT_PROTOCOL.md:32-45`, `:27-30` | "Pending commits (as of 2026-09-13)" with a recommended three-commit split, "awaiting founder instruction"; the trailer example hard-codes one session URL | The three efforts were committed 2026-09-14: `9837f30` (Brain semantic bridge …), `a4e052d` (Phase 1), `3314baa` (control plane). Every Phase 2 batch has its own commit. The session URL differs per session | **STALE** | Replace the pending section with the commit record and point to the state files; make the trailer session-generic |
+| P2-H07 | `ARCHITECTURE_NORTH_STAR.md:172-188` (DEAD list), `:162` (Observability row) | "DEAD — no importer (verified by grep, 2026-09-13)" lists `lib/memory/hierarchy.ts`; the Observability row calls `lib/security/audit.ts` "unused" | `hierarchy.ts` **was imported** by `lib/memory/retrieval.ts` at `6de7dd0` and `3314baa`, and still is (`retrieval.ts:46`): the listing was wrong on its date. 12 of the 14 listed modules were deleted in Phase 2 (`git log --diff-filter=D`): the 11 `lib/` files in `232c62a` (P2-A) and `TopBar.tsx` in `1447998` (P2-C). `lib/observability/logger.ts` is kept by decision, still without an importer. `/api/canvas` still has no UI caller | **STALE (false on its date + superseded)** | Replace the list with a per-file status table: `hierarchy.ts` marked **[corrected] not dead**, deleted files with their batch, `logger.ts` kept; correct the `audit.ts` phrase in the Observability row |
+
+**Found during inspection, outside the seven items (recorded, NOT
+changed):** the `IMPLEMENTATION_PLAN.md` header still reads "Status:
+Proposed — awaiting approval. No implementation has begun.", although
+Phases 1–12 of that plan were implemented. It is a dated planning
+document; changing its status line is a founder decision.
+
+**Guards planned** (`purification-authorities`, P2-H block; runtime code untouched):
+- `MEMORY_ARCHITECTURE.md` names `RETRIEVABLE_STATUSES` and does not claim
+  created or updated records are retrievable while the constant excludes the
+  knowledge route's default status.
+- The North Star dead-module table stays true. A file marked deleted does
+  not exist. A file marked kept or dead exists and has no importer in `app/`
+  or `lib/`. `hierarchy.ts` is never marked dead.
+- The `provider.ts` header does not claim to be the single provider transport
+  while other files fetch a `PROVIDER_ENDPOINTS` base URL.
+
+**Mutations planned:**
+- M1: restore the §6 lifecycle row.
+- M2: mark `hierarchy.ts` as dead in the table.
+- M3: mark the kept `logger.ts` as deleted.
+- M4: mark a deleted file as kept.
+- M5: restore the "single place" header.
+- M6: drop `RETRIEVABLE_STATUSES` from `MEMORY_ARCHITECTURE.md`.
+
+No runtime behaviour changes: every edit is documentation, a comment, or a
+test title, plus the new guards.
+
+#### What changed (uncommitted at `f566757`)
+
+- `MEMORY_ARCHITECTURE.md` §6: the lifecycle row states the real status
+  writes (`ready`, `processing`), names `RETRIEVABLE_STATUSES` as the rule,
+  and records the known limitation. §7 step 2 uses the constant instead
+  of a literal.
+- `ARCHITECTURE_AUDIT.md:77,177` and `IMPLEMENTATION_PLAN.md:170`: a
+  "superseded" annotation each, citing P2-F05. The dated text is kept.
+- `lib/orchestration/registry.ts`: the comment on `/api/agents/execute` is
+  in the past tense, with the retirement cited (P2-G02).
+- `lib/ai/provider.ts`: the header describes the adapter as the shared
+  chat-completion transport and names the four direct provider callers.
+- `tests/security/architecture-invariants.test.ts`: the test is retitled
+  "the retired /api/action neither runs work nor claims it ran"; its
+  assertions are unchanged.
+- `docs/engineering/GIT_PROTOCOL.md`: the pending-commits section is
+  replaced by the commit record (`9837f30`, `a4e052d`, `3314baa`, and
+  Phase 2 per batch); the trailer's session URL is now a placeholder.
+- `ARCHITECTURE_NORTH_STAR.md`: the dead list becomes a 14-row status
+  table (12 deleted with their commit, `logger.ts` kept, `hierarchy.ts`
+  **[corrected]** as not dead). The Observability row says `audit.ts` was
+  deleted.
+- `tests/security/purification-authorities.test.ts`: a P2-H block of 3
+  tests (H01, H07, H04b).
+- `lib/usage/entitlements.ts` and `lib/ai/registry.ts`: unchanged,
+  because their dated history is accurate.
+
+#### Verification (each heavy step alone, 300 MB gate before launch)
+
+| # | Step | Command | Result | Free RAM before |
+|---|---|---|---|---|
+| 1 | Targeted suites | `node --test --test-concurrency=1` `purification-authorities`, `architecture-invariants`, `engineering-control-plane`, `ai-provider`, `memory-isolation`, `agent-orchestration` | **PASS**: 282 tests: 275 pass, 0 fail, 7 todo | 444 MB |
+| 2 | Mutations | `scratchpad/mut-ph.mjs`, 7 below | **PASS**: 7 of 7 caught; files restored by hash | 364 … 438 MB |
+| 3 | Typecheck | `npx tsc --noEmit -p tsconfig.json` (heap 1,536 MB) | **PASS**: exit 0, 0 `error TS` | 469 MB |
+| 4 | Full suite | `npm run test:lowmem` | **PASS**: 1,863 tests, 352 suites: 1,856 pass, 0 fail, 7 todo | 851 MB |
+| 5 | Lint | `npx eslint` on the 4 changed `.ts` files (heap 768 MB) | **FAIL, then fixed**: `@next/next/no-assign-module-variable` at `purification-authorities.test.ts:552`, a local named `module` in the new guard. Renamed to `modulePath` | 762 MB |
+| R | Re-test after the fix | lint; `purification-authorities`; all 7 mutations; tsc; `test:lowmem` | **PASS**: lint exit 0; 65 / 65; 7 / 7 caught; tsc exit 0; 1,863: 1,856 pass, 0 fail, 7 todo | 452 … 859 MB |
+
+**Test-count delta** (1,863 against 1,860 after P2-P, +3), from a
+name-by-name diff: the three P2-H tests are new, and the one retitled test
+is the same test under a new name. Suites went from 351 to 352 with the
+new describe.
+
+#### Mutation testing
+
+Each mutation ran `purification-authorities` against one re-created stale
+claim, and every one was **caught (64 / 1)**. Restored files:
+`MEMORY_ARCHITECTURE.md` `D65820441730`, `ARCHITECTURE_NORTH_STAR.md`
+`ED1DC9BD75AF`, `lib/ai/provider.ts` `7AAB4431A0D6`.
+
+| # | Stale claim re-created | Test that failed |
+|---|---|---|
+| M1 | The §6 row claims "`status = 'active'` — retrievable" again | P2-H01 |
+| M2 | `hierarchy.ts` marked "Kept" (dead) | P2-H07 |
+| M3 | The kept `logger.ts` marked "Deleted" | P2-H07 |
+| M4 | The deleted `groq.ts` marked "Kept" | P2-H07 |
+| M5 | "The single place that talks to an AI provider" restored | P2-H04b |
+| M6 | `RETRIEVABLE_STATUSES` removed from `MEMORY_ARCHITECTURE.md` | P2-H01 |
+| M7 | The header stops naming `/api/voice/speak` | P2-H04b |
+
+`git status --short` and `syraven-audit.zip` (size, mtime) were unchanged
+throughout.
+
+#### Known limitations
+
+- The guards pin the corrected statements, not every sentence in every
+  document. Dated Phase 0 documents remain dated, with annotations only
+  where they cite removed code.
+- The `IMPLEMENTATION_PLAN.md` header status ("Proposed — no
+  implementation has begun") is recorded, not changed: a founder
+  decision.
+- Retrieval still returns no product-created knowledge; that is the
+  documented P2-F07 limitation, and P2-H only made the docs say so.
+
+**RESULT (P2-H):** implemented and verified; every step PASS after the
+lint fix. **Not committed**; awaiting the founder's instruction.
