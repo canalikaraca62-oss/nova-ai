@@ -522,6 +522,112 @@ moved, deleted or staged.
 **RESULT (P2-F08):** implemented and verified — all steps PASS. **Not
 committed**; awaiting founder instruction.
 
+### P2-F09 — voice provider errors (founder-approved 2026-09-15, both voice routes)
+
+| ID | Surface | Leak (file:line at `0ee964c`) | Reachable | Tests that pin it | Canonical owner | Decision |
+|---|---|---|---|---|---|---|
+| P2-F09a | `POST /api/voice/transcribe` | On a non-OK OpenAI response `getOpenAIErrorMessage(payload)` (`:235-251`) returns OpenAI's own `error.message`, and `createErrorResponse(message, safeStatus, …)` (`:604-631`) sends it as the client's `error`. `safeStatus` maps only 5xx → 502, so every provider 4xx passes through: a 401/403 on **our** key reaches the client as their own 401/403, our provider 429 as their rate limit. Provider text can carry project / organisation ids, quota and billing detail, key status and request echoes. The server log carries the same message uncapped | Route; no UI caller (`/api/voice/*` referenced only inside the speak route) | `api-auth-boundary`, `usage-enforcement`, `middleware-gate` — **none pins the error text or status** | `lib/ai/provider.ts` `normalizeHttpError(status)` — client-safe message and mapped status (401/403/429 → 503, 400/422 → 400, else 502) — and the 300-character log bound used at every other provider call site | FIX: client gets only `normalizeHttpError(response.status)`'s message and status; provider message logged capped at 300; `getOpenAIErrorMessage` deleted |
+| P2-F09b | `POST /api/voice/speak` | Same leak in the sibling route (`:547-591`): the client response carries `error.message: providerMessage`, `providerType` and the raw provider `status`, under the provider's own HTTP status; the log carries the message uncapped | Route; no UI caller | `ai-provider` (model-accepting), `api-auth-boundary`, `usage-enforcement`, `middleware-gate` — none pins the error text or status | Same | FIX: same mapping; `TTS_REQUEST_FAILED` code, `provider` and `latencyMs` kept; `providerType` and the raw `status` no longer sent; provider message logged capped at 300 |
+
+**Unchanged:** auth, usage guard and denial return, `guard.record`, every
+validation message, the timeout / network / unexpected-error responses,
+both success responses, and the model / key / URL logic.
+
+**Out-of-scope findings (recorded, not fixed — a later step):**
+`/api/voice/transcribe` keeps its own model allowlist (`ALLOWED_MODELS`,
+`:45-49`, including `gpt-4o-transcribe`, which is not in the registry) with
+no `selectModel` or plan check, reads `process.env.OPENAI_API_KEY` directly
+(`:355`) and posts to a hardcoded URL (`:13-14`); `/api/voice/speak` takes
+its default model from env `OPENAI_TTS_MODEL` (`:30-32`) and posts to a
+hardcoded URL (`:27-28`). Same class as P2-F08 and the `/api/files/analyze`,
+`/api/agents` env models.
+
+**Guards and mutations planned:** a P2-F09 block in
+`purification-authorities` for both routes (client response built only from
+`normalizeHttpError`; no provider message, `providerType` or raw status in
+it; provider message logged only capped at 300; `getOpenAIErrorMessage` /
+`safeStatus` gone). Mutations M-a transcribe message leak, M-b transcribe
+status passthrough, M-c uncapped logging, M-d missing `normalizeHttpError`
+mapping, M-e speak message leak, M-f speak status passthrough.
+
+#### What changed (uncommitted at `0ee964c`)
+
+- `app/api/voice/transcribe/route.ts` — imports `normalizeHttpError`;
+  `getOpenAIErrorMessage` deleted. On a non-OK provider response the
+  provider message is kept only for the log (`payload.error.message.trim()
+  .slice(0, 300)`), and the client gets `createErrorResponse(
+  failure.clientMessage, failure.status, …)` from
+  `normalizeHttpError(response.status)`; `safeStatus` (4xx passthrough) is
+  gone.
+- `app/api/voice/speak/route.ts` — imports `normalizeHttpError`. The log
+  keeps status, message (`.slice(0, 300)`) and type; the client response is
+  `{ error: { code: "TTS_REQUEST_FAILED", message: failure.clientMessage },
+  provider: "openai", latencyMs }` under `failure.status` — no
+  `providerMessage`, `providerType` or raw provider `status`.
+- `tests/security/purification-authorities.test.ts` — P2-F09 block: 6 tests
+  in 2 suites (3 per route).
+- Totals (`git diff --stat HEAD`): code and tests 3 files, +90 / −48; with
+  docs 5 files, +121 / −49.
+
+#### Verification (each step alone, 300 MB gate before launch)
+
+| # | Step | Command | Result | Free RAM before → after |
+|---|---|---|---|---|
+| 0 | Leftover sweep | search both voice routes for `getOpenAIErrorMessage`, `safeStatus`, `providerMessage`, `providerType`, `failure.` | **PASS** — provider message and type appear only in the log calls; both client responses are built only from `failure.*` | — |
+| 1 | Guard suite | `node --test --experimental-strip-types tests/security/purification-authorities.test.ts` | **PASS** — 27 tests, 9 suites: 27 pass, 0 fail (21 earlier + 6 P2-F09) | 395 → 322 MB |
+| 2 | Mutations | 6 mutations, below | **PASS** — 6 of 6 caught; both routes restored to their original hash after each | 338 … 499 MB per mutation |
+| 3 | Regression suites | `node --test --test-concurrency=1 …` `purification-authorities`, `usage-enforcement`, `api-auth-boundary`, `middleware-gate`, `ai-provider`, `observability-redaction` | **PASS** — exit 0; 374 tests, 44 suites: 374 pass, 0 fail, 0 todo | 571 → 556 MB |
+| 4 | Typecheck | `npx tsc --noEmit -p tsconfig.json` (`--max-old-space-size=1536`) | **PASS** — exit 0, 0 `error TS` lines | 486 → 743 MB |
+| 5 | Full suite | `npm run test:lowmem` | **PASS** — exit 0; 1,827 tests, 346 suites: 1,820 pass, 0 fail, 0 skipped, 7 todo (46.1 s) | 556 → 617 MB |
+| 6 | Lint | `npx eslint app/api/voice/transcribe/route.ts app/api/voice/speak/route.ts tests/security/purification-authorities.test.ts` (`--max-old-space-size=768`) | **PASS** — exit 0, 0 errors, 0 warnings | 607 → 502 MB |
+
+**Test-count delta accounted:** 1,827 vs 1,821 (after P2-F08) = the 6 new
+P2-F09 tests; 346 vs 344 suites = the 2 new `describe` blocks. No test
+removed; the 7 todos are the documented limitations, unchanged ("failing
+tests:" in the step 5 log lists only those).
+
+#### Mutation testing
+
+Each mutation re-created one defect, ran `purification-authorities`, and
+restored the original bytes in a `finally` block; both routes were backed
+up to the scratchpad first. SHA-256, first 12 hex.
+
+| # | Defect re-created | File | Result | Hash before = after |
+|---|---|---|---|---|
+| M-a | Provider message returned (`providerMessage ?? failure.clientMessage`) | transcribe | **Caught** — 25 / 2: "the client gets only the canonical message and status", "no response is built from the provider's message or status" | `21FE6CDF78C1` ✔ |
+| M-b | Provider status passed through (`response.status` for `failure.status`) | transcribe | **Caught** — 26 / 1: "the client gets only the canonical message and status" | `21FE6CDF78C1` ✔ |
+| M-c | Provider message logged uncapped (`.trim()` without `.slice(0, 300)`) | transcribe | **Caught** — 26 / 1: "the provider message is logged only capped" | `21FE6CDF78C1` ✔ |
+| M-d | `normalizeHttpError` mapping replaced by a literal message with `response.status` | transcribe | **Caught** — 26 / 1: "the client gets only the canonical message and status" | `21FE6CDF78C1` ✔ |
+| M-e | Provider message returned (`providerMessage \|\| failure.clientMessage`) | speak | **Caught** — 25 / 2: "the client gets only the canonical message and status", "no provider message, type or status is in the response" | `BF40A18170C0` ✔ |
+| M-f | Provider status passed through (`response.status` for `failure.status`) | speak | **Caught** — 25 / 2: same two tests | `BF40A18170C0` ✔ |
+
+`git status --short` identical before and after; `syraven-audit.zip` hash
+unchanged. **Memory:** the first mutation run stopped at the gate before
+M-a (286 MB, no mutation applied); a memory-only watcher (ran nothing)
+reported 354 MB free, and the single retry ran all six.
+
+#### Known limitations
+
+- Out-of-scope findings stand, unfixed: the transcribe model allowlist
+  (`gpt-4o-transcribe` not in the registry, no plan check), the direct
+  `OPENAI_API_KEY` read, the hardcoded URLs in both voice routes, and the
+  speak route's env default model.
+- Neither voice route has a UI caller; the change is proven by source
+  guards, types and the suites above, not by a live provider call (a real
+  OpenAI error cannot be produced without secrets or production).
+- The status mapping is now `normalizeHttpError`'s: our 401/403/429 become
+  503, 400/422 become 400, others 502. A client that relied on seeing the
+  provider's 4xx now sees the mapped status.
+- No production build was run.
+
+#### Not done
+
+No commit, push, deploy, build, migration, or secret / OAuth change.
+`syraven-audit.zip` not opened, moved, deleted or staged.
+
+**RESULT (P2-F09):** implemented and verified — all steps PASS. **Not
+committed**; awaiting founder instruction.
+
 ### Later groups
 
 Recorded as each batch is prepared: routes (P2-G), documentation (P2-H).

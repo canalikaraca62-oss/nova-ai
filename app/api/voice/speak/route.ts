@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { withAuth } from "@/lib/api/withAuth";
 import { enforceUsage } from "@/lib/api/usageGuard";
 import { selectModel } from "@/lib/ai/registry";
+import { normalizeHttpError } from "@/lib/ai/provider";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -544,11 +545,16 @@ export const POST = withAuth(async (
           ? providerError.error
           : null;
 
+      /*
+        Provider detail stays in the server log, the message capped at
+        300 characters. The client gets the canonical mapping only: no
+        provider message, no provider error type, no raw provider status
+        (PURIFICATION_EVIDENCE.md P2-F09).
+      */
       const providerMessage =
         getString(
           errorData?.message
-        ) ??
-        "Text-to-speech request failed.";
+        ) ?? "";
 
       const providerType =
         getString(
@@ -561,33 +567,25 @@ export const POST = withAuth(async (
           status:
             response.status,
           message:
-            providerMessage,
+            providerMessage.slice(0, 300),
           type:
             providerType,
         }
       );
 
+      const failure =
+        normalizeHttpError(response.status);
+
       return json(
         {
           error: {
-            code:
-              "TTS_REQUEST_FAILED",
-            message:
-              providerMessage,
-            providerType,
+            code: "TTS_REQUEST_FAILED",
+            message: failure.clientMessage,
           },
-
-          provider:
-            "openai",
-
-          status:
-            response.status,
-
-          latencyMs:
-            Date.now() -
-            startedAt,
+          provider: "openai",
+          latencyMs: Date.now() - startedAt,
         },
-        response.status
+        failure.status
       );
     }
 

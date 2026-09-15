@@ -226,3 +226,57 @@ void describe("P2-F08: /api/chat takes model and provider from the registry", ()
     );
   });
 });
+
+/* -------------------------------------------------------------------------- */
+/*          P2-F09 — voice routes answer provider failures canonically        */
+/* -------------------------------------------------------------------------- */
+
+void describe("P2-F09: /api/voice/transcribe maps provider failures", () => {
+  const TRANSCRIBE = code("app", "api", "voice", "transcribe", "route.ts");
+
+  void test("the client gets only the canonical message and status", () => {
+    assert.match(TRANSCRIBE, /normalizeHttpError\(\s*response\.status\s*\)/);
+    assert.match(
+      TRANSCRIBE,
+      /createErrorResponse\(\s*failure\.clientMessage,\s*failure\.status\b/,
+      "CRITICAL: the provider's own text or status reaches the client again.",
+    );
+  });
+
+  void test("no response is built from the provider's message or status", () => {
+    assert.ok(
+      !/getOpenAIErrorMessage|safeStatus|createErrorResponse\(\s*(?:message|providerMessage)\b/.test(
+        TRANSCRIBE,
+      ),
+      "Provider text or a passed-through provider status is back in the response.",
+    );
+  });
+
+  void test("the provider message is logged only capped", () => {
+    assert.match(TRANSCRIBE, /payload\.error\.message\.trim\(\)\.slice\(0,\s*300\)/);
+  });
+});
+
+void describe("P2-F09: /api/voice/speak maps provider failures", () => {
+  const SPEAK = code("app", "api", "voice", "speak", "route.ts");
+  const start = SPEAK.indexOf('"TTS_REQUEST_FAILED"');
+  const reply = SPEAK.slice(start, start + 600);
+
+  void test("the client gets only the canonical message and status", () => {
+    assert.ok(start > 0, "The TTS failure response moved; re-point this check.");
+    assert.match(SPEAK, /normalizeHttpError\(\s*response\.status\s*\)/);
+    assert.match(reply, /message:\s*failure\.clientMessage/);
+    assert.match(reply, /},\s*failure\.status\s*\)/);
+  });
+
+  void test("no provider message, type or status is in the response", () => {
+    assert.ok(
+      !/providerMessage|providerType|response\.status/.test(reply),
+      "CRITICAL: provider detail reaches the client again.",
+    );
+  });
+
+  void test("the provider message is logged only capped", () => {
+    assert.match(SPEAK, /providerMessage\.slice\(0,\s*300\)/);
+  });
+});

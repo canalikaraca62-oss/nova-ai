@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { withAuth } from "@/lib/api/withAuth";
 import { enforceUsage } from "@/lib/api/usageGuard";
+import { normalizeHttpError } from "@/lib/ai/provider";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -230,24 +231,6 @@ function createErrorResponse(
       },
     }
   );
-}
-
-function getOpenAIErrorMessage(
-  payload:
-    | OpenAITranscriptionResponse
-    | null
-): string {
-  const message =
-    payload?.error?.message;
-
-  if (
-    typeof message === "string" &&
-    message.trim().length > 0
-  ) {
-    return message.trim();
-  }
-
-  return "Voice transcription failed.";
 }
 
 function parseOpenAIResponse(
@@ -602,10 +585,18 @@ export const POST = withAuth(async (
     ============================================== */
 
     if (!response.ok) {
-      const message =
-        getOpenAIErrorMessage(
-          payload
-        );
+      /*
+        The provider's own message stays in the server log, capped at 300
+        characters like every other provider call site: it can carry
+        project and organisation ids, quota or key status, and echoes of
+        the request. The client gets the canonical mapping only -- a 401
+        on OUR key is a service problem (503), not the caller's session
+        failing (PURIFICATION_EVIDENCE.md P2-F09).
+      */
+      const providerMessage =
+        typeof payload?.error?.message === "string"
+          ? payload.error.message.trim().slice(0, 300)
+          : null;
 
       console.error(
         "SYRAVEN VOICE TRANSCRIBE API ERROR:",
@@ -613,18 +604,17 @@ export const POST = withAuth(async (
           requestId,
           status:
             response.status,
-          message,
+          message:
+            providerMessage,
         }
       );
 
-      const safeStatus =
-        response.status >= 500
-          ? 502
-          : response.status;
+      const failure =
+        normalizeHttpError(response.status);
 
       return createErrorResponse(
-        message,
-        safeStatus,
+        failure.clientMessage,
+        failure.status,
         undefined,
         requestId
       );
