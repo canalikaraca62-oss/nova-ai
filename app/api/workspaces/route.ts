@@ -174,20 +174,34 @@ function deriveSlug(name: string): string {
 /* -------------------------------------------------------------------------- */
 
 /**
- * Returns an organisation the caller is an active member of, creating a
- * personal one if they have none.
+ * Returns an organisation the caller OWNS, creating a personal one if they
+ * own none.
  *
  * Read through the caller's RLS client, so the membership rows returned
  * are provably their own. The id is never accepted from the request.
+ *
+ * OWNER-BOUND AND DETERMINISTIC (Phase 3, Batch 1; SECURITY_EVIDENCE.md).
+ * This used to take ANY active membership with an unordered `.limit(1)`.
+ * A membership can exist in an organisation the caller does not own, and
+ * while an organisation admin could insert arbitrary users, that let an
+ * attacker land a victim's next workspace in the attacker's organisation.
+ * Only an active OWNER membership whose organisation's server-side
+ * owner_id is the caller qualifies, oldest first, so several owned
+ * organisations resolve the same way on every call. No other membership
+ * is ever a fallback: with no owned organisation, a personal one is
+ * provisioned below.
  */
 async function resolveOrganizationId(
   session: AuthenticatedSession,
 ): Promise<{ ok: true; organizationId: string } | { ok: false; status: number }> {
   const { data: membership, error: membershipError } = await session.supabase
     .from("organization_members")
-    .select("organization_id")
+    .select("organization_id, organizations!inner(owner_id)")
     .eq("user_id", session.userId)
     .eq("status", "active")
+    .eq("role", "owner")
+    .eq("organizations.owner_id", session.userId)
+    .order("created_at", { ascending: true })
     .limit(1)
     .maybeSingle();
 

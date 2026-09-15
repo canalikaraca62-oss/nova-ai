@@ -734,14 +734,6 @@ void describe("Deferred boundaries (not closed in Phase 1)", () => {
   );
 
   void test(
-    "an organization admin cannot take ownership or grant the owner role",
-    { todo: "MIGRATION: organizations UPDATE lets an admin set owner_id; organization_members ALL lets an admin set role = 'owner'" },
-    () => {
-      assert.ok(false);
-    },
-  );
-
-  void test(
     "api_keys, ai_budgets and ai_agent_executions accept no client write",
     { todo: "MIGRATION: owner-scoped ALL/INSERT/UPDATE policies accept un-revoked keys, self-set budgets, forged cost records; latent while nothing reads them (guarded above)" },
     () => {
@@ -764,6 +756,34 @@ void describe("Deferred boundaries (not closed in Phase 1)", () => {
       assert.ok(false);
     },
   );
+});
+
+/*
+ * Closed in the repository by 20260915120000 (Phase 3, Batch 1;
+ * docs/engineering/SECURITY_EVIDENCE.md). This is repository state only:
+ * the migration is NOT APPLIED until the founder applies it, TEST first.
+ */
+void describe("Deferred boundaries closed in the repository (Phase 3)", () => {
+  void test("an organization admin cannot take ownership or grant the owner role", () => {
+    const createAt = MIGRATIONS_SQL.lastIndexOf('create policy "admins can manage organization members"');
+    const dropAt = MIGRATIONS_SQL.lastIndexOf('drop policy if exists "admins can manage organization members"');
+
+    assert.ok(dropAt > createAt, "The admin FOR ALL membership policy is still in force.");
+
+    const update = lastPolicy(MIGRATIONS_SQL, "admins can update non-owner memberships");
+    assert.match(update, /using\s*\([\s\S]*role\s*<>\s*'owner'/i, "An admin can rewrite an owner membership.");
+    assert.match(
+      update,
+      /with check\s*\([\s\S]*role\s+in\s*\(\s*'admin',\s*'manager',\s*'member',\s*'viewer'\s*\)/i,
+      "An admin can grant the owner role.",
+    );
+
+    assert.match(MIGRATIONS_SQL, /revoke\s+update\s+on\s+table\s+public\.organizations\s+from\s+anon,\s*authenticated/i);
+
+    const grant = /grant\s+update\s*\(([^)]*)\)\s*on\s+table\s+public\.organizations\s+to\s+authenticated/i.exec(MIGRATIONS_SQL);
+    assert.ok(grant, "No column-level UPDATE grant on organizations.");
+    assert.ok(!/\bowner_id\b/.test(grant[1] ?? ""), "Clients can still reassign organizations.owner_id.");
+  });
 });
 
 /* -------------------------------------------------------------------------- */
