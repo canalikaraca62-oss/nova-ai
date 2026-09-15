@@ -288,6 +288,125 @@ migration `2AF2E9638B31`, the route `CF2F0A8CC0E6`.
   organization-bound rows (for example `projects.organization_id`). Not
   cross-tenant after I1.
 - `organizations.plan` and `status` stay admin-writable (Batch 4).
+
+### Batch 1 TEST prerequisite — `set_updated_at()` schema drift (2026-09-15)
+
+**Finding.** The Batch 1 read-only P0 check against TEST
+(`akhkukajdgayqwhedeoo`, anon REST, `limit=0`) returned 404 `PGRST205`
+for `public.canvases`. The other five guarded tables answered 200. The
+delete guard queries `canvases` at run time, so applying Batch 1 to TEST
+as it stands would make every workspace delete, and every organization
+delete, fail. Batch 1 was therefore **not applied**, and it is **not
+changed** (founder).
+
+**TEST reads (founder, SQL Editor, read-only):**
+
+| Query | Result |
+|---|---|
+| T1 | `public.canvases` is NULL; `public.set_updated_at()` is NULL; `public.handle_updated_at()` exists |
+| T3 | The `canvases` policies return 0 rows |
+| T2 | `20260908120000` does not appear in `supabase_migrations.schema_migrations` |
+
+T2 contradicts `VERIFICATION_STATE.md:79` (2026-09-13, "recorded:
+`20260908120000`"). That row is now out of date. Correcting it is a
+separate, approved documentation change and is not made here.
+
+**Root cause.**
+- `20260908120000_syraven_canvases.sql` (unchanged since `1c5a2c9`) ends
+  with `create trigger set_canvases_updated_at … execute function
+  public.set_updated_at()`.
+- No migration defines that function. The repository defines
+  `handle_updated_at()` and `ai_set_updated_at()` only.
+- `CREATE TRIGGER` requires the function to exist. The failure (42883)
+  rolls back the whole migration, so there is no table, no policies and no
+  history row.
+- Production has the function, created outside the repository, which is
+  why the migration succeeded there. This was already recorded as a known
+  defect (`MIGRATION_APPROVAL_REQUIRED.md:33`,
+  `ARCHITECTURE_NORTH_STAR.md:504`).
+
+**Production definition** (founder, SQL Editor, read-only):
+
+| Property | Value |
+|---|---|
+| Returns | `trigger` |
+| Language | `plpgsql` |
+| Security | invoker (`prosecdef = false`) |
+| Volatility | `v` |
+| Owner | `postgres` |
+| `search_path` | `''` (empty) |
+| Body | `new.updated_at = now(); return new;` |
+
+It matches `handle_updated_at()` except for `search_path`, which is
+`public` in the repository.
+
+**Fix (repository only).** New migration
+`20260908110000_syraven_set_updated_at.sql`:
+- a `do $migration$ … $migration$` block that creates
+  `public.set_updated_at()` **only if `to_regprocedure(...)` is NULL**;
+- the definition is production's exactly, including `search_path = ''`.
+  `now()` resolves from `pg_catalog`, which is always searched, and the
+  body references no relation;
+- no `create or replace`, `alter`, `grant` or `revoke`. On production it
+  is a no-op;
+- it sorts before the canvases migration, so a database built in
+  filename order has the function first;
+- relative to production's history the file is out of order, like the
+  Phase 2 baseline. `db push` is never used; apply through the SQL Editor.
+
+**Guard.** `tests/schema/set-updated-at-migration.test.ts`:
+- file order;
+- a generic check that every `execute function public.X()` is defined
+  earlier in migration order;
+- the definition matches production;
+- the create is conditional;
+- no side effects;
+- a dollar-quote-aware parse of the file;
+- the canvases migration is pinned by SHA-256 (LF-normalized).
+
+**Mutations planned (9):**
+1. File moved after the canvases migration.
+2. Conditional removed and `create or replace` used.
+3. `search_path` set to `public`.
+4. `search_path` removed.
+5. `security definer`.
+6. Body changed to `clock_timestamp()`.
+7. File deleted.
+8. A migration referencing an undefined trigger function added.
+9. The canvases migration altered.
+
+**Status: NOT APPLIED to TEST or production.** The TEST order is:
+1. `20260908110000` (this file).
+2. `20260908120000` (canvases, unchanged).
+3. Batch 1 P0 re-run, then P1–P6.
+4. `20260915120000` (Batch 1).
+5. Probe (needs TEST user B).
+
+`20260909120000` and `20260910120000` stay unapplied.
+
+**Verification** (repository only; each heavy step alone, behind the
+300 MB gate):
+
+| Check | Result |
+|---|---|
+| Targeted: `set-updated-at-migration`, `migration-integrity`, `canvas-persistence`, `membership-fortress`, `architecture-invariants` | **PASS**: 246 tests, 240 pass, 0 fail, 6 todo. The generic check finds no other migration that executes an undefined trigger function. |
+| Mutations (`scratchpad/mut-sua.mjs`) | **PASS**: 9 of 9 caught; files restored by hash (`set_updated_at` `CE3E230241C6`, canvases `A0DB540DCFB6`); moved, parked and added files removed; `git status` and the zip unchanged |
+| `npx tsc --noEmit` | **PASS**: exit 0 |
+| ESLint on the new test | **PASS**: exit 0 |
+| `npm run test:lowmem` | **PASS**: 1,931 tests, 365 suites: 1,925 pass, 0 fail, 6 todo |
+
+Test-count delta: +20 from the Batch 1 run (1,911). That is 16 new tests
+plus 4 `migration-integrity` checks for the new file. Suites go from 359
+to 365.
+
+M6 (body changed to `clock_timestamp()`) survived the first mutation
+pass. The mutation script's unanchored replace hit the identical text in
+the migration's header comment, not the function body. The script was
+fixed to target the body line and re-run, and "the body is exactly
+production's" catches it.
+
+**Not done:** no migration applied, no SQL Editor use, no database
+connection, no probe run, `VERIFICATION_STATE.md` unchanged, no commit.
 - **A trade-off of failing closed: deletion can be blocked by planting a
   row.**
   - `tasks`, `knowledge`, `teams`, `canvases` and `projects` let a user
