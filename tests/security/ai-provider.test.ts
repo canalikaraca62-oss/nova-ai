@@ -264,7 +264,10 @@ void describe("Routes accepting a model validate it", () => {
    */
   const MODEL_ACCEPTING = [
     "app/api/chat/route.ts",
-    "app/api/agents/execute/route.ts",
+    /*
+     * app/api/agents/execute/route.ts left this list when it was retired to
+     * a 410 (PURIFICATION_EVIDENCE.md P2-G02).
+     */
     /*
      * app/api/stream/route.ts left this list when it was retired to a 410
      * (PURIFICATION_EVIDENCE.md P2-G01): it accepts no model and calls no
@@ -598,7 +601,7 @@ void describe("Phase 1-6 guarantees still hold", () => {
       "app/api/chat/route.ts",
       "app/api/files/analyze/route.ts",
       /* app/api/stream/route.ts: retired (P2-G01) -- no guard, no policy, no call. */
-      "app/api/agents/execute/route.ts",
+      /* app/api/agents/execute/route.ts: retired (P2-G02) -- likewise. */
     ]) {
       const code = stripComments(
         readFileSync(join(process.cwd(), id), "utf8"),

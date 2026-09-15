@@ -769,7 +769,137 @@ deleted or staged.
 **RESULT (P2-G01 / G-B1):** implemented and verified — all steps PASS.
 **Not committed**; awaiting founder instruction.
 
+#### P2-G02 / P2-G03 — retire `/api/agents/execute` and `/api/action` (founder-approved 2026-09-15, G-B2)
+
+| ID | Route | Evidence (file:line at `d10f0df`) | Consumers | Tests that pin it | Canonical replacement | Decision |
+|---|---|---|---|---|---|---|
+| P2-G02 | `POST /api/agents/execute` (484 lines) | A single chat completion with an agent-flavoured system message (header `:8-32`). Correct on the provider side (`resolveAiPolicy`, `chatCompletion` / `chatCompletionStream`, `enforceUsage`), but it accepts a client `systemPrompt` and places it in the SYSTEM message (`:53`, `:247-262`) with no context budget or untrusted-content fence — the protection `/api/chat` applies. Runs no tools; acting agent work is `/api/agents/run` (its own header says so) | **None** — mentions in `lib/ai/provider.ts:14,50`, `lib/orchestration/registry.ts:14`, `lib/usage/entitlements.ts:293` are comments | `ai-provider` (`MODEL_ACCEPTING`; policy-after-guard list), `usage-enforcement` (`METERED_ROUTES`), `api-auth-boundary` (`AI_SPENDING_ROUTES`: exists + `POST = withAuth(`), `middleware-gate` (protected list), `architecture-invariants` (comment only) | `/api/agents/run` (agents) and `/api/chat` (conversation) | RETIRE: `withAuth` 410 naming both |
+| P2-G03 | `POST /api/action` (340 lines) + public `GET` | Classifies an action and never runs it: `"none"` → "nothing to do", a high-risk type → `pending_confirmation`, a registered low-risk type → 409 `not_executed`, anything else → "unsupported" (`:163-307`). It still calls `enforceUsage(…, "agentRun")` first (`:177-185`), so each call counts against the caller's agent-run quota for no work. Its risk logic is a second copy of the registry rule: the authority is `lib/orchestration/registry.ts` (`getTool` `:279`, `requiresHumanApproval` `:69`), applied by `planValidation.ts:295` and the orchestrator (`:428`, `:540`, `:604`). `GET` answers 405 and is listed as a public status probe in `middleware.ts` `PUBLIC_STATUS_GET_ROUTES` | **None** — `lib/orchestration/registry.ts:19` mention is a comment; `tests/e2e/seeded-journey.spec.ts:288` deliberately does not call it | `agent-orchestration` ("/api/action classifies risk server-side" `:860-899`; "the action route still enforces auth and usage" `:930-935`), `architecture-invariants` (`:327-332`, no execute / no "Done."), `middleware-gate` (`PUBLIC_STATUS_GET_ROUTES` mirror, must equal `middleware.ts`), `purification-authorities` (P2-F05: no `services/action-types` import) | `/api/agents/run` — plan validated against the registry, approvals claimed, tools executed | RETIRE: `withAuth` 410; drop the public GET |
+
+**Pins reworked — only those that require the old implementations:**
+- `ai-provider` `MODEL_ACCEPTING` and the policy-after-guard list:
+  `/api/agents/execute` removed (it resolves no model and calls no provider).
+- `usage-enforcement` `METERED_ROUTES`: `/api/agents/execute` removed (spends
+  nothing).
+- `agent-orchestration` "/api/action classifies risk server-side": replaced
+  by "risk is classified in lib/orchestration, not in a route" — pins
+  `requiresHumanApproval(risk)` in `planValidation.ts`,
+  `requiresHumanApproval(step.risk)` in the orchestrator, and that the
+  retired route carries no `getTool` / `requiresHumanApproval` copy.
+- `agent-orchestration` "the action route still enforces auth and usage":
+  becomes "the retired action route still requires a session" (no work, so
+  no usage).
+- `middleware.ts` `PUBLIC_STATUS_GET_ROUTES` and its mirror in
+  `middleware-gate`: `/api/action` removed — a public exception for a GET
+  the route no longer has (narrows the public surface); `/api/action` added
+  to the protected list (anonymous GET/POST/PATCH/DELETE rejected).
+
+**Unchanged:** `api-auth-boundary` (still pins `POST = withAuth(`),
+`architecture-invariants` `:327-332` (the retired route still executes and
+writes nothing), `purification-authorities` P2-F05 (still no
+`services/action-types` import), the paid-call and metering sweeps.
+
+**Retired-route guard:** `RETIRED_ROUTES` gains `/api/agents/execute` and
+`/api/action` (session, 410, no work, no product caller).
+
+**Mutations planned:** for each route — re-add work (provider call /
+`enforceUsage`), 410 → 200, remove `withAuth`, add a product caller (in
+`app/agents/[id]/page.tsx`); plus re-adding `/api/action` to
+`middleware.ts` `PUBLIC_STATUS_GET_ROUTES` (the mirror must fail).
+
+#### What changed (uncommitted at `d10f0df`)
+
+- `app/api/agents/execute/route.ts` — implementation removed (404 → 39
+  non-blank lines); now only `POST = withAuth(async () => …)` answering 410
+  `ROUTE_RETIRED` "This endpoint is retired. Run agents through
+  /api/agents/run; chat through /api/chat." The `OPTIONS` export is gone.
+- `app/api/action/route.ts` — implementation removed (293 → 39 non-blank
+  lines); now only `POST = withAuth(async () => …)` answering 410
+  `ROUTE_RETIRED` "… Actions run through an agent at /api/agents/run, where
+  each step is classified, approved and executed." The public `GET` is gone.
+- `middleware.ts` — `/api/action` removed from `PUBLIC_STATUS_GET_ROUTES`
+  (note in its place, no quoted path so the mirror parser ignores it).
+- `tests/security/middleware-gate.test.ts` — mirror list matches;
+  `/api/action` added to the protected-routes list.
+- `tests/security/agent-orchestration.test.ts` — "/api/action classifies risk
+  server-side" (4 tests) replaced by "Risk is classified in
+  lib/orchestration, not in a route" (3 tests: `planValidation.ts`
+  `requiresHumanApproval(risk)`, orchestrator `requiresHumanApproval(step.risk)`,
+  no rule copy in the retired route); "the action route still enforces auth
+  and usage" became "the retired action route still requires a session".
+- `tests/security/ai-provider.test.ts`, `usage-enforcement.test.ts` —
+  `/api/agents/execute` removed from `MODEL_ACCEPTING`, the policy-after-
+  guard list and `METERED_ROUTES`, each with a note.
+- `tests/security/purification-authorities.test.ts` — `RETIRED_ROUTES` gains
+  both routes.
+- Totals (`git diff --stat HEAD`): code, middleware and tests 8 files,
+  +98 / −820; with this file 9 files, +139 / −821.
+
+#### Verification (each step alone, 300 MB gate before launch)
+
+| # | Step | Command | Result | Free RAM before → after |
+|---|---|---|---|---|
+| 1 | Affected guard suites | `node --test --test-concurrency=1 …` `purification-authorities`, `ai-provider`, `usage-enforcement`, `agent-orchestration`, `middleware-gate`, `api-auth-boundary`, `architecture-invariants` | **PASS** — exit 0; 451 tests, 62 suites: 444 pass, 0 fail, 7 todo | 348 → 379 MB |
+| 2 | Mutations | 9 mutations, below | **PASS** — 9 of 9 caught; every file restored to its original hash | 300 … 448 MB per mutation |
+| 3 | Regression suites | `node --test --test-concurrency=1 …` `data-access`, `defect-remediation`, `memory-isolation`, `observability-redaction`, `api-reference-integrity` | **PASS** — exit 0; 157 tests, 31 suites: 157 pass, 0 fail | 526 → 513 MB |
+| 4 | Typecheck | `npx tsc --noEmit -p tsconfig.json` (`--max-old-space-size=1536`) | **PASS** — exit 0, 0 `error TS` lines | 610 → 898 MB |
+| 5 | Full suite | `npm run test:lowmem` | **PASS** — exit 0; 1,834 tests, 347 suites: 1,827 pass, 0 fail, 0 skipped, 7 todo (64.6 s) | 631 → 775 MB |
+| 6 | Lint | `npx eslint` on the two routes, `middleware.ts` and the five changed test files (`--max-old-space-size=768`) | **PASS** — exit 0, 0 errors, 0 warnings | 650 → 866 MB |
+
+**Test-count delta accounted:** 1,834 vs 1,829 (after G-B1) = +6 retired-
+route tests (3 × 2 routes), −2 (`ai-provider` `MODEL_ACCEPTING`, 2 per
+route), −2 (`usage-enforcement` `METERED_ROUTES`, 2 per route), −1
+(`agent-orchestration` describe 4 → 3 tests), +4 (`middleware-gate`
+protected list, 4 methods for `/api/action`). Suites unchanged (347): the
+replaced `describe` is one-for-one. The 7 todos are the documented
+limitations; "failing tests:" in steps 1 and 5 lists only those.
+
+#### Mutation testing
+
+Each mutation re-created one defect, ran the guard that owns it, and
+restored the original bytes in a `finally` block; the four files were
+backed up to the scratchpad first. SHA-256, first 12 hex.
+
+| # | Defect re-created | File | Result | Hash before = after |
+|---|---|---|---|---|
+| M1 | Provider call re-added (`await chatCompletion(…)`) | `app/api/agents/execute/route.ts` | **Caught** — `purification-authorities` 38 / 1: "/api/agents/execute reads, writes and spends nothing" | `0065D1D8770E` ✔ |
+| M2 | 410 → 200 | same | **Caught** — 38 / 1: "/api/agents/execute requires a session and answers 410" | `0065D1D8770E` ✔ |
+| M3 | `withAuth` removed | same | **Caught** — `purification-authorities` 38 / 1; `api-auth-boundary` 135 / 1: "app/api/agents/execute/route.ts exists and wraps POST in withAuth" | `0065D1D8770E` ✔ |
+| M4 | Product caller added (`fetch("/api/agents/execute", …)`) | `app/agents/[id]/page.tsx` | **Caught** — 38 / 1: "nothing in the product calls /api/agents/execute" | `C6CA8EF1DE43` ✔ |
+| M5 | Usage enforcement re-added (`await enforceUsage(…, "agentRun")`) | `app/api/action/route.ts` | **Caught** — 38 / 1: "/api/action reads, writes and spends nothing" | `219BBF36CEE1` ✔ |
+| M6 | 410 → 200 | same | **Caught** — 38 / 1: "/api/action requires a session and answers 410" | `219BBF36CEE1` ✔ |
+| M7 | `withAuth` removed | same | **Caught** — `purification-authorities` 38 / 1; `agent-orchestration` 54 / 1: "the retired action route still requires a session" | `219BBF36CEE1` ✔ |
+| M8 | Product caller added (`fetch("/api/action", …)`) | `app/agents/[id]/page.tsx` | **Caught** — 38 / 1: "nothing in the product calls /api/action" | `C6CA8EF1DE43` ✔ |
+| M9 | `/api/action` re-added to `PUBLIC_STATUS_GET_ROUTES` | `middleware.ts` | **Caught** — `middleware-gate` 78 / 1: "the public status GET list matches" | `35F4E375A938` ✔ |
+
+`git status --short` identical before and after; `syraven-audit.zip` size
+and timestamp unchanged. **Memory:** all nine ran in one pass; M9 started
+at exactly 300 MB (gate: ≥ 300). Free memory then fell to 273 MB, below the
+gate, so steps 3–6 waited for a memory-only watcher (ran nothing; reported
+355 MB) before step 3 launched.
+
+#### Known limitations
+
+- An external client of either route, if one exists, now receives 410;
+  `/api/agents/run` has a different request contract (a registered agent
+  and a goal, not an action object or a free system prompt).
+- `architecture-invariants` "/api/action classifies; it neither runs work
+  nor claims it ran" still passes (the retired route runs and writes
+  nothing); its title now describes history.
+- Comments in `lib/ai/provider.ts`, `lib/orchestration/registry.ts` and
+  `lib/usage/entitlements.ts` still describe the old routes — P2-H.
+- No live request against the retired routes; no production build.
+
+#### Not done
+
+No commit, push, deploy, build, migration, or secret / OAuth change.
+G-B3 … G-B7 and P2-H not started. `syraven-audit.zip` not opened, moved,
+deleted or staged.
+
+**RESULT (P2-G02 / P2-G03 / G-B2):** implemented and verified — all steps
+PASS. **Not committed**; awaiting founder instruction.
+
 ### Later groups
 
-Recorded as each batch is prepared: remaining P2-G batches (G-B2 … G-B7),
+Recorded as each batch is prepared: remaining P2-G batches (G-B3 … G-B7),
 documentation (P2-H).

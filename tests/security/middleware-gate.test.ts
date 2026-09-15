@@ -36,7 +36,7 @@ const PUBLIC_API_ROUTES: readonly string[] = [
 const PUBLIC_STATUS_GET_ROUTES: readonly string[] = [
   "/api/chat",
   "/api/canvas",
-  "/api/action",
+  /* /api/action: retired to a 410 (P2-G03); no public status GET. */
   "/api/voice/speak",
   "/api/files/analyze",
 ];
@@ -117,6 +117,8 @@ void describe("Middleware rejects anonymous traffic to protected API routes", ()
     "/api/knowledge/search",
     "/api/tasks",
     "/api/tasks/execute",
+    /* Retired to a 410 (P2-G03); its GET is no longer a public probe. */
+    "/api/action",
     "/api/usage",
     "/api/agents",
     "/api/agents/execute",

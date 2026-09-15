@@ -75,7 +75,11 @@ const PUBLIC_API_ROUTES: readonly string[] = [
 const PUBLIC_STATUS_GET_ROUTES: readonly string[] = [
   "/api/chat",
   "/api/canvas",
-  "/api/action",
+  /*
+   * /api/action is retired to a 410 behind the session gate
+   * (PURIFICATION_EVIDENCE.md P2-G03); it has no status GET left to
+   * exempt.
+   */
   "/api/voice/speak",
   "/api/files/analyze",
 ];

@@ -854,46 +854,38 @@ void describe("lib/orchestration/execution.ts invariants", () => {
 });
 
 /* -------------------------------------------------------------------------- */
-/*                   /api/action RISK IS SERVER-SIDE                          */
+/*          RISK IS CLASSIFIED IN lib/orchestration, NOT IN A ROUTE           */
 /* -------------------------------------------------------------------------- */
 
-void describe("/api/action classifies risk server-side", () => {
-  const code = stripComments(read("app", "api", "action", "route.ts"));
-
-  void test("risk comes from the tool registry", () => {
+void describe("Risk is classified in lib/orchestration, not in a route", () => {
+  /*
+   * /api/action held a second copy of the registry's risk rule and ran
+   * nothing with it. It is retired to a 410 (PURIFICATION_EVIDENCE.md
+   * P2-G03), so these checks pin the rule where work actually runs: plan
+   * validation and the orchestrator, both reading the tool registry.
+   */
+  void test("plan validation gates approval on the registry's risk", () => {
     assert.match(
-      code,
-      /getTool\(action\.type\)/,
-      "Risk must be looked up server-side, not read from the request.",
+      stripComments(read("lib", "orchestration", "planValidation.ts")),
+      /requiresHumanApproval\(risk\)/,
+      "A plan step's approval requirement must come from the registry's risk.",
     );
   });
 
-  void test("an unknown action type is NOT treated as safe", () => {
+  void test("the orchestrator re-checks each step's risk before running it", () => {
     assert.match(
-      code,
-      /if \(tool === null\)\s*\{\s*\n\s*return false;/,
-      "Treating an unrecognised action as harmless is how an " +
-        "unregistered privileged operation slips through.",
+      stripComments(read("lib", "orchestration", "orchestrator.ts")),
+      /requiresHumanApproval\(step\.risk\)/,
+      "A high-risk step must not run on the plan's word alone.",
     );
   });
 
-  void test("a client cannot LOWER the confirmation requirement", () => {
-    /*
-     * The client flag may still raise caution, but the server check runs
-     * first and returns true independently.
-     */
-    assert.match(
-      code,
-      /requiresHumanApproval\(tool\.risk\)\s*\)\s*\{\s*\n\s*return true;/,
-      "The server's high-risk determination must short-circuit before " +
-        "the client flag is consulted.",
-    );
-  });
-
-  void test("high-risk actions are never auto-safe", () => {
-    assert.match(
-      code,
-      /if \(requiresHumanApproval\(tool\.risk\)\)\s*\{\s*\n\s*return false;/,
+  void test("the retired action route keeps no copy of the rule", () => {
+    assert.ok(
+      !/getTool\(|requiresHumanApproval\(/.test(
+        stripComments(read("app", "api", "action", "route.ts")),
+      ),
+      "A route-local risk rule is a second authority that can drift.",
     );
   });
 });
@@ -927,10 +919,10 @@ void describe("Phase 1-8 guarantees still hold", () => {
     }
   });
 
-  void test("the action route still enforces auth and usage", () => {
+  void test("the retired action route still requires a session", () => {
+    /* It does no work, so there is no usage to enforce (P2-G03). */
     const code = stripComments(read("app", "api", "action", "route.ts"));
 
-    assert.match(code, /withAuth\(/);
-    assert.match(code, /enforceUsage\(/);
+    assert.match(code, /export\s+const\s+POST\s*=\s*withAuth\(/);
   });
 });

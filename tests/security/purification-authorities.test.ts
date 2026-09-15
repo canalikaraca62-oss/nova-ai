@@ -293,6 +293,8 @@ void describe("P2-F09: /api/voice/speak maps provider failures", () => {
 const RETIRED_ROUTES: Record<string, string> = {
   "app/api/tasks/execute/route.ts": "/api/tasks/execute",
   "app/api/stream/route.ts": "/api/stream",
+  "app/api/agents/execute/route.ts": "/api/agents/execute",
+  "app/api/action/route.ts": "/api/action",
 };
 
 /** Every .ts/.tsx file beneath a directory. */

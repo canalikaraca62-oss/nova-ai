@@ -1,340 +1,48 @@
 import { NextResponse } from "next/server";
 
 import { withAuth } from "@/lib/api/withAuth";
-import { enforceUsage } from "@/lib/api/usageGuard";
-import {
-  getTool,
-  requiresHumanApproval,
-} from "@/lib/orchestration/registry";
-
-/* ==================================================
- * TYPES
- * ================================================== */
-
-type ActionResultStatus =
-  | "completed"
-  | "pending_confirmation"
-  | "not_executed"
-  | "rejected"
-  | "unsupported";
-
-type ActionResult = {
-  success: boolean;
-  status: ActionResultStatus;
-  message: string;
-  data?: Record<string, unknown>;
-};
 
 /*
-  The request this route reads: an action `type`, with an optional
-  payload. It was imported from services/action-types.ts, 410 lines of
-  contracts nothing else used (PURIFICATION_EVIDENCE.md P2-F05).
+  SYRAVEN — /api/action is retired
+
+  WHAT THIS ROUTE USED TO DO
+
+  It classified an action and never ran it: "nothing to do" for "none",
+  "pending confirmation" for a high-risk type, 409 "not executed" for a
+  registered low-risk type, "unsupported" for anything else. It still
+  charged the caller's agent-run quota for each call, and its risk rule
+  was a second copy of the one in lib/orchestration/registry.ts. Nothing
+  in the product called it.
+
+  WHY IT IS NOT REBUILT HERE
+
+  Actions run in one place: /api/agents/run, where every step is
+  validated against the registry (lib/orchestration/planValidation.ts),
+  high-risk steps wait for a claimed approval, and the orchestrator
+  re-checks each step's risk before it runs
+  (docs/engineering/PURIFICATION_EVIDENCE.md P2-G03).
+
+  It now answers 410 and reads, writes and spends nothing. Its public
+  status GET is gone with it, and the middleware no longer exempts the
+  path.
 */
-interface ActionRequest {
-  type: string;
-  input?: unknown;
-}
 
-/*
- * ActionRequest ana tipini değiştirmeden,
- * endpoint seviyesinde confirmation desteği ekliyoruz.
- *
- * requiresConfirmation, mevcut ActionRequest tipinde
- * henüz tanımlı olmayabilir. Bu nedenle güvenli bir
- * genişletilmiş görünüm kullanıyoruz.
- */
-type ConfirmableAction = ActionRequest & {
-  requiresConfirmation?: boolean;
-};
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
-/* ==================================================
- * RESPONSE HELPER
- * ================================================== */
-
-function json(
-  body: ActionResult,
-  status = 200
-): NextResponse<ActionResult> {
-  return NextResponse.json(body, {
-    status,
-    headers: {
-      "Cache-Control": "no-store",
-      "Content-Type": "application/json; charset=utf-8",
-    },
-  });
-}
-
-/* ==================================================
- * TYPE GUARDS
- * ================================================== */
-
-function isRecord(
-  value: unknown
-): value is Record<string, unknown> {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    !Array.isArray(value)
-  );
-}
-
-function isActionRequest(
-  value: unknown
-): value is ActionRequest {
-  if (!isRecord(value)) {
-    return false;
-  }
-
-  return typeof value.type === "string";
-}
-
-/* ==================================================
- * ACTION HELPERS
- * ================================================== */
-
-/*
-  SECURITY (Phase 9): risk classification is SERVER-SIDE.
-
-  This previously read `action.requiresConfirmation` — a CLIENT-SUPPLIED
-  field. A caller who simply omitted it had every action classified as
-  safe, so the confirmation boundary was effectively self-declared.
-
-  Risk now comes from the server-side tool registry
-  (lib/orchestration/registry.ts). An action type absent from the
-  registry is UNKNOWN and is refused rather than assumed safe — failing
-  closed is the whole point of the boundary.
-
-  The client's own `requiresConfirmation` is still honoured as a signal
-  that MORE caution is wanted, but it can only raise the requirement,
-  never lower it.
-*/
-function requiresConfirmation(
-  action: ActionRequest
-): boolean {
-  const tool = getTool(action.type);
-
-  if (tool !== null) {
-    if (requiresHumanApproval(tool.risk)) {
-      return true;
-    }
-  }
-
-  /* A client may ask for confirmation it would not otherwise get. */
-  const confirmableAction =
-    action as ConfirmableAction;
-
-  return (
-    confirmableAction.requiresConfirmation === true
-  );
-}
-
-/**
- * An action is safe only when the SERVER can classify it as low risk.
- *
- * Unknown action types are NOT safe. Treating an unrecognised type as
- * harmless is how an unregistered privileged operation would slip
- * through.
- */
-function isSafeAction(
-  action: ActionRequest
-): boolean {
-  if (action.type === "none") {
-    return true;
-  }
-
-  const tool = getTool(action.type);
-
-  if (tool === null) {
-    /* Unknown to the registry -> not classifiable -> not safe. */
-    return false;
-  }
-
-  if (requiresHumanApproval(tool.risk)) {
-    return false;
-  }
-
-  return !requiresConfirmation(action);
-}
-
-/* ==================================================
- * POST
- * ================================================== */
-
-export const POST = withAuth(async (
-  request,
-  session
-) => {
-  /*
-    USAGE ENFORCEMENT (Phase 5, extended in Phase 9)
-
-    This route was outside Phase 5's scope because it calls no paid
-    provider. It is now an ACTION EXECUTION boundary, so it is metered
-    and rate limited like any other: an unmetered action endpoint is a
-    way to drive server-side work without it counting against anything.
-
-    The existing Phase 5 system is reused — no second quota system.
-  */
-  const guard = await enforceUsage(
-    session,
-    "ai:agent",
-    "agentRun"
-  );
-
-  if (guard.denied) {
-    return guard.response;
-  }
-
-  try {
-    let body: unknown;
-
-    try {
-      body = await request.json();
-    } catch {
-      return json(
-        {
-          success: false,
-          status: "rejected",
-          message:
-            "The request body is not valid JSON.",
-        },
-        400
-      );
-    }
-
-    if (!isRecord(body)) {
-      return json(
-        {
-          success: false,
-          status: "rejected",
-          message:
-            "A valid request body is required.",
-        },
-        400
-      );
-    }
-
-    const action = body.action;
-
-    if (!isActionRequest(action)) {
-      return json(
-        {
-          success: false,
-          status: "rejected",
-          message:
-            "A valid action is required.",
-        },
-        400
-      );
-    }
-
-    /* ==============================================
-     * NO ACTION
-     * ============================================== */
-
-    if (action.type === "none") {
-      return json({
-        success: true,
-        status: "completed",
-        message:
-          "There is nothing to do.",
-        data: {
-          actionType: action.type,
-        },
-      });
-    }
-
-    /* ==============================================
-     * CONFIRMATION REQUIRED
-     * ============================================== */
-
-    if (requiresConfirmation(action)) {
-      return json({
-        success: false,
-        status: "pending_confirmation",
-        message:
-          "That action needs your approval first.",
-        data: {
-          actionType: action.type,
-        },
-      });
-    }
-
-    /* ==============================================
-     * CLASSIFIED, NOT RUN
-     * ============================================== */
-
-    /*
-      A low-risk, registered action is classified here -- and NOT run.
-
-      This branch used to answer success: true, status "completed",
-      message "Done." for an action nothing executed: the route has no
-      executor. Claiming completion for work that never happened is the
-      fabricated-success defect. Work runs through /api/agents/run, where
-      plans are validated, approvals claimed and tools executed on the
-      caller's own client -- the one execution path.
-    */
-    if (isSafeAction(action)) {
-      return json(
-        {
-          success: false,
-          status: "not_executed",
-          message:
-            "This endpoint classifies actions; it does not run them. Run work through an agent.",
-          data: {
-            actionType: action.type,
-            requiresApproval: false,
-          },
-        },
-        409
-      );
-    }
-
-    /* ==============================================
-     * FALLBACK
-     * ============================================== */
-
-    return json(
-      {
-        success: false,
-        status: "unsupported",
-        message:
-          "That action is not supported.",
-        data: {
-          actionType: action.type,
-        },
-      },
-      400
-    );
-  } catch (error) {
-    console.error(
-      "[SYRAVEN_ACTION_API_ERROR]",
-      error
-    );
-
-    return json(
-      {
-        success: false,
-        status: "rejected",
-        message:
-          "Something went wrong while handling that action.",
-      },
-      500
-    );
-  }
-});
-
-/* ==================================================
- * METHOD NOT ALLOWED
- * ================================================== */
-
-export async function GET() {
-  return json(
+export const POST = withAuth(async () => {
+  return NextResponse.json(
     {
       success: false,
-      status: "rejected",
-      message:
-        "This endpoint accepts POST requests only.",
+      error: {
+        code: "ROUTE_RETIRED",
+        message:
+          "This endpoint is retired. Actions run through an agent at /api/agents/run, where each step is classified, approved and executed.",
+      },
     },
-    405
+    {
+      status: 410,
+      headers: { "Cache-Control": "private, no-store" },
+    },
   );
-}
+});
