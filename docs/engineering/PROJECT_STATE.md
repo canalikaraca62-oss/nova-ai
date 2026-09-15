@@ -56,11 +56,24 @@ committed separately:
 
 **Phase 1 — North Star Architecture: PASS** (founder-accepted 2026-09-14;
 I-7 and I-15 PARTIAL, I-14 BLOCKED remain documented limitations).
-**Phase 2 — Repository and Architecture Purification: IN PROGRESS**
-(started 2026-09-14; stopped and resumed by the founder the same day, to
-be completed before Phase 3). Committed locally only, never pushed; P2-H
-and the Phase 2 final gate remain. Phase 3 has not started. Details:
-`PHASE_STATE.md`.
+**Phase 2 — Repository and Architecture Purification: PASS** —
+documented environment limitations accepted (founder, 2026-09-15). It
+was accepted on the final gate re-run on `cd24c57`, with the evidence
+reconciled in `a72be3f`; everything is committed locally and never
+pushed.
+
+- Accepted limitations: the production build of the Phase 2 tree is
+  BLOCKED by machine memory, so browser/E2E and visual QA are BLOCKED /
+  NOT RUN.
+- Documented follow-ups:
+  - FG-02: no sign-out control.
+  - FG-03: unused `signOut()` export.
+  - The remaining duplicate authorities.
+  - The deliberate search vs AI-retrieval status distinction.
+  - The pre-existing settings lint error.
+
+**Phase 3: NOT STARTED.** It starts only on the founder's instruction.
+Details: `PHASE_STATE.md`.
 
 ## Major blockers
 

@@ -237,11 +237,13 @@ void describe("Browser state and the production guard stay protected", () => {
      * what the PASS may not hide: the invariants it does not close stay
      * named with their real status.
      *
-     * Phase 2 was started, stopped and resumed on the founder's
-     * instruction (2026-09-14); this used to pin NOT STARTED, which had
-     * become false. It is IN PROGRESS -- never PASS before its final gate
-     * and the founder's acceptance -- and Phase 3 is not recorded as
-     * started without its own instruction.
+     * Phase 2 was accepted by the founder (2026-09-15) as PASS with its
+     * environment limitations documented. This used to pin IN PROGRESS
+     * (before the gate) and, before that, NOT STARTED. It now pins the
+     * accepted status in exactly those words and, as for Phase 1, what the
+     * PASS may not hide: every accepted limitation and follow-up stays
+     * named. Phase 3 is not recorded as started without its own
+     * instruction.
      */
     const phase = read("docs", "engineering", "PHASE_STATE.md");
 
@@ -249,15 +251,54 @@ void describe("Browser state and the production guard stay protected", () => {
     assert.match(phase, /\| I-7 \|[^\n]*\| PARTIAL \|/, "I-7 must stay recorded as PARTIAL.");
     assert.match(phase, /\| I-14 \|[^\n]*\| BLOCKED \|/, "I-14 must stay recorded as BLOCKED.");
     assert.match(phase, /\| I-15 \|[^\n]*\| PARTIAL \|/, "I-15 must stay recorded as PARTIAL.");
-    assert.match(
-      phase,
-      /\| Phase 2 — Repository and Architecture Purification \| IN PROGRESS \|/,
-      "Phase 2 must be recorded as in progress until its final gate and the founder's acceptance.",
+
+    const phase2 = /^\| Phase 2 — Repository and Architecture Purification \|([^|\n]*)\|([^\n]*)$/m.exec(phase);
+    assert.ok(phase2, "The Phase 2 row is missing from the phase history.");
+    assert.equal(
+      phase2[1]?.trim(),
+      "PASS — documented environment limitations accepted",
+      "Phase 2 is recorded exactly as the founder accepted it: PASS with its environment limitations accepted.",
     );
-    assert.ok(
-      !/\| Phase 2[^|\n]*\| (?:PASS|COMPLETE|DONE)\b/.test(phase),
-      "Phase 2 may not be recorded as passed before its final gate and the founder's acceptance.",
-    );
+    assert.match(phase2[2] ?? "", /Founder acceptance 2026-09-15/, "The Phase 2 PASS must name the founder's acceptance.");
+
+    const accepted = /## Phase 2 — accepted limitations and follow-ups\n[\s\S]*?(?=\n## )/.exec(phase)?.[0] ?? "";
+    const MUST_STAY_DOCUMENTED: ReadonlyArray<readonly [RegExp, string]> = [
+      [/Production build[^\n]*\*\*BLOCKED\*\*/, "the blocked production build"],
+      [/Browser \/ E2E[^\n]*\*\*BLOCKED \/ NOT RUN\*\*/, "browser/E2E BLOCKED / NOT RUN"],
+      [/Visual QA[^\n]*\*\*BLOCKED \/ NOT RUN\*\*/, "visual QA BLOCKED / NOT RUN"],
+      [/FG-02[^\n]*sign-out/, "FG-02, no sign-out control"],
+      [/FG-03[^\n]*signOut\(\)/, "FG-03, the unused signOut() export"],
+      [/Remaining duplicate authorities[^\n]*\*\*PARTIAL\*\*/, "the remaining duplicate authorities"],
+      [/Search vs AI-retrieval[^\n]*RETRIEVABLE_STATUSES/, "the search vs AI-retrieval status distinction"],
+      [/settings lint error[^\n]*set-state-in-effect/, "the pre-existing settings lint error"],
+    ];
+    for (const [pattern, item] of MUST_STAY_DOCUMENTED) {
+      assert.match(accepted, pattern, `The Phase 2 PASS may not hide ${item}; it must stay documented.`);
+    }
+
     assert.match(phase, /\| Phase 3 \| NOT STARTED \|/, "Phase 3 starts only on the founder's instruction.");
+  });
+
+  void test("the entry documents agree with PHASE_STATE on Phase 2 and Phase 3", () => {
+    /*
+     * CLAUDE.md is read at the start of every session and PROJECT_STATE.md
+     * is the recovery summary; a stale phase line in either is how a
+     * session starts from the wrong state.
+     */
+    const claude = read("CLAUDE.md");
+    const project = read("docs", "engineering", "PROJECT_STATE.md");
+
+    assert.match(claude, /\*\*PHASE 2 — Repository and Architecture Purification: PASS\*\* —\s+documented environment limitations accepted/);
+    assert.match(claude, /\*\*PHASE 3: NOT STARTED\.\*\*/);
+    assert.match(project, /\*\*Phase 2 — Repository and Architecture Purification: PASS\*\* —\s+documented environment limitations accepted/);
+    assert.match(project, /\*\*Phase 3: NOT STARTED\.\*\*/);
+
+    for (const [name, text] of [["CLAUDE.md", claude], ["PROJECT_STATE.md", project]] as const) {
+      assert.ok(
+        !/Phase 2[^\n]*:\s*IN PROGRESS|final gate remain/i.test(text),
+        `${name} still describes Phase 2 as in progress.`,
+      );
+      assert.match(text, /BLOCKED/, `${name} must keep the accepted environment limitations visible.`);
+    }
   });
 });

@@ -1,7 +1,8 @@
 # SYRAVEN — Phase State
 
-**Last updated:** 2026-09-15, Phase 2 status recorded as IN PROGRESS
-(Phase 1 accepted as PASS by the founder 2026-09-14).
+**Last updated:** 2026-09-15. Phase 2 was accepted by the founder as
+**PASS — documented environment limitations accepted**; Phase 1 was
+accepted as PASS by the founder on 2026-09-14.
 
 ## Current phase
 
@@ -11,7 +12,7 @@
 |---|---|
 | Status | **PASS** — accepted by the founder 2026-09-14, on the evidence in `VERIFICATION_STATE.md` |
 | Passes | First pass 2026-09-13; second pass 2026-09-13; steps 1–7 (migration readiness, TEST verification, remaining gaps) 2026-09-13/14; final gate (step 8) 2026-09-14: PARTIAL; production migrations applied and verified by the founder 2026-09-14; production `projects` boundary verified by the founder 2026-09-14; production build of the Phase 1 tree passed in a secret-free scratch copy 2026-09-14; **founder acceptance 2026-09-14: PASS** |
-| Next allowed action | Phase 1 is closed. Phase 2 is IN PROGRESS (see Phase history); each Phase 2 batch proceeds only on the founder's instruction, and Phase 3 starts only on its own. Applying any migration, pushing, and committing each need an explicit instruction (the Vercel Git integration deploys any push). |
+| Next allowed action | Phase 1 and Phase 2 are closed, each founder-accepted as PASS (Phase 2 with its environment limitations documented below). Phase 3 starts only on the founder's explicit instruction. Applying any migration, pushing, and committing each need an explicit instruction (the Vercel Git integration deploys any push). |
 
 ## Objective
 
@@ -71,10 +72,32 @@ approval to exact arguments (Action Engine).
 - Browser / E2E verification of the Phase 1 tree (not a DoD item).
 - The migration files' headers still read "WRITTEN, NOT APPLIED".
 
+## Phase 2 — accepted limitations and follow-ups
+
+The founder accepted Phase 2 on 2026-09-15 as **PASS — documented
+environment limitations accepted**. The acceptance was based on the
+final gate re-run on `cd24c57` and the evidence reconciled in `a72be3f`
+(`VERIFICATION_STATE.md`, "re-run" rows; `PURIFICATION_EVIDENCE.md`).
+
+The PASS does **not** close the items below. They stay documented, and
+none of them may be removed from this list without the evidence that
+closes it.
+
+| Item | Status | What closes it |
+|---|---|---|
+| Production build of the Phase 2 tree | **BLOCKED** — machine memory (~3.9 GB); the last attempt was killed during compilation at 513 MB free, and it is not retried into an OOM. The last successful build is the Phase 1 tree (`R3WTT03LAIpTqm5j4I0tf`) | A memory window (or a larger machine) and one gated scratch build |
+| Browser / E2E verification | **BLOCKED / NOT RUN** — there is no production build of the current tree | The build above, then E2E against the TEST project only |
+| Visual QA | **BLOCKED / NOT RUN** — no build, no browser | The build above |
+| FG-02 — no sign-out control | Open (pre-existing: nothing calls `/api/auth/logout` or `signOut()`; already true at `3314baa`) | A sign-out control in the product |
+| FG-03 — unused `signOut()` export in `lib/supabase.ts` | Open (dead export) | Resolved together with FG-02, or removed |
+| Remaining duplicate authorities | **PARTIAL** — embedding model authority in `lib/search` beside `lib/ai/registry`; the `/agents/[id]` catalogue vocabulary mapped onto orchestration ids; `AgentStatus` vocabularies; checkout `BillingPlan` (deliberate subset); direct provider fetches in `/api/chat`, voice and embeddings (documented in `lib/ai/provider.ts`) | Consolidation, each by its own approved change |
+| Search vs AI-retrieval status distinction | Deliberate, documented: keyword search shows knowledge with status `draft`/`ready`/`active` (`lib/search/query.ts`), while AI retrieval uses `RETRIEVABLE_STATUSES = ["active"]` (`lib/memory/hierarchy.ts`). The fact that `ready` records are never retrieved is the P2-F07 limitation (founder decision 2026-09-14) | A founder decision to widen retrieval |
+| Pre-existing settings lint error | Open: `react-hooks/set-state-in-effect` in `app/settings/page.tsx` (the settings-load effect). It predates Phase 2 and is unrelated to the FG-01 change | A change to that effect, approved on its own |
+
 ## Phase history
 
 | Phase | Status | Notes |
 |---|---|---|
 | Phase 1 — North Star Architecture | PASS (founder-accepted 2026-09-14) | This file |
-| Phase 2 — Repository and Architecture Purification | IN PROGRESS | Started 2026-09-14 on the founder's instruction; stopped as PARTIAL and resumed by the founder the same day, to be completed before Phase 3. P2-A … P2-G committed locally (16 commits after `3314baa`, never pushed); preflight follow-up P2-P committed 2026-09-15 (`f566757`); P2-H (documentation consistency) committed 2026-09-15 (`50346bb`). Phase 2 final gate run 2026-09-15 on `50346bb`: tests, guards, typecheck and lint pass; `/profile` found orphaned (FAIL finding FG-01), subsequently resolved and committed in `cd24c57` (linked from `/settings`). Final gate re-run 2026-09-15 on `cd24c57`: **PARTIAL** — tests, guards and typecheck pass; 44/44 kept pages reachable; lint 50 of 51 Phase 2 files clean (1 pre-existing error); duplicate authorities PARTIAL; production build BLOCKED (insufficient sustained memory); browser/E2E and visual QA BLOCKED / NOT RUN; awaiting the founder's decision on the gate. Evidence: `PURIFICATION_EVIDENCE.md`, `PURIFICATION_SCORECARD.md` |
+| Phase 2 — Repository and Architecture Purification | PASS — documented environment limitations accepted | Founder acceptance 2026-09-15; the limitations and follow-ups are in the section above. History: started 2026-09-14 on the founder's instruction; stopped as PARTIAL and resumed by the founder the same day, to be completed before Phase 3. P2-A … P2-G committed locally (16 commits after `3314baa`, never pushed); preflight follow-up P2-P committed 2026-09-15 (`f566757`); P2-H (documentation consistency) committed 2026-09-15 (`50346bb`). Phase 2 final gate run 2026-09-15 on `50346bb`: tests, guards, typecheck and lint pass; `/profile` found orphaned (FAIL finding FG-01), subsequently resolved and committed in `cd24c57` (linked from `/settings`). Final gate re-run 2026-09-15 on `cd24c57`: PARTIAL — tests, guards and typecheck pass; 44/44 kept pages reachable; lint 50 of 51 Phase 2 files clean (1 pre-existing error); duplicate authorities PARTIAL; production build BLOCKED (insufficient sustained memory); browser/E2E and visual QA BLOCKED / NOT RUN. Evidence reconciled in `a72be3f`. Evidence: `PURIFICATION_EVIDENCE.md`, `PURIFICATION_SCORECARD.md` |
 | Phase 3 | NOT STARTED | Starts only on the founder's instruction |

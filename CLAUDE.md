@@ -139,10 +139,24 @@ INSPECT → UNDERSTAND → PLAN → IMPLEMENT → TEST → ADVERSARIAL REVIEW
   PASSED in a secret-free scratch copy (2026-09-14). Every Phase 1 DoD
   item is verified and the founder accepted PASS. Not closed by this
   PASS, and documented as such: I-7 and I-15 PARTIAL, I-14 BLOCKED.
-- **PHASE 2 — Repository and Architecture Purification: IN PROGRESS**
-  (started 2026-09-14; stopped and resumed by the founder the same day,
-  to be completed before Phase 3). Committed locally only, never pushed.
-  P2-H and the Phase 2 final gate remain. Phase 3 has not started.
+- **PHASE 2 — Repository and Architecture Purification: PASS** —
+  documented environment limitations accepted (founder, 2026-09-15). It
+  was accepted on the final gate re-run on `cd24c57`, with the evidence
+  reconciled in `a72be3f`; everything is committed locally and never
+  pushed.
+  - Accepted limitations: the production build of the Phase 2 tree is
+    BLOCKED by machine memory, so browser/E2E and visual QA are BLOCKED
+    / NOT RUN.
+  - Documented follow-ups, kept:
+    - FG-02: no sign-out control.
+    - FG-03: unused `signOut()` export.
+    - The remaining duplicate authorities.
+    - The deliberate search vs AI-retrieval status distinction.
+    - The pre-existing lint error in `app/settings/page.tsx`.
+
+  See `docs/engineering/PHASE_STATE.md`.
+- **PHASE 3: NOT STARTED.** It starts only on the founder's explicit
+  instruction.
 - **Vercel Git integration is connected:** any push or PR deploys. Never
   push, open a PR or merge without explicit founder approval.
 - For client writes the database is the boundary of record (ADR-003): a
