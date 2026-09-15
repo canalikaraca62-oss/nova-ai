@@ -1823,7 +1823,7 @@ recorded in `VERIFICATION_STATE.md` (the "P2 gate" rows).
 
 | ID | Finding | Evidence | Classification | Disposition |
 |---|---|---|---|---|
-| FG-01 | `/profile` has no inbound product link | Reachability matrix: only `app/robots.ts` names it. At `e0ac56f` its one link was `app/privacy/activity/page.tsx:465` ("Manage your account"), which P2-P03 retired. The P2-P guard checked the three pages but not what removing one left unreachable | **FAIL**, a Phase 2 regression | Not fixed during the gate (UI change). Proposed: link `/profile` from Settings or the navigation, and add a reachability guard for every kept page. Founder decision |
+| FG-01 | `/profile` has no inbound product link | Reachability matrix: only `app/robots.ts` names it. At `e0ac56f` its one link was `app/privacy/activity/page.tsx:465` ("Manage your account"), which P2-P03 retired. The P2-P guard checked the three pages but not what removing one left unreachable | **FAIL**, a Phase 2 regression | Not fixed during the gate (UI change). Proposed: link `/profile` from Settings or the navigation, and add a reachability guard for every kept page. Founder decision. **Subsequently resolved and committed in `cd24c57`** (the FG-01 fix below; re-run: PASS) |
 | FG-02 | No sign-out control in the product | `/api/auth/logout` and `lib/supabase.ts` `signOut()` have no caller in `app/` or `lib/`; the same was true at `3314baa` | Pre-existing reachability gap, not introduced by Phase 2 | Recorded. Founder decision |
 | FG-03 | `signOut()` in `lib/supabase.ts` is an exported function with no importer | `git grep signOut` | Dead export (the P2-A pass worked per file, not per export) | Recorded; resolves with FG-02 |
 | FG-04 | Remaining duplicate authorities | Duplicate-authority rescan | **PARTIAL** | Recorded, not fixed. The five are listed after this table |
@@ -1872,4 +1872,53 @@ and lint on 50 files.
 | Lint on `app/settings/page.tsx` | **1 error, pre-existing and not introduced here**: `react-hooks/set-state-in-effect` at `:204`, the settings-load effect. The same error is reported on the unmodified `50346bb` file (`:203`, through `eslint --stdin`). The file was never in Phase 2's lint set (it was not modified in Phase 2). This change adds lines at `:3` and `:628-640` only. Not fixed: out of scope |
 | Reachability (`scratchpad/reach.cjs`) | `/profile` ← `app/settings/page.tsx` (plus `robots.ts`). The only other pages without a code reference are `/billing/success` and `/billing/cancel`, which are Stripe return URLs. `/chat/[id]` and `/privacy/activity` remain absent; `/teams/[id]` remains linked |
 
-`syraven-audit.zip` size and mtime unchanged. **Not committed.**
+`syraven-audit.zip` size and mtime unchanged. The three stale final-gate
+documents were annotated afterwards, and the fix was committed with them
+as `cd24c57` on the founder's instruction (2026-09-15); not pushed.
+
+### Phase 2 final gate re-run (2026-09-15, HEAD `cd24c57`)
+
+Verification only; no code changed. The per-check rows are in
+`VERIFICATION_STATE.md` (the "re-run" rows). **Overall: PARTIAL.**
+
+| Area | Result |
+|---|---|
+| Repository integrity | **PASS**. HEAD `cd24c57`; clean; only `syraven-audit.zip` untracked (excluded, not touched) |
+| Secret scan | **PASS**. 1 synthetic fixture (`observability-redaction.test.ts:380`), not a secret |
+| Full suite | **PASS**. 1,864: 1,857 pass, 0 fail, 7 todo |
+| Invariants and control plane; migrations; E2E guards | **PASS**. 61 / 0 / 7; 185 / 185; 24 / 24 |
+| Boundary guards, including `api-auth-boundary` export-shape detection | **PASS**. 412: 405 / 0 / 7 (14 shape tests and 45 sweep tests) |
+| Playwright config and production-origin safety | **PASS**. 78 tests listed; no browser; production never visited |
+| Typecheck | **PASS**. exit 0 |
+| Lint on the 51 Phase 2 files | **PARTIAL**. 50 clean. 1 pre-existing error, `react-hooks/set-state-in-effect` at `app/settings/page.tsx:204`: already present at `50346bb` (`:203`), unrelated to the FG-01 change (lines `:3`, `:628-640`); left unfixed on the founder's instruction |
+| Reachability | **PASS**. 44/44 kept pages reachable; FG-01 resolved (`/profile` linked from `/settings`); retired routes still `withAuth` + 410 with no work; `/teams/[id]` linked; `/chat/[id]` and `/privacy/activity` absent |
+| Fabrication audit | **PASS**. No new finding |
+| Duplicate authorities | **PARTIAL**. The five FG-04 items remain, plus the dead `signOut()` export (FG-03). See the distinction below |
+| Production build | **BLOCKED**. Insufficient sustained memory: 365–635 MB sampled; the last attempt was killed at 513 MB start; not attempted |
+| Browser / E2E, visual QA | **BLOCKED / NOT RUN**. No current production build |
+| Mutation | Not re-run; no guard changed (FG-01 guard 3/3 caught) |
+| Phase state | Unchanged: Phase 2 IN PROGRESS, Phase 3 NOT STARTED |
+
+**Documented distinction, surfaced by the broader status-filter rescan
+(not a duplicate authority):** two rules on `public.knowledge`, each with
+a different purpose.
+
+- **Keyword search visibility**, `["draft", "ready", "active"]`
+  (`lib/search/query.ts:200`), decides what a user can *find* through
+  `/api/search`. It was set from the statuses the table actually holds,
+  after it was verified that no production row was `active`.
+- **AI retrieval**, `RETRIEVABLE_STATUSES = ["active"]`
+  (`lib/memory/hierarchy.ts`), decides what may *enter AI context*.
+
+That `ready` records are findable but never retrieved is the documented
+P2-F07 limitation, and the founder decided (2026-09-14) not to widen
+retrieval in Phase 2.
+
+**Still open (founder decisions, not fixed in this pass):**
+
+- FG-02: no sign-out control.
+- FG-03: the dead `signOut()` export.
+- The FG-04 duplicate authorities.
+- The pre-existing settings lint error.
+- FG-05: the production build.
+- FG-06: browser/E2E and visual QA.
