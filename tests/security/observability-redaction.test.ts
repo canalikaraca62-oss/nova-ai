@@ -569,18 +569,19 @@ void describe("The audited log leaks remain fixed", () => {
     }
   });
 
-  void test("stream truncates the provider error body", () => {
+  void test("the retired stream route logs no provider body", () => {
+    /*
+     * /api/stream logged an untruncated provider error body, then a
+     * truncated one. It is now retired to a 410 (PURIFICATION_EVIDENCE.md
+     * P2-G01) and calls no provider, so there is no body to log; the
+     * retired-route guard in purification-authorities.test.ts pins that
+     * it stays that way.
+     */
     const code = read("app", "api", "stream", "route.ts");
 
-    const logCall = code.slice(
-      code.indexOf("SYRAVEN AI PROVIDER ERROR"),
-      code.indexOf("SYRAVEN AI PROVIDER ERROR") + 400,
-    );
-
-    assert.match(
-      logCall,
-      /errorText\.slice\(0,\s*\d+\)/,
-      "The provider body is logged untruncated again.",
+    assert.ok(
+      !/errorText|\bfetch\s*\(|console\.(?:error|log)\(/.test(code),
+      "The retired stream route is logging or calling a provider again.",
     );
   });
 });

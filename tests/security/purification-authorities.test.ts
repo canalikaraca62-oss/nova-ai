@@ -13,7 +13,7 @@
 
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
 const ROOT = process.cwd();
@@ -279,4 +279,96 @@ void describe("P2-F09: /api/voice/speak maps provider failures", () => {
   void test("the provider message is logged only capped", () => {
     assert.match(SPEAK, /providerMessage\.slice\(0,\s*300\)/);
   });
+});
+
+/* -------------------------------------------------------------------------- */
+/*              P2-G — retired routes answer 410 and do nothing               */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Routes retired in place. Each keeps its path, so an external client gets
+ * an honest 410 instead of a 404, and does nothing else. Adding a route
+ * here is a decision recorded in PURIFICATION_EVIDENCE.md.
+ */
+const RETIRED_ROUTES: Record<string, string> = {
+  "app/api/tasks/execute/route.ts": "/api/tasks/execute",
+  "app/api/stream/route.ts": "/api/stream",
+};
+
+/** Every .ts/.tsx file beneath a directory. */
+function sourceFiles(dir: string): string[] {
+  if (!existsSync(dir)) return [];
+
+  const found: string[] = [];
+
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = join(dir, entry.name);
+
+    if (entry.isDirectory()) {
+      if (entry.name !== "node_modules" && entry.name !== ".next") {
+        found.push(...sourceFiles(full));
+      }
+    } else if (/\.(?:ts|tsx)$/.test(entry.name)) {
+      found.push(full);
+    }
+  }
+
+  return found;
+}
+
+function relative(file: string): string {
+  return file.slice(ROOT.length + 1).replace(/\\/g, "/");
+}
+
+void describe("P2-G: retired routes answer 410 and do nothing", () => {
+  const callerFiles = [
+    ...sourceFiles(join(ROOT, "app")),
+    ...sourceFiles(join(ROOT, "lib")),
+    ...sourceFiles(join(ROOT, "tests", "e2e")),
+  ];
+
+  for (const [file, path] of Object.entries(RETIRED_ROUTES)) {
+    const source = code(...file.split("/"));
+
+    void test(`${path} requires a session and answers 410`, () => {
+      assert.match(
+        source,
+        /export\s+const\s+POST\s*=\s*withAuth\s*\(/,
+        `${path} must stay behind the session requirement.`,
+      );
+      assert.match(source, /status:\s*410\b/, `${path} must answer 410 Gone.`);
+    });
+
+    void test(`${path} reads, writes and spends nothing`, () => {
+      assert.ok(
+        !/\bfetch\s*\(|\.from\(|\.rpc\(|enforceUsage\(|guard\.record\(|process\.env|supabaseAdmin|chatCompletion|api\.openai\.com|api\.groq\.com/.test(
+          source,
+        ),
+        `CRITICAL: the retired ${path} is doing work again.`,
+      );
+    });
+
+    void test(`nothing in the product calls ${path}`, () => {
+      const literal = new RegExp(
+        `["'\`]${path.replace(/\//g, "\\/")}(?:["'\`?/]|$)`,
+      );
+
+      const callers = callerFiles
+        .filter((candidate) => relative(candidate) !== file)
+        .filter((candidate) =>
+          literal.test(
+            readFileSync(candidate, "utf8")
+              .replace(/\/\*[\s\S]*?\*\//g, "")
+              .replace(/^\s*\/\/.*$/gm, ""),
+          ),
+        )
+        .map(relative);
+
+      assert.deepEqual(
+        callers,
+        [],
+        `${path} is retired; point these at its replacement instead.`,
+      );
+    });
+  }
 });

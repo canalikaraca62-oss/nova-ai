@@ -628,6 +628,148 @@ No commit, push, deploy, build, migration, or secret / OAuth change.
 **RESULT (P2-F09):** implemented and verified — all steps PASS. **Not
 committed**; awaiting founder instruction.
 
+### P2-G — legacy routes
+
+**Inventory (read-only, 2026-09-15, at `70e660e`).** All 35 `app/api/**/route.ts`
+files were matched against every `/api/…` string in `app/`, `lib/`,
+`middleware.ts` and `e2e/` outside `app/api` (comments separated from live
+fetches), and against the tests that pin them.
+
+| Candidate | Callers | Finding | Status |
+|---|---|---|---|
+| G01 `/api/stream` | none | Second streaming chat transport | **G-B1 — approved, below** |
+| G02 `/api/agents/execute` | none (lib mentions are comments) | Second chat-completion path; caller `systemPrompt` becomes the system message unfenced | G-B2, not started |
+| G03 `/api/action` | none (e2e deliberately avoids it) | Classifies only, never runs; still meters `agentRun` | G-B2, not started |
+| G04 `/api/knowledge/search` | none | Second keyword search; `["active"]` filter returns nothing for `ready` rows | G-B3, not started |
+| G05 `/api/files/analyze` | none | The pre-P2-F08 provider logic (env models, own pickers, hardcoded URLs, direct keys) | G-B5, founder decision |
+| G06 `/api/files/upload` | none | Unmetered 50 MB service-role storage writes | G-B4, founder decision |
+| G07 `/api/voice/*` | none | Own model list, direct key, hardcoded URLs, env TTS model (P2-F09 out-of-scope) | G-B6, founder decision |
+| G08 `/api/agents` POST | agents pages | Stores an env default model with no registry validation | G-B7, not started |
+
+Retained with evidence: `/api/tasks/execute` (already 410), `/api/usage`
+(P2-F06, e2e), `/api/auth/logout` (D4), `/api/billing/webhook` (Stripe),
+`/api/canvas` (canvas page), and every route with a live UI caller. UI
+mentions of `/api/marketplace`, `/api/privacy`, `/api/profile`,
+`/api/settings` are explanatory comments, not fetches.
+
+#### P2-G01 — retire `/api/stream` (founder-approved 2026-09-15, G-B1)
+
+| ID | Route | Evidence (file:line at `70e660e`) | Consumers | Tests that pin it | Canonical replacement | Decision |
+|---|---|---|---|---|---|---|
+| P2-G01 | `POST /api/stream` | 1,065 lines. A second streaming chat transport beside `/api/chat`: reads `GROQ_API_KEY` directly (`:551`), posts to a hardcoded Groq URL (`:696`), defaults to env `SYRAVEN_AI_MODEL` (`:83-85`) with its own model allowlist (`:423`), and places the client's `memoryContext` verbatim in the SYSTEM prompt under "RELEVANT MEMORY CONTEXT" (`:315-369`, `:629-650`) — bypassing `lib/memory` retrieval and the untrusted-content fence `/api/chat` applies. Groq-only, its own stream format. History `7554f31` … `7dae7e9` (last change 2026-09-07) | **None** — no reference in `app/`, `lib/`, `e2e/`, `public/`; only `middleware-gate` names the path | `ai-provider` (model-accepting list; policy-after-guard list), `usage-enforcement` (`METERED_ROUTES`), `observability-redaction` ("stream truncates the provider error body"; route sweep), `api-auth-boundary` (`AI_SPENDING_ROUTES`: exists + `POST = withAuth(`), `middleware-gate` (gated list) | `/api/chat` with `stream: true` — registry model, fenced context, metered | RETIRE: a `withAuth` 410 naming `/api/chat`, reading, writing and spending nothing — the `/api/tasks/execute` precedent. External clients cannot be ruled out, so the path answers rather than 404s |
+
+**Pins reworked — only those that require the stream implementation:**
+- `ai-provider` `MODEL_ACCEPTING` (requires `resolveAiPolicy` /
+  `selectModel`) and the policy-after-guard list (requires `enforceUsage` and
+  `resolveAiPolicy`): `/api/stream` removed from both.
+- `usage-enforcement` `METERED_ROUTES` (requires `enforceUsage` and
+  `guard.record`): removed.
+- `observability-redaction` "stream truncates the provider error body"
+  (requires a provider log call): replaced by "the retired stream route logs
+  no provider body" (it makes no provider call).
+
+**Unchanged:** `api-auth-boundary` (`POST = withAuth(` — the retired route
+still satisfies it), `middleware-gate` (the path stays gated), the
+`observability-redaction` route sweep (a file with no provider body passes
+it), and every provider/metering sweep (`architecture-invariants` §3,
+`usage-enforcement` and `ai-provider` "every route calling a provider is
+metered" — a route with no provider call is not in their scope).
+
+**Shared retired-route guard** (new, `purification-authorities`, covering
+`/api/stream` and the existing retired `/api/tasks/execute`): each retired
+route exports `POST = withAuth(`, answers `status: 410`, and contains no
+`fetch(`, `.from(` / `.rpc(`, `enforceUsage(` / `guard.record(`,
+`process.env`, `supabaseAdmin`, provider adapter call or vendor URL; and no
+file in `app/`, `lib/` or `tests/e2e/` outside the route itself references
+its path.
+
+**Mutations planned:** M1 re-add a provider `fetch` to the retired route;
+M2 change 410 to 200; M3 remove `withAuth`; M4 add a caller of
+`/api/stream` in `app/chat/page.tsx`.
+
+#### What changed (uncommitted at `70e660e`)
+
+- `app/api/stream/route.ts` — the legacy implementation is removed
+  completely (1,065 lines → 50). The route now exports only
+  `POST = withAuth(async () => …)`, answering 410
+  `{ success: false, error: { code: "ROUTE_RETIRED", message: "This
+  endpoint is retired. Stream chat through /api/chat with stream: true." } }`
+  with `Cache-Control: private, no-store`. No provider call, database access,
+  usage enforcement, env read or logging.
+- `tests/security/purification-authorities.test.ts` — shared retired-route
+  guard (`RETIRED_ROUTES`: `/api/tasks/execute`, `/api/stream`): per route,
+  "requires a session and answers 410", "reads, writes and spends nothing",
+  "nothing in the product calls" (scans `app/`, `lib/`, `tests/e2e/`,
+  comments stripped). 6 tests, 1 suite.
+- `tests/security/ai-provider.test.ts` — `/api/stream` removed from
+  `MODEL_ACCEPTING` and from the policy-after-guard list, each with a note.
+- `tests/security/usage-enforcement.test.ts` — removed from
+  `METERED_ROUTES`, with a note.
+- `tests/security/observability-redaction.test.ts` — "stream truncates the
+  provider error body" replaced by "the retired stream route logs no
+  provider body".
+- Unchanged: `api-auth-boundary` (still pins `POST = withAuth(`),
+  `middleware-gate` (path still gated).
+- Totals (`git diff --stat HEAD`): code and tests 5 files, +149 / −1,065;
+  with this file 6 files, +212 / −1,066.
+
+#### Verification (each step alone, 300 MB gate before launch)
+
+| # | Step | Command | Result | Free RAM before → after |
+|---|---|---|---|---|
+| 1 | Affected guard suites | `node --test --test-concurrency=1 …` `purification-authorities`, `ai-provider`, `usage-enforcement`, `observability-redaction`, `api-auth-boundary`, `middleware-gate` | **PASS** — exit 0; 376 tests, 45 suites: 376 pass, 0 fail | 304 → 356 MB |
+| 2 | Mutations | 4 mutations, below | **PASS** — 4 of 4 caught; files restored to their original hash | 333 … 399 MB per mutation |
+| 3 | Regression suites | `node --test --test-concurrency=1 …` `architecture-invariants`, `api-reference-integrity`, `data-access`, `defect-remediation`, `memory-isolation` | **PASS** — exit 0; 171 tests, 37 suites: 164 pass, 0 fail, 7 todo | 483 → 471 MB |
+| 4 | Typecheck | `npx tsc --noEmit -p tsconfig.json` (`--max-old-space-size=1536`) | **PASS** — exit 0, 0 `error TS` lines | 512 → 745 MB |
+| 5 | Full suite | `npm run test:lowmem` | **PASS** — exit 0; 1,829 tests, 347 suites: 1,822 pass, 0 fail, 0 skipped, 7 todo (58.3 s) | 485 → 427 MB |
+| 6 | Lint | `npx eslint app/api/stream/route.ts` and the four changed test files (`--max-old-space-size=768`) | **PASS** — exit 0, 0 errors, 0 warnings | 423 → 677 MB |
+
+**Test-count delta accounted:** 1,829 vs 1,827 (after P2-F09) = +6 retired-
+route tests (3 × 2 routes), −2 (`ai-provider` `MODEL_ACCEPTING` generates 2
+tests per route), −2 (`usage-enforcement` `METERED_ROUTES` generates 2 per
+route), 0 (`observability-redaction` test replaced one-for-one). Suites
+347 vs 346 = the new retired-route `describe`. The 7 todos are the
+documented limitations; "failing tests:" in the step 3 and 5 logs lists
+only those.
+
+#### Mutation testing
+
+Each mutation re-created one defect, ran the guard that owns it, and
+restored the original bytes in a `finally` block; both files were backed up
+to the scratchpad first. SHA-256, first 12 hex.
+
+| # | Defect re-created | File | Result | Hash before = after |
+|---|---|---|---|---|
+| M1 | Provider `fetch` re-added to the retired route | `app/api/stream/route.ts` | **Caught** — `purification-authorities` 32 / 1: "/api/stream reads, writes and spends nothing" | `2DFCE8D728AB` ✔ |
+| M2 | `status: 410` changed to `200` | `app/api/stream/route.ts` | **Caught** — 32 / 1: "/api/stream requires a session and answers 410" | `2DFCE8D728AB` ✔ |
+| M3 | `withAuth` removed (`POST = (async () => …)`) | `app/api/stream/route.ts` | **Caught** — `purification-authorities` 32 / 1: "requires a session and answers 410"; `api-auth-boundary` 135 / 1: "app/api/stream/route.ts exists and wraps POST in withAuth" | `2DFCE8D728AB` ✔ |
+| M4 | A product caller added (`fetch("/api/stream", …)` in the chat page) | `app/chat/page.tsx` | **Caught** — 32 / 1: "nothing in the product calls /api/stream" | `99CC31E6B69A` ✔ |
+
+`git status --short` identical before and after every mutation run;
+`syraven-audit.zip` size and timestamp unchanged. **Memory:** the first
+mutation run completed M1 (360 MB) and stopped at the gate before M2
+(293 MB, no mutation applied); a memory-only watcher (ran nothing) reported
+411 MB, and the single resume ran M2–M4 without repeating M1.
+
+#### Known limitations
+
+- An external client of `/api/stream`, if one exists, now receives 410; the
+  replacement (`/api/chat` with `stream: true`) uses a different SSE event
+  format (`meta` / `token` / `done` events rather than the old JSON chunks).
+- No live request was made against the retired route; the 410 is proven by
+  the source guard, types and suites, not by an HTTP call.
+- No production build was run.
+
+#### Not done
+
+No commit, push, deploy, build, migration, or secret / OAuth change.
+G-B2 … G-B7 and P2-H not started. `syraven-audit.zip` not opened, moved,
+deleted or staged.
+
+**RESULT (P2-G01 / G-B1):** implemented and verified — all steps PASS.
+**Not committed**; awaiting founder instruction.
+
 ### Later groups
 
-Recorded as each batch is prepared: routes (P2-G), documentation (P2-H).
+Recorded as each batch is prepared: remaining P2-G batches (G-B2 … G-B7),
+documentation (P2-H).

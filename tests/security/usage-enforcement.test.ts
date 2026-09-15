@@ -373,7 +373,11 @@ void describe("Every AI-spending route enforces and records usage", () => {
   const METERED_ROUTES = [
     "app/api/chat/route.ts",
     "app/api/agents/execute/route.ts",
-    "app/api/stream/route.ts",
+    /*
+     * app/api/stream/route.ts left this list when it was retired to a 410
+     * (PURIFICATION_EVIDENCE.md P2-G01): it spends nothing, so there is
+     * nothing to meter. purification-authorities.test.ts pins that.
+     */
     "app/api/files/analyze/route.ts",
     "app/api/voice/speak/route.ts",
     "app/api/voice/transcribe/route.ts",
