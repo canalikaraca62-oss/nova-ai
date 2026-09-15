@@ -233,10 +233,15 @@ void describe("Browser state and the production guard stay protected", () => {
     }
 
     /*
-     * Phase 1 passed on founder-accepted evidence (2026-09-14). This used to
-     * pin PARTIAL; it now pins what the PASS may not hide: the invariants
-     * it does not close stay named with their real status, and Phase 2 is
-     * not recorded as started without the founder's instruction.
+     * Phase 1 passed on founder-accepted evidence (2026-09-14). This pins
+     * what the PASS may not hide: the invariants it does not close stay
+     * named with their real status.
+     *
+     * Phase 2 was started, stopped and resumed on the founder's
+     * instruction (2026-09-14); this used to pin NOT STARTED, which had
+     * become false. It is IN PROGRESS -- never PASS before its final gate
+     * and the founder's acceptance -- and Phase 3 is not recorded as
+     * started without its own instruction.
      */
     const phase = read("docs", "engineering", "PHASE_STATE.md");
 
@@ -244,6 +249,15 @@ void describe("Browser state and the production guard stay protected", () => {
     assert.match(phase, /\| I-7 \|[^\n]*\| PARTIAL \|/, "I-7 must stay recorded as PARTIAL.");
     assert.match(phase, /\| I-14 \|[^\n]*\| BLOCKED \|/, "I-14 must stay recorded as BLOCKED.");
     assert.match(phase, /\| I-15 \|[^\n]*\| PARTIAL \|/, "I-15 must stay recorded as PARTIAL.");
-    assert.match(phase, /\| Phase 2 \| NOT STARTED \|/, "Phase 2 starts only on the founder's instruction.");
+    assert.match(
+      phase,
+      /\| Phase 2 — Repository and Architecture Purification \| IN PROGRESS \|/,
+      "Phase 2 must be recorded as in progress until its final gate and the founder's acceptance.",
+    );
+    assert.ok(
+      !/\| Phase 2[^|\n]*\| (?:PASS|COMPLETE|DONE)\b/.test(phase),
+      "Phase 2 may not be recorded as passed before its final gate and the founder's acceptance.",
+    );
+    assert.match(phase, /\| Phase 3 \| NOT STARTED \|/, "Phase 3 starts only on the founder's instruction.");
   });
 });

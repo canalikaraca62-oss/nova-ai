@@ -472,15 +472,31 @@ export default function TeamsPage() {
                         </div>
                       </div>
 
-                      <button
-                        type="button"
-                        onClick={() => {
-                          void deleteTeam(selectedTeam.id);
-                        }}
-                        className="rounded-xl border border-red-500/25 bg-red-500/10 px-4 py-2.5 text-sm font-medium text-red-200 transition hover:bg-red-500/20"
-                      >
-                        Delete team
-                      </button>
+                      {/*
+                        The team's own page, /teams/[id], reads the same
+                        row through GET /api/teams?id= but nothing linked
+                        to it. The list rows stay buttons (they select in
+                        place, and a link inside a button is invalid), so
+                        the way there is here.
+                      */}
+                      <div className="flex shrink-0 flex-wrap gap-3">
+                        <Link
+                          href={`/teams/${encodeURIComponent(selectedTeam.id)}`}
+                          className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5 text-sm font-medium text-foreground/70 transition hover:bg-white/[0.07] hover:text-foreground"
+                        >
+                          Open team page
+                        </Link>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void deleteTeam(selectedTeam.id);
+                          }}
+                          className="rounded-xl border border-red-500/25 bg-red-500/10 px-4 py-2.5 text-sm font-medium text-red-200 transition hover:bg-red-500/20"
+                        >
+                          Delete team
+                        </button>
+                      </div>
                     </div>
 
                     <div className="mt-8 grid gap-4 border-t border-white/10 pt-6 sm:grid-cols-3">

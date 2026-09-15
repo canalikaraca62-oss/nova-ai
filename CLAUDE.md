@@ -139,7 +139,10 @@ INSPECT → UNDERSTAND → PLAN → IMPLEMENT → TEST → ADVERSARIAL REVIEW
   PASSED in a secret-free scratch copy (2026-09-14). Every Phase 1 DoD
   item is verified and the founder accepted PASS. Not closed by this
   PASS, and documented as such: I-7 and I-15 PARTIAL, I-14 BLOCKED.
-  Phase 2 has not started.
+- **PHASE 2 — Repository and Architecture Purification: IN PROGRESS**
+  (started 2026-09-14; stopped and resumed by the founder the same day,
+  to be completed before Phase 3). Committed locally only, never pushed.
+  P2-H and the Phase 2 final gate remain. Phase 3 has not started.
 - **Vercel Git integration is connected:** any push or PR deploys. Never
   push, open a PR or merge without explicit founder approval.
 - For client writes the database is the boundary of record (ADR-003): a

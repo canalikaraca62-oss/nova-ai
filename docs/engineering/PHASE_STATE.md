@@ -1,6 +1,7 @@
 # SYRAVEN — Phase State
 
-**Last updated:** 2026-09-14, Phase 1 accepted as PASS by the founder.
+**Last updated:** 2026-09-15, Phase 2 status recorded as IN PROGRESS
+(Phase 1 accepted as PASS by the founder 2026-09-14).
 
 ## Current phase
 
@@ -10,7 +11,7 @@
 |---|---|
 | Status | **PASS** — accepted by the founder 2026-09-14, on the evidence in `VERIFICATION_STATE.md` |
 | Passes | First pass 2026-09-13; second pass 2026-09-13; steps 1–7 (migration readiness, TEST verification, remaining gaps) 2026-09-13/14; final gate (step 8) 2026-09-14: PARTIAL; production migrations applied and verified by the founder 2026-09-14; production `projects` boundary verified by the founder 2026-09-14; production build of the Phase 1 tree passed in a secret-free scratch copy 2026-09-14; **founder acceptance 2026-09-14: PASS** |
-| Next allowed action | Wait for the founder. Phase 2 starts only on "CONTINUE TO PHASE 2". Applying any migration, pushing, and committing the working tree each need an explicit instruction (the Vercel Git integration deploys any push). |
+| Next allowed action | Phase 1 is closed. Phase 2 is IN PROGRESS (see Phase history); each Phase 2 batch proceeds only on the founder's instruction, and Phase 3 starts only on its own. Applying any migration, pushing, and committing each need an explicit instruction (the Vercel Git integration deploys any push). |
 
 ## Objective
 
@@ -75,4 +76,5 @@ approval to exact arguments (Action Engine).
 | Phase | Status | Notes |
 |---|---|---|
 | Phase 1 — North Star Architecture | PASS (founder-accepted 2026-09-14) | This file |
-| Phase 2 | NOT STARTED | Awaiting instruction |
+| Phase 2 — Repository and Architecture Purification | IN PROGRESS | Started 2026-09-14 on the founder's instruction; stopped as PARTIAL and resumed by the founder the same day, to be completed before Phase 3. P2-A … P2-G committed locally (16 commits after `3314baa`, never pushed); preflight follow-up P2-P recorded 2026-09-15; P2-H and the Phase 2 final gate remain. Evidence: `PURIFICATION_EVIDENCE.md`, `PURIFICATION_SCORECARD.md` |
+| Phase 3 | NOT STARTED | Starts only on the founder's instruction |

@@ -56,8 +56,11 @@ committed separately:
 
 **Phase 1 — North Star Architecture: PASS** (founder-accepted 2026-09-14;
 I-7 and I-15 PARTIAL, I-14 BLOCKED remain documented limitations).
-Phase 2 has not started and may start only on the instruction
-"CONTINUE TO PHASE 2". Details: `PHASE_STATE.md`.
+**Phase 2 — Repository and Architecture Purification: IN PROGRESS**
+(started 2026-09-14; stopped and resumed by the founder the same day, to
+be completed before Phase 3). Committed locally only, never pushed; P2-H
+and the Phase 2 final gate remain. Phase 3 has not started. Details:
+`PHASE_STATE.md`.
 
 ## Major blockers
 

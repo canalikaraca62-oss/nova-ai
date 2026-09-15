@@ -157,6 +157,67 @@ void describe("IDOR: caller identity is never taken from client input", () => {
 /*                    EVERY MUTATING HANDLER IS AUTHENTICATED                 */
 /* -------------------------------------------------------------------------- */
 
+type HandlerShape = "absent" | "wrapped" | "plain" | "unclassified";
+
+/**
+ * How a route file exports one HTTP method.
+ *
+ * The sweep below used to recognise only the two shapes it can verify and
+ * skip everything else, so an unwrapped `export const POST = async (…) =>`
+ * produced no test at all (found in Phase 2 by G-B3 mutation M3;
+ * PURIFICATION_EVIDENCE.md P2-P04). Every other way of exporting the name
+ * is now "unclassified", and an unclassified mutating handler fails.
+ */
+function classifyHandler(code: string, method: string): HandlerShape {
+  if (
+    new RegExp(`export\\s+const\\s+${method}\\s*=\\s*withAuth\\s*\\(`).test(
+      code,
+    )
+  ) {
+    return "wrapped";
+  }
+
+  if (
+    new RegExp(`export\\s+(async\\s+)?function\\s+${method}\\s*\\(`).test(code)
+  ) {
+    return "plain";
+  }
+
+  const exportsName =
+    new RegExp(
+      `export\\s+(?:async\\s+)?(?:function\\*?|const|let|var|class)\\s+${method}\\b`,
+    ).test(code) ||
+    new RegExp(`export\\s*\\{[^}]*\\b${method}\\b[^}]*\\}`).test(code) ||
+    /export\s*\*/.test(code);
+
+  return exportsName ? "unclassified" : "absent";
+}
+
+void describe("The handler sweep cannot be bypassed by an export shape", () => {
+  const SHAPES: ReadonlyArray<readonly [string, string, HandlerShape]> = [
+    ["withAuth", "export const POST = withAuth(async (request, session) => {});", "wrapped"],
+    ["async function", "export async function POST() { return 405; }", "plain"],
+    ["function", "export function POST(request: Request) {}", "plain"],
+    ["unwrapped async arrow", "export const POST = async (request: Request) => {};", "unclassified"],
+    ["parenthesised async arrow", "export const POST = (async (request: Request) => {});", "unclassified"],
+    ["alias of a local", "const handler = withAuth(run);\nexport const POST = handler;", "unclassified"],
+    ["type-annotated const", "export const POST: Handler = withAuth(run);", "unclassified"],
+    ["export list alias", "const h = async () => {};\nexport { h as POST };", "unclassified"],
+    ["export let", "export let POST = async () => {};", "unclassified"],
+    ["export var", "export var POST = async () => {};", "unclassified"],
+    ["named re-export", 'export { POST } from "./handlers";', "unclassified"],
+    ["wildcard re-export", 'export * from "./handlers";', "unclassified"],
+    ["not exported", "const POST = async () => {};", "absent"],
+    ["another method only", "export const GET = withAuth(run);", "absent"],
+  ];
+
+  for (const [label, source, expected] of SHAPES) {
+    void test(`${label} is ${expected}`, () => {
+      assert.equal(classifyHandler(source, "POST"), expected);
+    });
+  }
+});
+
 void describe("Every mutating route handler requires authentication", () => {
   for (const file of ROUTE_FILES) {
     const id = routeId(file);
@@ -166,18 +227,20 @@ void describe("Every mutating route handler requires authentication", () => {
     const code = stripComments(read(file));
 
     for (const method of MUTATING_METHODS) {
-      const wrapped = new RegExp(
-        `export\\s+const\\s+${method}\\s*=\\s*withAuth\\s*\\(`,
-      ).test(code);
+      const shape = classifyHandler(code, method);
 
-      const plain = new RegExp(
-        `export\\s+(async\\s+)?function\\s+${method}\\s*\\(`,
-      ).test(code);
-
-      if (!wrapped && !plain) continue;
+      if (shape === "absent") continue;
 
       void test(`${id} ${method} is authenticated`, () => {
-        if (wrapped) {
+        assert.notEqual(
+          shape,
+          "unclassified",
+          `${id} exports ${method} in a shape this sweep cannot verify. ` +
+            `Write it as export const ${method} = withAuth(...) so the ` +
+            `session requirement is visible here.`,
+        );
+
+        if (shape === "wrapped") {
           assert.ok(true);
           return;
         }

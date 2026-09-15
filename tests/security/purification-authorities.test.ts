@@ -472,3 +472,67 @@ void describe("P2-G08: /api/agents stores only a registry-approved model", () =>
     assert.match(AGENTS, /configuration:\s*\{[\s\S]{0,200}?modelPreference/);
   });
 });
+
+/* -------------------------------------------------------------------------- */
+/*        P2-P — every kept page is reachable; retired pages stay gone        */
+/* -------------------------------------------------------------------------- */
+
+void describe("P2-P: orphan pages are linked or retired", () => {
+  const productFiles = [
+    ...sourceFiles(join(ROOT, "app")),
+    ...sourceFiles(join(ROOT, "lib")),
+  ];
+
+  function stripped(file: string): string {
+    return readFileSync(file, "utf8")
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/^\s*\/\/.*$/gm, "")
+      .replace(/\{\s*\/\*[\s\S]*?\*\/\s*\}/g, "");
+  }
+
+  function filesMatching(files: string[], pattern: RegExp): string[] {
+    return files.filter((file) => pattern.test(stripped(file))).map(relative);
+  }
+
+  void test("P2-P01: /chat/[id] is retired and no chat page keeps conversations in the browser", () => {
+    assert.ok(
+      !existsSync(join(ROOT, "app", "chat", "[id]", "page.tsx")),
+      "/chat/[id] is back. It kept conversations in localStorage and " +
+        "presented them as saved; a conversation page needs server storage.",
+    );
+    assert.deepEqual(
+      filesMatching(sourceFiles(join(ROOT, "app", "chat")), /\b(?:localStorage|sessionStorage)\b/),
+      [],
+      "A chat surface stores conversations in web storage again.",
+    );
+  });
+
+  void test("P2-P01: nothing links to a /chat/<id> page", () => {
+    assert.deepEqual(
+      filesMatching(productFiles, /["'`]\/chat\/(?:\$\{|[\w-])/),
+      [],
+      "A link points at the retired /chat/<id> page.",
+    );
+  });
+
+  void test("P2-P02: /teams links to each team's page, and that page exists", () => {
+    assert.ok(existsSync(join(ROOT, "app", "teams", "[id]", "page.tsx")));
+    assert.match(
+      code("app", "teams", "page.tsx"),
+      /<Link\s+href=\{`\/teams\/\$\{encodeURIComponent\(selectedTeam\.id\)\}`\}/,
+      "/teams/[id] is unreachable again: /teams no longer links to it.",
+    );
+  });
+
+  void test("P2-P03: /privacy/activity is retired and nothing links to it", () => {
+    assert.ok(
+      !existsSync(join(ROOT, "app", "privacy", "activity", "page.tsx")),
+      "/privacy/activity is back without an audit-log backend.",
+    );
+    assert.deepEqual(
+      filesMatching(productFiles, /["'`]\/privacy\/activity(?:["'`?#/]|$)/),
+      [],
+      "A link points at the retired /privacy/activity page.",
+    );
+  });
+});

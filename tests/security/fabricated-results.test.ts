@@ -39,7 +39,7 @@
 
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 /* -------------------------------------------------------------------------- */
@@ -229,26 +229,24 @@ void describe("No stock media is presented as the user's own", () => {
 });
 
 void describe("A security log is never invented", () => {
-  const PRIVACY = stripComments(read("app", "privacy", "activity", "page.tsx"));
+  /*
+    The worst surface in the product to fabricate. A person reads a
+    security log to decide whether someone else has been in their
+    account: an invented sign-in from an unfamiliar device causes real
+    alarm, and an invented quiet log hides a real intrusion.
 
-  void test("the log is not seeded", () => {
-    /*
-      The worst surface in the product to fabricate. A person reads a
-      security log to decide whether someone else has been in their
-      account: an invented sign-in from an unfamiliar device causes real
-      alarm, and an invented quiet log hides a real intrusion.
-    */
+    /privacy/activity first shipped five invented events, then an empty
+    log with no backend: no route exposes audit_logs and there is no
+    /api/privacy. Phase 2 retired it (PURIFICATION_EVIDENCE.md P2-P03).
+    A security log comes back only with a real audit-log route behind
+    it -- and with this pin replaced by one on that route's data.
+  */
+  void test("/privacy/activity stays retired until a real audit-log route exists", () => {
     assert.ok(
-      !/const\s+ACTIVITIES\s*[:=]/.test(PRIVACY),
-      "/privacy/activity renders invented security events.",
-    );
-  });
-
-  void test("it opens empty", () => {
-    assert.match(
-      PRIVACY,
-      /useState<PrivacyActivity\[\]>\(\[\]\)/,
-      "The log must be empty until real events are recorded.",
+      !existsSync(join(process.cwd(), "app", "privacy", "activity", "page.tsx")),
+      "/privacy/activity is back without an audit-log backend. A " +
+        "security log must read real events, not show a seeded or " +
+        "permanently empty list.",
     );
   });
 });

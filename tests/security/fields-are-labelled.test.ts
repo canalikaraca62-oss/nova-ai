@@ -190,15 +190,13 @@ void describe("A search field is named, not merely placeheld", () => {
    * the field has content, and screen readers treat it inconsistently
    * -- some announce it, some do not, and none should be relied on.
    *
-   * These three search inputs had a decorative magnifying-glass icon
-   * and a placeholder, and nothing else.
+   * These search inputs had a decorative magnifying-glass icon and a
+   * placeholder, and nothing else. A third, on /privacy/activity, left
+   * with that page when Phase 2 retired it (PURIFICATION_EVIDENCE.md
+   * P2-P03).
    */
   const SEARCH_PAGES = [
     { name: "/marketplace", path: ["app", "marketplace", "page.tsx"] },
-    {
-      name: "/privacy/activity",
-      path: ["app", "privacy", "activity", "page.tsx"],
-    },
     { name: "/studio", path: ["app", "studio", "page.tsx"] },
   ] as const;
 

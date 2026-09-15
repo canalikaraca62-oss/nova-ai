@@ -1502,7 +1502,191 @@ staged.
 **RESULT (P2-G08 / G-B7):** implemented and verified — all steps PASS.
 **Not committed**; awaiting founder instruction.
 
-### Later groups
+### P2-P — preflight follow-up before P2-H (founder-approved 2026-09-15)
 
-Recorded as each batch is prepared: documentation (P2-H). All P2-G
-batches (G-B1 … G-B7) are now recorded.
+The read-only preflight at `e0ac56f` found three pages with no inbound
+link from `app/` or `lib/` (`/billing/success` and `/billing/cancel` are
+**not** orphans: Stripe's `success_url` / `cancel_url`,
+`app/api/billing/checkout/route.ts:235,239`), a latent shape gap in the
+`api-auth-boundary` sweep, and final-gate prerequisites. The founder
+approved seven items; each is recorded here before it is made.
+
+| ID | Target (file:line at `e0ac56f`) | Finding | Inbound refs | Tests that pin it | Decision |
+|---|---|---|---|---|---|
+| P2-P01 | `app/chat/[id]/page.tsx` (1,038 lines) | FAKE-PERSISTENCE: a conversation "saved" only in the browser — `STORAGE_PREFIX = "syraven-chat:"` (`:47-48`), `localStorage.getItem` (`:150`), `setItem` (`:217`), `removeItem` (`:618`). Nothing navigates to it; no `/chat/${…}` link exists anywhere. The server stores no conversation for it | 0 (`app/`, `lib/`, `tests/e2e`, sitemap) | None | **RETIRE** (founder): delete the page. `/chat/<id>` answers Next's 404. `/chat` (`app/chat/page.tsx`, no web storage) and `app/chat/layout.tsx` are unchanged |
+| P2-P02 | `app/teams/[id]/page.tsx` (490 lines, kept) · `app/teams/page.tsx` | An honest page (reads `GET /api/teams?id=` on the caller's session; team RLS owner-scoped; fabrication removed earlier) that nothing links to — the `/teams` list selects a team in place and never offers its page | 0 | `fabricated-results` (`:306-386`), `dialogs-are-dialogs` (`:70`, `:233`) | **KEEP AND LINK** (founder): `/teams` gains a link to `/teams/${encodeURIComponent(id)}` in the selected team's header. List rows stay buttons (a link inside a button is invalid markup) |
+| P2-P03 | `app/privacy/activity/page.tsx` (527 lines) | A security log with no backend: opens empty (`useState<PrivacyActivity[]>([])`, `:119-120`), "Clear activity" clears local state only (`:166-168`), export disabled (`:513-521`). The page itself records that no route exposes `audit_logs` and there is no `/api/privacy` (`:57-60`). `/privacy` does not link to it; sitemap lists only `/privacy` | 0 | `fabricated-results` (`:231-254`, 2 tests), `fields-are-labelled` (`:198-201`, 1 generated test) | **RETIRE** (founder): delete the page. The two pins are converted, not dropped: `fabricated-results` asserts the page stays retired until a real audit-log route exists; `fields-are-labelled` loses the entry for the deleted file (its other search fields stay pinned) |
+| P2-P04 | `tests/security/api-auth-boundary.test.ts:160-238` | The per-method sweep only generates a test for `export const M = withAuth(` and `export (async) function M(`; any other export of a mutating method (`export const POST = (async …)`, `export const POST = handler`, `export { h as POST }`, `export let/var`, `export * from`) hits `if (!wrapped && !plain) continue` and is **skipped silently**. 0 current violations (74 handlers in 35 routes: 53 `const … = withAuth(`, 21 function declarations). Found by G-B3 mutation M3 | — | The sweep itself | **HARDEN** (founder): classify every export of `POST`/`PUT`/`PATCH`/`DELETE` as `absent` / `wrapped` / `plain` / `unclassified`; an `unclassified` export **fails** ("cannot verify") instead of being skipped. The classifier gets its own shape tests. `GET` stays out of scope (covered by `middleware.ts`; not part of the gap) |
+| P2-P05 | `syraven-audit.zip` (untracked, 2,444,143 bytes, mtime `2026-09-14T17:41:03.66Z`) | Unexplained untracked artifact at the repository root | — | — | **INTENTIONALLY EXCLUDED** (founder): not opened, modified, moved, deleted, staged or git-ignored. Excluded by name from the final gate's repository-integrity and secret-scan checks and from the scratch build copy; metadata (size, mtime) is the only thing read |
+| P2-P06 | `tests/security/engineering-control-plane.test.ts:247` · `PHASE_STATE.md:13,78` · `CLAUDE.md` "Current state" · `PROJECT_STATE.md:59-60` | All four say Phase 2 has **not started**; it was started, stopped and resumed by the founder (2026-09-14) and has 16 local commits. The guard pins the false statement | — | `engineering-control-plane` | **CORRECT TOGETHER** (founder): the guard pins Phase 2 as `IN PROGRESS` (not PASS before its final gate and founder acceptance) and Phase 3 as `NOT STARTED`; the docs state the real status. Only the Phase 2 status lines change |
+| P2-P07 | Production build of the Phase 2 tree | Last build: the Phase 1 tree (`R3WTT03LAIpTqm5j4I0tf`, 2026-09-14). `next build` loads `.env.local` (production secrets) in the canonical checkout | — | — | **ATTEMPT** (founder) in a secret-free scratch copy, as in Phase 1, behind the memory gate (`RESOURCE_POLICY.md`: ≥ 300 MB free to start; heap 1,600 MB). If the memory is not there, **BLOCKED** with the readings — never forced |
+
+**Guards planned.**
+- `purification-authorities`, P2-P block: `app/chat/[id]/page.tsx` absent and
+  nothing links to `/chat/<id>`; no `app/chat` source uses `localStorage` /
+  `sessionStorage`; `/teams` links to `/teams/${encodeURIComponent(…id)}`
+  and `app/teams/[id]/page.tsx` exists; `app/privacy/activity/page.tsx`
+  absent and nothing links to `/privacy/activity`.
+- `fabricated-results`: the security-log block asserts the page stays
+  retired (a re-added page must first have a real audit-log route).
+- `api-auth-boundary`: `classifyHandler` + shape tests; the sweep fails on
+  `unclassified`.
+- `engineering-control-plane`: `| Phase 2 | IN PROGRESS |`, not PASS;
+  `| Phase 3 | NOT STARTED |`.
+
+**Mutations planned.**
+- P01: page restored; a `localStorage` write re-added to `/chat`; a
+  `/chat/${id}` link re-added.
+- P02: link removed.
+- P03: page restored; a `/privacy/activity` link re-added.
+- P04: on a real non-public route (`app/api/teams/route.ts`):
+  - M1 `withAuth(` dropped from `export const POST = withAuth(` (unauthenticated arrow — the gap; also run against the **unfixed** sweep to show it was skipped);
+  - M2 re-exported through a list (`export { h as DELETE }`);
+  - M3 `export let PATCH`;
+  - M4 `export * from`;
+  - M5 the classifier's `unclassified` branch returning `absent` (the old skip).
+- P06: guard pin reverted to `NOT STARTED` while the doc says `IN PROGRESS`; doc
+  says `PASS`; Phase 3 row set to `IN PROGRESS`.
+
+**Behaviour changes, recorded:** `/chat/<id>` and `/privacy/activity`
+answer 404 (no product link reaches either; conversations a browser kept
+under `syraven-chat:` stay in that browser, unread). `/teams` shows one
+extra link. No API route, database access, migration, dependency or
+secret changes.
+
+#### What changed (uncommitted at `e0ac56f`)
+
+- **P2-P01** — `app/chat/[id]/page.tsx` deleted (1,038 lines; the empty
+  `[id]` directory removed). `app/chat/page.tsx` and `layout.tsx` untouched.
+- **P2-P02** — `app/teams/page.tsx`: the selected team's header wraps
+  "Delete team" with a new `<Link href={`/teams/${encodeURIComponent(selectedTeam.id)}`}>`
+  "Open team page". `app/teams/[id]/page.tsx` untouched.
+- **P2-P03** — `app/privacy/activity/page.tsx` deleted (527 lines; the
+  empty directory removed). `fabricated-results`: the two tests on the page
+  source ("the log is not seeded", "it opens empty") become one retirement
+  pin ("/privacy/activity stays retired until a real audit-log route
+  exists"). `fields-are-labelled`: the entry for the deleted page removed;
+  `/marketplace` and `/studio` stay pinned.
+- **P2-P04** — `api-auth-boundary`: `classifyHandler(code, method)` returns
+  `absent` / `wrapped` / `plain` / `unclassified`. The sweep skips only
+  `absent`; `unclassified` fails with "exports M in a shape this sweep
+  cannot verify". A new describe pins 14 shapes. The wrapped and plain
+  verification logic after it is unchanged.
+- **P2-P05** — nothing touched; see the verification notes.
+- **P2-P06** — `engineering-control-plane:247`: `| Phase 2 | NOT STARTED |`
+  replaced by `| Phase 2 — Repository and Architecture Purification | IN PROGRESS |`,
+  a negative pin (no `PASS` / `COMPLETE` / `DONE` status cell for Phase
+  2), and `| Phase 3 | NOT STARTED |`. `PHASE_STATE.md` (last-updated line,
+  next allowed action, Phase history: Phase 2 and Phase 3 rows),
+  `CLAUDE.md` "Current state" (one bullet), `PROJECT_STATE.md` "Active
+  phase" (one paragraph).
+- `purification-authorities`: a P2-P block of 4 tests. It covers:
+  - `/chat/[id]` is absent, and no `app/chat` source uses web storage;
+  - no `"/chat/<id>"` link exists;
+  - `/teams` links to `/teams/[id]`, which exists;
+  - `/privacy/activity` is absent and unlinked.
+- `.next/types` regenerated with `npx next typegen` (exit 0). There are 0
+  references left to either deleted page. `.next` is git-ignored.
+
+#### Verification (each heavy step alone, 300 MB gate before launch)
+
+| # | Step | Command | Result | Free RAM before → after |
+|---|---|---|---|---|
+| 1 | Affected guard suites | `node --test --test-concurrency=1` `purification-authorities`, `fabricated-results`, `fields-are-labelled`, `api-auth-boundary`, `engineering-control-plane`, `dialogs-are-dialogs`, `connector-surface-is-honest`, `middleware-gate`, `one-main-landmark`, `ui-integrity`, `no-dead-controls`, `api-reference-integrity` | **PASS**: exit 0; 474 tests, 59 suites, 474 pass, 0 fail. The first launch was refused at the gate (285 MB, nothing started) | 548 → 556 MB |
+| 2 | Mutations | 15, below | **PASS**: 14 of 14 caught, and the unfixed-sweep baseline confirmed the gap; every file restored by hash | 313 … 506 MB per mutation |
+| 3 | Invariants and control plane | `npm run test:invariants` | **PASS**: exit 0; 68 tests, 61 pass, 0 fail, 7 todo | 333 → 396 MB |
+| 4 | Typecheck | `npx tsc --noEmit -p tsconfig.json` (`--max-old-space-size=1536`), after `next typegen` | **PASS**: exit 0, 0 `error TS` lines (108 s) | 382 → 981 MB |
+| 5 | Full suite | `npm run test:lowmem` | **PASS**: exit 0; 1,860 tests, 351 suites, 1,853 pass, 0 fail, 0 skipped, 7 todo (37.8 s) | 970 → 667 MB |
+| 6 | Lint | `npx eslint app/teams/page.tsx` plus the 5 changed test files (`--max-old-space-size=768`) | **PASS**: exit 0, 0 errors, 0 warnings | 667 → 954 MB |
+
+**Test-count delta** (1,860 against 1,845 after G-B7, +15), from a
+name-by-name diff of the two full-suite logs:
+
+| Change | Tests |
+|---|---|
+| Classifier shape tests | +14 |
+| P2-P block | +4 |
+| `fabricated-results` retirement pin | +1 |
+| Removed: `fabricated-results` "the log is not seeded" and "it opens empty" | −2 |
+| Removed: `fields-are-labelled` "/privacy/activity names its search field" | −1 |
+| Removed: `one-main-landmark` "app/chat/[id]/page.tsx renders no <main>" (generated per page) | −1 |
+| **Net** | **+15** |
+
+The suites went from 349 to 351, one for each of the two new describes.
+The 7 todos are the documented limitations.
+
+#### Mutation testing
+
+Each mutation re-created one defect, ran the named suite, and restored the
+original bytes in a `finally` block. The backups are in
+`scratchpad/mutation-backup-pp` (SHA-256, first 12 hex). Script:
+`scratchpad/mut-pp.mjs`, TAP reporter, gate ≥ 300 MB per run.
+
+| # | Defect re-created | Suite | Result |
+|---|---|---|---|
+| P01a | `/chat/[id]` page restored | `purification-authorities` | **Caught**: 61 / 1 |
+| P01b | `localStorage.setItem` re-added to `app/chat/page.tsx` | same | **Caught**: 61 / 1 |
+| P01c | `` `/chat/${id}` `` link re-added | same | **Caught**: 61 / 1 |
+| P02 | `/teams` link replaced with `href="/teams"` | same | **Caught**: 61 / 1 |
+| P03a | `/privacy/activity` page restored | `purification-authorities` + `fabricated-results` | **Caught**: 116 / 2 |
+| P03b | `"/privacy/activity"` link re-added to `/privacy` | `purification-authorities` | **Caught**: 61 / 1 |
+| P04 baseline | M1 applied under the **unfixed** sweep (the `e0ac56f` test file) | `api-auth-boundary` | **Gap confirmed**: 133 pass / 0 fail, so the unauthenticated POST passed unseen |
+| P04-M1 | `export const POST = (async …)`: `withAuth` dropped in `app/api/teams/route.ts` | `api-auth-boundary` | **Caught**: 147 / 1 ("POST is authenticated") |
+| P04-M2 | DELETE exported through `export { deleteHandler as DELETE }` | same | **Caught**: 147 / 1 |
+| P04-M3 | `export let PATCH = withAuth(…)` | same | **Caught**: 147 / 1 |
+| P04-M4 | `export * from "./handlers"` appended | same | **Caught**: 148 / 1 (PUT: the one method the file does not already export as `withAuth`) |
+| P04-M5 | The classifier's `unclassified` branch returns `absent` (the old skip) | same | **Caught**: 139 / 9 (the shape tests) |
+| P06a | Guard pin reverted to `\| Phase 2 \| NOT STARTED \|` | `engineering-control-plane` | **Caught**: 15 / 1 |
+| P06b | `PHASE_STATE.md` Phase 2 status set to `PASS` | same | **Caught**: 15 / 1 |
+| P06c | `PHASE_STATE.md` Phase 3 row set to `IN PROGRESS` | same | **Caught**: 15 / 1 |
+
+Restored hashes:
+- `app/api/teams/route.ts` `59BCA655C5A8` (= backup)
+- `app/chat/page.tsx` `99CC31E6B69A`
+- `app/teams/page.tsx` `C317C0051A29`
+- `app/privacy/page.tsx` `379F2F75AB2B`
+- `api-auth-boundary.test.ts` `05A455EB65C5`
+- `engineering-control-plane.test.ts` `9CA072AA94B3`
+- `PHASE_STATE.md` `CF30CD8D8554`
+
+Both restored pages were removed again. `git status --short` was identical
+before and after, and the size and mtime of `syraven-audit.zip` were unchanged.
+
+#### Known limitations
+
+- `/chat/<id>` and `/privacy/activity` answer Next's generic 404, not a
+  page explaining the retirement; no product link reaches either.
+- A security or privacy activity log does not exist in the product; it
+  needs an `audit_logs` route (and the durability work recorded for the
+  dead `lib/security/audit.ts`).
+- The sweep still covers only `POST` / `PUT` / `PATCH` / `DELETE`. `GET`
+  relies on `middleware.ts` (founder scope: the gap, not GET).
+- The `withAuth` form is recognised only as `export const M = withAuth(`.
+  A generic call (`withAuth<T>(`) or a type annotation now fails as
+  unclassified rather than passing. That is fail-closed by design; none
+  exist today.
+- No browser check of the `/teams` link.
+
+#### P2-P07 — production build attempt (scratch copy, memory gate)
+
+| Attempt | Result | Evidence |
+|---|---|---|
+| 0 | **NOT STARTED** | The pre-build secret scan matched the synthetic fixture in `observability-redaction.test.ts:380`, a `postgres` URL with placeholder credentials, used there since `5f2832f`. It is now allowed by exact file and value; every other match still blocks |
+| 1 | **FAIL (environment)** | Exit 1 after 13 s: `Cannot find module 'next/dist/compiled/webpack/webpack-lib'`. The scratch `node_modules` under `%TEMP%` had lost files (2 of 28 in that directory). Re-synced with `robocopy /MIR` (14,266 copied, 854 extras removed, 0 failed); the script now checks Next's compiled directories file for file |
+| 2 | **NOT STARTED** | The scan matched that fixture's literal, which I had quoted in a `VERIFICATION_STATE.md` row. The row was reworded |
+| 3 | **BLOCKED (resources)** | Started at 513 MB free, with the copy (309 files, 0 hash mismatches, no `.env*`, no secret-named project env vars) and `node_modules` checks passing. The host killed it for low memory during "Creating an optimized production build …". No `BUILD_ID`, no process left |
+
+Not retried: the founder's instruction was to record BLOCKED rather than
+force it. `git status` and `syraven-audit.zip` (size and mtime) were
+unchanged by every attempt; the canonical checkout was never built.
+
+**RESULT (P2-P):**
+
+| Item | Status |
+|---|---|
+| P2-P01–P04 (orphan pages, sweep hardening) | Implemented and verified: every step PASS |
+| P2-P05 (`syraven-audit.zip`) | Recorded as an excluded artifact |
+| P2-P06 (Phase 2 status, guard and docs) | Implemented and verified |
+| P2-P07 (production build) | **BLOCKED** (resources) |
+
+**Not committed**; awaiting the founder's instruction. P2-H not started.
