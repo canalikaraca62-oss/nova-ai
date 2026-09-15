@@ -61,8 +61,11 @@ const ELEVATED_ALLOWLIST: Record<string, string> = {
     "No caller identity: creates the user and org before any session exists.",
   "app/api/billing/webhook/route.ts":
     "No caller identity: authenticated by Stripe signature, not a session.",
-  "app/api/files/upload/route.ts":
-    "Storage operations are governed by bucket policies, not table RLS.",
+  /*
+   * app/api/files/upload/route.ts left this list when it was retired to a
+   * 410 (PURIFICATION_EVIDENCE.md P2-G06): it no longer writes storage, so
+   * it no longer holds service-role access.
+   */
   "app/api/notifications/route.ts":
     "Create only: notifications have no insert policy by design.",
 };

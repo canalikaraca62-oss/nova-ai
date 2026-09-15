@@ -436,7 +436,10 @@ export const RATE_LIMITS: Record<string, RateLimitRule> = {
   "ai:vision": { max: 10, windowSeconds: 60 },
   "ai:voice": { max: 10, windowSeconds: 60 },
   "ai:canvas": { max: 10, windowSeconds: 60 },
-  "files:upload": { max: 20, windowSeconds: 60 },
+  /*
+   * "files:upload" was declared here for /api/files/upload, which never
+   * called it and is now retired (PURIFICATION_EVIDENCE.md P2-G06).
+   */
 
   /*
    * Search (Phase 10.2).

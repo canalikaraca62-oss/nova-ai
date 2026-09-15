@@ -1023,7 +1023,111 @@ deleted or staged.
 with one guard-coverage finding recorded. **Not committed**; awaiting
 founder instruction.
 
+#### P2-G06 — retire `/api/files/upload` (founder decision 2026-09-15: "Retire to 410", G-B4)
+
+| ID | Route | Evidence (file:line at `ff92238`) | Consumers | Tests that pin it | Canonical replacement | Decision |
+|---|---|---|---|---|---|---|
+| P2-G06 | `POST /api/files/upload` (562 lines; `GET` answers 405) | Writes up to 50 MB per request (`MAX_FILE_SIZE`, `:23`) to the `files` storage bucket through `supabaseAdmin` (`:13`, `:437-448`), with a signed URL (`:478-485`). No usage metering and no rate limit: `enforceUsage` / `checkRateLimit` are never called, although `lib/usage/meter.ts` declares both a `fileUpload` metric and a `"files:upload"` rate rule (`:439`) for exactly this. Any signed-in account can fill storage at the operator's cost. Last changed `3f62f71` (P2-E06, the id fix) | **None** — no reference to `/api/files/upload` or to storage uploads anywhere in `app/` or `lib/` outside `app/api` | `data-access` (`ELEVATED_ALLOWLIST` entry, and "every allowlisted route still actually uses it"), `middleware-gate` (protected list) | None needed today; an upload surface, when one exists, is built metered and rate limited | RETIRE: `withAuth` 410; no storage write, no service-role client |
+
+**Changes that follow from the retirement:**
+- `data-access` `ELEVATED_ALLOWLIST`: the `app/api/files/upload/route.ts`
+  entry removed — the retired route no longer uses `supabaseAdmin`, and the
+  suite's own "every allowlisted route still actually uses it" test requires
+  stale permissions to be removed. One fewer service-role route (4 → 3).
+- `lib/usage/meter.ts` `RATE_LIMITS`: the `"files:upload"` rule removed — it
+  existed only for this route, which never called it; no code or test
+  references it (searched `app/`, `lib/`, `tests/`).
+- **Kept:** `USAGE_METRICS.fileUpload` — plans define `fileUploadsPerDay`
+  and `/api/usage` reports it; it is not dead.
+
+**Unchanged:** `middleware-gate` (path stays protected), every other
+allowlist entry and test.
+
+**Retired-route guard:** `RETIRED_ROUTES` gains `/api/files/upload`.
+
+**Mutations planned:** M1 re-add the service-role storage write — must fail
+the retired-route guard and `data-access` "no route outside the allowlist
+uses supabaseAdmin"; M2 410 → 200; M3 remove `withAuth`; M4 add a product
+caller of `/api/files/upload`; M5 re-add the upload entry to
+`ELEVATED_ALLOWLIST` — "every allowlisted route still actually uses it" must
+fail.
+
+#### What changed (uncommitted at `ff92238`)
+
+- `app/api/files/upload/route.ts` — implementation removed (562 lines, 482
+  non-blank → 44 lines, 35 non-blank). Only `POST = withAuth(async () => …)`
+  remains, answering 410 `ROUTE_RETIRED` "This endpoint is retired. File
+  upload is not available." No `supabaseAdmin`, no storage call; the 405
+  `GET` export is gone.
+- `tests/security/data-access.test.ts` — `ELEVATED_ALLOWLIST` entry for the
+  route removed, with a note (4 → 3 service-role routes).
+- `lib/usage/meter.ts` — the unused `"files:upload"` rule removed from
+  `RATE_LIMITS`, with a note. `USAGE_METRICS.fileUpload` kept.
+- `tests/security/purification-authorities.test.ts` — `RETIRED_ROUTES` gains
+  `/api/files/upload`.
+- Leftover sweep: `files:upload`, `supabaseAdmin.storage`, `STORAGE_BUCKET`
+  appear nowhere in `app/`, `lib/`, `tests/`, `middleware.ts` except the
+  explanatory comment in `meter.ts`.
+- Totals (`git diff --stat HEAD`): code, lib and tests 4 files,
+  +38 / −549; with this file 5 files, +70 / −550.
+
+#### Verification (each step alone, 300 MB gate before launch)
+
+| # | Step | Command | Result | Free RAM before → after |
+|---|---|---|---|---|
+| 1 | Affected guard suites | `node --test --test-concurrency=1 …` `purification-authorities`, `data-access`, `middleware-gate`, `api-auth-boundary`, `usage-enforcement`, `ingest-cost-control`, `brain-semantic-bridge` | **PASS** — exit 0; 397 tests, 46 suites: 397 pass, 0 fail. First launch refused at the gate (283 MB) | 474 → 395 MB |
+| 2 | Mutations | 5 mutations, below | **PASS** — 5 of 5 caught; every file restored to its original hash | 333 … 457 MB per mutation |
+| 3 | Regression suites | `node --test --test-concurrency=1 …` `architecture-invariants`, `api-reference-integrity`, `ai-provider`, `observability-redaction`, `authorization-boundary`, `search-isolation` | **PASS** — exit 0; 214 tests, 48 suites: 207 pass, 0 fail, 7 todo | 327 → 381 MB |
+| 4 | Typecheck | `npx tsc --noEmit -p tsconfig.json` (`--max-old-space-size=1536`) | **PASS** — exit 0, 0 `error TS` lines | 548 → 818 MB |
+| 5 | Full suite | `npm run test:lowmem` | **PASS** — exit 0; 1,830 tests, 347 suites: 1,823 pass, 0 fail, 0 skipped, 7 todo (74.1 s) | 584 → 525 MB |
+| 6 | Lint | `npx eslint app/api/files/upload/route.ts lib/usage/meter.ts tests/security/data-access.test.ts tests/security/purification-authorities.test.ts` (`--max-old-space-size=768`) | **PASS** — exit 0, 0 errors, 0 warnings | 607 → 1,026 MB |
+
+**Test-count delta accounted:** 1,830 vs 1,827 (after G-B3) = +3 retired-
+route tests for `/api/files/upload`. The `data-access` allowlist tests
+iterate the list inside single tests, so removing an entry changes no count;
+`api-auth-boundary` still generates one `POST` test for the route (the old
+`GET` was not a mutating method). Suites unchanged (347). The 7 todos are
+the documented limitations.
+
+#### Mutation testing
+
+Each mutation re-created one defect, ran the guards that own it, and
+restored the original bytes in a `finally` block; the three files were
+backed up to the scratchpad first. SHA-256, first 12 hex.
+
+| # | Defect re-created | File | Result | Hash before = after |
+|---|---|---|---|---|
+| M1 | Service-role storage write re-added (`await supabaseAdmin.storage.from("files").upload(…)`) | `app/api/files/upload/route.ts` | **Caught** by two guards — `purification-authorities` 44 / 1: "/api/files/upload reads, writes and spends nothing"; `data-access` 21 / 1: "no route outside the allowlist uses supabaseAdmin" | `F98C4F3B85AA` ✔ |
+| M2 | 410 → 200 | same | **Caught** — 44 / 1: "/api/files/upload requires a session and answers 410" | `F98C4F3B85AA` ✔ |
+| M3 | `withAuth` removed | same | **Caught** — 44 / 1: "requires a session and answers 410" | `F98C4F3B85AA` ✔ |
+| M4 | Product caller added (the `/search` page pointed at `/api/files/upload`) | `app/search/page.tsx` | **Caught** — 44 / 1: "nothing in the product calls /api/files/upload" | `5BDA196C0467` ✔ |
+| M5 | Upload entry re-added to `ELEVATED_ALLOWLIST` | `tests/security/data-access.test.ts` | **Caught** — `data-access` 20 / 2: "every allowlisted route still actually uses it", "each elevated route documents the reason at the call site" | `74982C0FB564` ✔ |
+
+`git status --short` identical before and after; `syraven-audit.zip` size
+and timestamp unchanged. **Memory:** the first step 1 launch was refused at
+the gate (283 MB, nothing started); a memory-only watcher (ran nothing)
+reported 459 MB, and every later step and mutation ran at ≥ 300 MB.
+
+#### Known limitations
+
+- An external client of `/api/files/upload`, if one exists, now receives
+  410; there is no replacement upload route.
+- M3 is caught by the retired-route guard only; the `api-auth-boundary`
+  blind shape recorded in G-B3 still stands.
+- The `files` storage bucket and any objects already in it are untouched
+  (no storage or database change was made).
+- No live request against the retired route; no production build.
+
+#### Not done
+
+No commit, push, deploy, build, migration, storage, or secret / OAuth
+change. G-B5 … G-B7 and P2-H not started. `syraven-audit.zip` not opened,
+moved, deleted or staged.
+
+**RESULT (P2-G06 / G-B4):** implemented and verified — all steps PASS.
+**Not committed**; awaiting founder instruction.
+
 ### Later groups
 
-Recorded as each batch is prepared: remaining P2-G batches (G-B4 … G-B7),
+Recorded as each batch is prepared: remaining P2-G batches (G-B5 … G-B7),
 documentation (P2-H).
