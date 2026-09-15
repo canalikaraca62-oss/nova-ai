@@ -535,6 +535,25 @@ void describe("P2-P: orphan pages are linked or retired", () => {
       "A link points at the retired /privacy/activity page.",
     );
   });
+
+  void test("FG-01: /profile is kept and has an inbound product link", () => {
+    /*
+      Retiring /privacy/activity removed the only link to /profile
+      (Phase 2 final gate, FG-01). robots.ts lists the path but is not
+      navigation, and the page cannot link to itself.
+    */
+    assert.ok(existsSync(join(ROOT, "app", "profile", "page.tsx")));
+    assert.ok(
+      filesMatching(
+        productFiles.filter((file) => {
+          const rel = relative(file);
+          return !rel.startsWith("app/profile/") && rel !== "app/robots.ts";
+        }),
+        /href=\{?\s*["'`]\/profile(?:["'`?#]|$)/,
+      ).length > 0,
+      "/profile is unreachable again: nothing in the product links to it.",
+    );
+  });
 });
 
 /* -------------------------------------------------------------------------- */

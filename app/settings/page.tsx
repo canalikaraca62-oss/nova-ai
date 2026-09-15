@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import {
   Bell,
   Bot,
@@ -624,6 +625,19 @@ function ProfileSettings({
             Your profile identity is used across projects,
             collaboration and workspace activity.
           </p>
+
+          {/*
+            /profile shows the signed-in account as the auth server
+            verifies it. Its only link used to be /privacy/activity,
+            retired in Phase 2 (PURIFICATION_EVIDENCE.md FG-01).
+          */}
+          <Link
+            href="/profile"
+            className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+          >
+            View your account profile
+            <ChevronRight className="h-4 w-4" />
+          </Link>
         </div>
       </div>
 

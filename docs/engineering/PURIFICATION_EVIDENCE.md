@@ -1813,4 +1813,63 @@ throughout.
   documented P2-F07 limitation, and P2-H only made the docs say so.
 
 **RESULT (P2-H):** implemented and verified; every step PASS after the
-lint fix. **Not committed**; awaiting the founder's instruction.
+lint fix. Committed as `50346bb` on the founder's instruction
+(2026-09-15); not pushed.
+
+### Phase 2 final gate (2026-09-15, HEAD `50346bb`)
+
+Verification only; no code changed. Every result, with its command, is
+recorded in `VERIFICATION_STATE.md` (the "P2 gate" rows).
+
+| ID | Finding | Evidence | Classification | Disposition |
+|---|---|---|---|---|
+| FG-01 | `/profile` has no inbound product link | Reachability matrix: only `app/robots.ts` names it. At `e0ac56f` its one link was `app/privacy/activity/page.tsx:465` ("Manage your account"), which P2-P03 retired. The P2-P guard checked the three pages but not what removing one left unreachable | **FAIL**, a Phase 2 regression | Not fixed during the gate (UI change). Proposed: link `/profile` from Settings or the navigation, and add a reachability guard for every kept page. Founder decision |
+| FG-02 | No sign-out control in the product | `/api/auth/logout` and `lib/supabase.ts` `signOut()` have no caller in `app/` or `lib/`; the same was true at `3314baa` | Pre-existing reachability gap, not introduced by Phase 2 | Recorded. Founder decision |
+| FG-03 | `signOut()` in `lib/supabase.ts` is an exported function with no importer | `git grep signOut` | Dead export (the P2-A pass worked per file, not per export) | Recorded; resolves with FG-02 |
+| FG-04 | Remaining duplicate authorities | Duplicate-authority rescan | **PARTIAL** | Recorded, not fixed. The five are listed after this table |
+| FG-05 | Production build of the Phase 2 tree | Memory 308–629 MB sampled; the last attempt was killed during compilation at 513 MB start | **BLOCKED** (resources) | Not attempted; no OOM retry |
+| FG-06 | Browser / E2E and visual QA | No build of the current tree | **BLOCKED** / **NOT RUN** | Needs FG-05 first |
+
+The remaining duplicate authorities (FG-04):
+
+1. The embedding model authority (`lib/search/openaiEmbedding.ts`
+   `APPROVED_EMBEDDING_MODEL` plus the `lib/search/embedding.ts`
+   candidate table) sits beside `lib/ai/registry.ts`, although it takes
+   its endpoint and key from the registry.
+2. `/agents/[id]` keeps its own catalogue of agents (research, coding,
+   writing), mapped onto the orchestration ids (researcher, organizer,
+   curator).
+3. `AgentStatus` vocabularies.
+4. Checkout `BillingPlan`, a deliberate sellable subset.
+5. Direct provider fetches in `/api/chat`, the voice routes and
+   embeddings (documented in `lib/ai/provider.ts`).
+
+Everything else passed: repository integrity, the secret scan (1
+synthetic fixture), the full suite (1,863: 1,856 / 0 / 7), invariants,
+schema, the E2E guards, the boundary guards, the Playwright listing, tsc,
+and lint on 50 files.
+
+#### FG-01 fix — `/profile` gets an inbound link (founder-approved 2026-09-15)
+
+| Field | Record |
+|---|---|
+| Target | `app/settings/page.tsx` `ProfileSettings` (`:587-676` at `50346bb`); `app/profile/page.tsx` unchanged |
+| Finding | `/profile`, a kept and honest page (the verified account email via `auth.getUser()`, disabled fields with the reason), lost its only inbound link when P2-P03 retired `/privacy/activity` |
+| Surface chosen | The Profile section of `/settings`. Settings is in both the desktop and the mobile navigation, and its Profile section is the one place a user looks for their account profile. No navigation entry is added (founder: no unrelated UX change) |
+| Change | One `next/link` `Link` to `/profile` ("View your account profile") under the "Profile identity" text; `Link` import added. The existing `/pricing` `<a>` is not touched |
+| Not changed | `/privacy/activity` stays retired; FG-02, FG-03 and the duplicate-authority findings stay open |
+| Guard | `purification-authorities` P2-P block: `app/profile/page.tsx` exists and at least one product file other than the page itself and `robots.ts` links to it with an `href` (comments stripped) |
+| Mutations planned | M1: the link's `href` changed to `/settings`. M2: the link moved into a JSX comment. M3: the link removed |
+
+**Verification** (each step alone, 300 MB gate):
+
+| Step | Result |
+|---|---|
+| Targeted suites: `purification-authorities`, `fields-are-labelled`, `no-false-claims`, `one-product-language` (the suites that read `app/settings/page.tsx`) | **PASS**: 86 / 86, 0 fail, including "FG-01: /profile is kept and has an inbound product link" |
+| Mutations (`scratchpad/mut-fg01.mjs`) | **PASS**: 3 of 3 caught (65 / 1 each; FG-01 fails); `app/settings/page.tsx` restored to `71448E6B1A27` |
+| Typecheck (`tsc`, heap 1,536 MB) | **PASS**: exit 0, 0 `error TS` |
+| Lint on `tests/security/purification-authorities.test.ts` | **PASS**: 0 problems |
+| Lint on `app/settings/page.tsx` | **1 error, pre-existing and not introduced here**: `react-hooks/set-state-in-effect` at `:204`, the settings-load effect. The same error is reported on the unmodified `50346bb` file (`:203`, through `eslint --stdin`). The file was never in Phase 2's lint set (it was not modified in Phase 2). This change adds lines at `:3` and `:628-640` only. Not fixed: out of scope |
+| Reachability (`scratchpad/reach.cjs`) | `/profile` ← `app/settings/page.tsx` (plus `robots.ts`). The only other pages without a code reference are `/billing/success` and `/billing/cancel`, which are Stripe return URLs. `/chat/[id]` and `/privacy/activity` remain absent; `/teams/[id]` remains linked |
+
+`syraven-audit.zip` size and mtime unchanged. **Not committed.**
