@@ -217,8 +217,13 @@ void describe("2. The client cannot define tenant truth", () => {
 /* -------------------------------------------------------------------------- */
 
 void describe("3. AI cannot bypass policy", () => {
+  /*
+   * PROVIDER_ENDPOINTS[ is a paid call site too: /api/chat takes its base
+   * URL from the registry (P2-F08). Without it that route would match
+   * nothing here and silently leave the metering check below.
+   */
   const PAID_CALL =
-    /api\.openai\.com|api\.groq\.com|chatCompletion(?:Stream|WithFailover)?\(|runOrchestration\(|embedText\(|createOpenAiEmbeddingClient\(/;
+    /api\.openai\.com|api\.groq\.com|PROVIDER_ENDPOINTS\[|chatCompletion(?:Stream|WithFailover)?\(|runOrchestration\(|embedText\(|createOpenAiEmbeddingClient\(/;
 
   /** The first step inside a handler that leads to a paid provider. */
   const PAID_STEP =

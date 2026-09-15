@@ -167,3 +167,62 @@ void describe("P2-F01: chat shows the boundary's error message", () => {
     );
   });
 });
+
+/* -------------------------------------------------------------------------- */
+/*        P2-F08 — /api/chat pairs model and provider through the registry    */
+/* -------------------------------------------------------------------------- */
+
+void describe("P2-F08: /api/chat takes model and provider from the registry", () => {
+  const CHAT_ROUTE = code("app", "api", "chat", "route.ts");
+
+  void test("the client cannot choose the provider", () => {
+    assert.ok(
+      !/body\.provider\b/.test(CHAT_ROUTE),
+      "A client-chosen vendor can contradict the registry model's provider.",
+    );
+  });
+
+  void test("no model comes from the environment", () => {
+    assert.ok(
+      !/OPENAI_MODEL|GROQ_MODEL|DEFAULT_(?:OPENAI|GROQ)_MODEL/.test(CHAT_ROUTE),
+      "An env model name reaches the provider without a registry or plan check.",
+    );
+  });
+
+  void test("endpoints and keys come from the registry", () => {
+    assert.ok(
+      !/api\.openai\.com|api\.groq\.com/.test(CHAT_ROUTE),
+      "A hardcoded vendor URL is a second copy of PROVIDER_ENDPOINTS.",
+    );
+    assert.match(CHAT_ROUTE, /PROVIDER_ENDPOINTS\[\s*\w+\.provider\s*\]\.baseUrl/);
+    assert.match(CHAT_ROUTE, /providerApiKey\(\s*\w+\.provider\s*\)/);
+  });
+
+  void test("candidates are the plan-aware failover candidates", () => {
+    assert.match(
+      CHAT_ROUTE,
+      /failoverCandidates\(\s*policy\.policy\.model,\s*"chat",\s*guard\.entitlement\.effectivePlan\s*\)/,
+      "CRITICAL: a fallback not re-validated against the caller's plan is a side door around it.",
+    );
+    assert.ok(
+      !/function getProvider\b|function getFallbackProvider\b/.test(CHAT_ROUTE),
+      "The route-local provider pickers are back.",
+    );
+  });
+
+  void test("a failed call moves on only when failover is worth it", () => {
+    assert.match(
+      CHAT_ROUTE,
+      /isFailoverWorthy\(\s*normalizeHttpError\(\s*response\.status\s*\)\s*\)/,
+      "An unconditional fallback buys a second paid refusal of an invalid request.",
+    );
+  });
+
+  void test("each candidate keeps its own token ceiling", () => {
+    assert.match(
+      CHAT_ROUTE,
+      /Math\.min\(\s*maxTokens,\s*\w+\.maxOutputTokens\s*\)/,
+      "Carrying the primary's ceiling to a smaller model sends an over-limit request.",
+    );
+  });
+});

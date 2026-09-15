@@ -12,6 +12,17 @@ import {
   requireOptionalProjectAccess,
   requireOptionalWorkspaceAccess,
 } from "@/lib/api/tenantGuard";
+import {
+  PROVIDER_ENDPOINTS,
+  providerApiKey,
+  type ModelDefinition,
+  type ProviderId,
+} from "@/lib/ai/registry";
+import {
+  failoverCandidates,
+  isFailoverWorthy,
+} from "@/lib/ai/failover";
+import { normalizeHttpError } from "@/lib/ai/provider";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -45,7 +56,6 @@ type ChatRequestBody = {
   conversationId?: string | null;
 
   model?: string;
-  provider?: "auto" | "openai" | "groq";
 
   stream?: boolean;
 
@@ -60,28 +70,23 @@ type ChatRequestBody = {
   maxTokens?: number;
 };
 
-type AIProvider =
-  | "openai"
-  | "groq";
-
+/*
+  One candidate call: a registry model on its own provider's endpoint,
+  with that model's own token ceiling. Built only by toProviderConfigs
+  from registry data -- never from the request or from env model names
+  (PURIFICATION_EVIDENCE.md P2-F08).
+*/
 type ProviderConfig = {
-  provider: AIProvider;
+  provider: ProviderId;
   apiKey: string;
   baseUrl: string;
   model: string;
+  maxTokens: number;
 };
 
 /* ==================================================
    CONSTANTS
 ================================================== */
-
-const DEFAULT_OPENAI_MODEL =
-  process.env.OPENAI_MODEL ??
-  "gpt-4o-mini";
-
-const DEFAULT_GROQ_MODEL =
-  process.env.GROQ_MODEL ??
-  "llama-3.3-70b-versatile";
 
 const MAX_MESSAGE_LENGTH = 100_000;
 const MAX_MESSAGES = 100;
@@ -351,78 +356,49 @@ SYRAVEN is more than a chatbot. It is an AI workspace capable of helping with re
    PROVIDER RESOLUTION
 ================================================== */
 
-function getProvider(
-  preferred:
-    | "auto"
-    | "openai"
-    | "groq"
-    | undefined,
-  requestedModel?: string
-): ProviderConfig | null {
-  const openaiKey =
-    process.env.OPENAI_API_KEY;
+/*
+  The registry is the only authority for which model runs on which
+  provider (PURIFICATION_EVIDENCE.md P2-F08).
 
-  const groqKey =
-    process.env.GROQ_API_KEY;
+  This used to keep only the policy model's id and pick the vendor from
+  the request's `provider` field, or from whichever key existed, so a
+  Groq model could be sent to OpenAI; its fallback then sent a model
+  named by an env variable that no plan check had approved.
 
-  const cleanModel =
-    requestedModel?.trim();
+  Each candidate now travels with its own provider's endpoint and key --
+  a key never reaches another provider -- and with its own token
+  ceiling, since a fallback model may allow fewer tokens than the
+  primary. A provider with no key in this deployment is skipped, as
+  lib/ai/failover.ts skips it.
+*/
+function toProviderConfigs(
+  candidates: readonly ModelDefinition[],
+  maxTokens: number
+): ProviderConfig[] {
+  const configs: ProviderConfig[] = [];
 
-  if (
-    preferred === "openai" &&
-    openaiKey
-  ) {
-    return {
-      provider: "openai",
-      apiKey: openaiKey,
+  for (const candidate of candidates) {
+    const apiKey =
+      providerApiKey(candidate.provider);
+
+    if (apiKey === null) {
+      continue;
+    }
+
+    configs.push({
+      provider: candidate.provider,
+      apiKey,
       baseUrl:
-        "https://api.openai.com/v1",
-      model:
-        cleanModel ||
-        DEFAULT_OPENAI_MODEL,
-    };
+        PROVIDER_ENDPOINTS[candidate.provider].baseUrl,
+      model: candidate.id,
+      maxTokens: Math.min(
+        maxTokens,
+        candidate.maxOutputTokens
+      ),
+    });
   }
 
-  if (
-    preferred === "groq" &&
-    groqKey
-  ) {
-    return {
-      provider: "groq",
-      apiKey: groqKey,
-      baseUrl:
-        "https://api.groq.com/openai/v1",
-      model:
-        cleanModel ||
-        DEFAULT_GROQ_MODEL,
-    };
-  }
-
-  if (openaiKey) {
-    return {
-      provider: "openai",
-      apiKey: openaiKey,
-      baseUrl:
-        "https://api.openai.com/v1",
-      model:
-        cleanModel ||
-        DEFAULT_OPENAI_MODEL,
-    };
-  }
-
-  if (groqKey) {
-    return {
-      provider: "groq",
-      apiKey: groqKey,
-      baseUrl:
-        "https://api.groq.com/openai/v1",
-      model:
-        cleanModel ||
-        DEFAULT_GROQ_MODEL,
-    };
-  }
-
-  return null;
+  return configs;
 }
 
 /* ==================================================
@@ -499,55 +475,6 @@ async function callAI(
         ),
     }
   );
-}
-
-/* ==================================================
-   FALLBACK PROVIDER
-================================================== */
-
-function getFallbackProvider(
-  current: ProviderConfig,
-  requestedModel?: string
-): ProviderConfig | null {
-  if (
-    current.provider === "openai" &&
-    process.env.GROQ_API_KEY
-  ) {
-    return {
-      provider: "groq",
-
-      apiKey:
-        process.env.GROQ_API_KEY,
-
-      baseUrl:
-        "https://api.groq.com/openai/v1",
-
-      model:
-        requestedModel ||
-        DEFAULT_GROQ_MODEL,
-    };
-  }
-
-  if (
-    current.provider === "groq" &&
-    process.env.OPENAI_API_KEY
-  ) {
-    return {
-      provider: "openai",
-
-      apiKey:
-        process.env.OPENAI_API_KEY,
-
-      baseUrl:
-        "https://api.openai.com/v1",
-
-      model:
-        requestedModel ||
-        DEFAULT_OPENAI_MODEL,
-    };
-  }
-
-  return null;
 }
 
 /* ==================================================
@@ -939,14 +866,24 @@ export const POST = withAuth(async (
       policy.policy.maxTokens;
 
     /*
-      Provider selection uses the VALIDATED model id from the registry,
-      not the caller's raw string.
+      Provider selection is the REGISTRY's (P2-F08). The policy model
+      comes first, then the approved alternatives on another provider
+      that this caller's plan allows -- the same candidates, in the same
+      order, as lib/ai/failover.ts. Nothing in the request chooses the
+      provider.
     */
-    const provider =
-      getProvider(
-        body.provider,
-        policy.policy.model.id
+    const candidates =
+      toProviderConfigs(
+        failoverCandidates(
+          policy.policy.model,
+          "chat",
+          guard.entitlement.effectivePlan
+        ),
+        maxTokens
       );
+
+    const provider =
+      candidates[0];
 
     if (!provider) {
       return jsonError(
@@ -964,6 +901,9 @@ export const POST = withAuth(async (
         knowledge
       );
 
+    let activeProvider =
+      provider;
+
     let response =
       await callAI(
         provider,
@@ -971,51 +911,55 @@ export const POST = withAuth(async (
         systemPrompt,
         {
           temperature,
-          maxTokens,
+          maxTokens:
+            provider.maxTokens,
           stream:
             shouldStream,
         }
       );
 
-    let activeProvider =
-      provider;
-
     /*
-      Provider fallback:
-      If one configured provider fails,
-      SYRAVEN can continue through
-      the other configured provider.
+      Failover (P2-F08). A failed call moves to the next candidate only
+      when lib/ai/failover.ts would: our credentials rejected, a rate
+      limit, or a provider error -- a 404 for a model the vendor does not
+      know included. An invalid request (400/422) is invalid at every
+      provider, so it is answered as is instead of buying a second
+      refusal. A thrown timeout or network error is not retried here; it
+      reaches the catch below, as before.
     */
-    if (!response.ok) {
-      const fallback =
-        getFallbackProvider(
-          provider
-        );
-
-      if (fallback) {
-        const fallbackResponse =
-          await callAI(
-            fallback,
-            messages,
-            systemPrompt,
-            {
-              temperature,
-              maxTokens,
-              stream:
-                shouldStream,
-            }
-          );
-
-        if (
-          fallbackResponse.ok
-        ) {
-          response =
-            fallbackResponse;
-
-          activeProvider =
-            fallback;
-        }
+    for (const next of candidates.slice(1)) {
+      if (response.ok || !isFailoverWorthy(normalizeHttpError(response.status))) {
+        break;
       }
+
+      console.error(
+        "SYRAVEN CHAT PROVIDER FAILOVER:",
+        {
+          from: activeProvider.provider,
+          model: activeProvider.model,
+          status: response.status,
+          to: next.provider,
+        }
+      );
+
+      await response.body?.cancel().catch(() => undefined);
+
+      activeProvider =
+        next;
+
+      response =
+        await callAI(
+          next,
+          messages,
+          systemPrompt,
+          {
+            temperature,
+            maxTokens:
+              next.maxTokens,
+            stream:
+              shouldStream,
+          }
+        );
     }
 
     if (!response.ok) {
@@ -1205,14 +1149,13 @@ export const POST = withAuth(async (
 ================================================== */
 
 export async function GET() {
+  /* Configuration as the registry reads it, the same check POST uses. */
   const providers = {
-    openai: Boolean(
-      process.env.OPENAI_API_KEY
-    ),
+    openai:
+      providerApiKey("openai") !== null,
 
-    groq: Boolean(
-      process.env.GROQ_API_KEY
-    ),
+    groq:
+      providerApiKey("groq") !== null,
   };
 
   return NextResponse.json(

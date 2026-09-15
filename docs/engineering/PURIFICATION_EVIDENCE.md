@@ -376,6 +376,152 @@ after every mutation run.
 (lint after the founder-authorized one-line fix). **Not committed**;
 awaiting founder instruction.
 
+### P2-F08 — `/api/chat` provider pairing (founder-approved 2026-09-14)
+
+| ID | Surface | Duplicate and its drift (file:line at `d144ca7`) | Reachable | Tests that pin it | Canonical owner | Decision |
+|---|---|---|---|---|---|---|
+| P2-F08 | `POST /api/chat` provider pairing and fallback | `resolveAiPolicy` returns a registry `ModelDefinition` (id **and** provider), but `getProvider(body.provider, policy.policy.model.id)` (`route.ts:354-426`, `:945-949`) keeps only the id and picks the vendor from the client's `body.provider`, else from whichever key exists (OpenAI first). A Groq model id can be sent to OpenAI; with only a Groq key the default `gpt-4o-mini` is sent to Groq. `getFallbackProvider(provider)` (`:508-548`) is called without a model, so it sends `DEFAULT_GROQ_MODEL` / `DEFAULT_OPENAI_MODEL` (`:78-84`: env `GROQ_MODEL` / `OPENAI_MODEL`, else a hardcoded id) — a model neither the registry nor the plan check approved — carries the primary's token ceiling to it, fires on **any** non-OK status (a 400 buys a second paid refusal), and meters the unapproved id (`:1105`, `:1137`). Base URLs and keys are hardcoded / read from `process.env` beside the registry's `PROVIDER_ENDPOINTS` / `providerApiKey`; `GET` (`:1207-1216`) reads the keys directly too | Yes — `app/chat/page.tsx:305`, `app/chat/[id]/page.tsx:474` (both send only `message`/`messages`: default model, non-stream) | `defect-remediation` D3 (401/403→503 `PROVIDER_NOT_CONFIGURED`, 429→503 `PROVIDER_RATE_LIMITED`, 502 `PROVIDER_REQUEST_FAILED`, no key text within 900 chars before `PROVIDER_NOT_CONFIGURED`), `ai-provider` (model resolved server-side; policy denial returned; guard before policy; no raw client model), `observability-redaction` (provider body bounded), `usage-enforcement`, `memory-isolation` (context order; guard before policy), `api-auth-boundary`, `middleware-gate`, `architecture-invariants` §3 | `lib/ai/registry.ts` (`ProviderId`, `PROVIDER_ENDPOINTS`, `providerApiKey`) and `lib/ai/failover.ts` (`failoverCandidates` — plan re-validated, other-provider alternatives only; `isFailoverWorthy`) with `lib/ai/provider.ts` `normalizeHttpError` | CONSOLIDATE the pairing onto the registry and failover rules; delete `body.provider`, the env default models, `getProvider`, `getFallbackProvider`, `AIProvider` |
+
+**`normalizeHttpError` re-checked before coding (`lib/ai/provider.ts:152-187`):**
+401/403 → `AUTHENTICATION`; 429 → `RATE_LIMITED`; 400/422 →
+`INVALID_REQUEST`; **everything else, 404 included → `PROVIDER_ERROR`**.
+`isFailoverWorthy` accepts `AUTHENTICATION`, `RATE_LIMITED`,
+`PROVIDER_ERROR`, `TIMEOUT`, `NOT_CONFIGURED`. So a 404 (a vendor that does
+not know the model) fails over; a 400/422 is answered as is.
+
+**Correction to the inspection:** a timeout or network failure *throws*
+out of `fetch` into the route's catch (504/500) and never failed over.
+Failover here is status-based as approved, so that is unchanged and
+recorded as a limitation.
+
+**Guard coverage found during the design:** `architecture-invariants` §3
+("every route that reaches a paid model is metered before the call")
+detects paid routes by `api.openai.com | api.groq.com | chatCompletion…(`.
+With registry-derived base URLs the chat route would match none and drop
+out of that check silently. Its detector gains `PROVIDER_ENDPOINTS\[`
+(a strengthening), and mutation M-f proves chat is still covered.
+
+**Plan (as approved):**
+1. Candidates = `failoverCandidates(policy.policy.model, "chat",
+   guard.entitlement.effectivePlan)`, keeping only providers with
+   `providerApiKey(provider) !== null`; each config's base URL from
+   `PROVIDER_ENDPOINTS`, model = the candidate's registry id, max tokens =
+   min(policy ceiling, candidate `maxOutputTokens`). None configured → the
+   existing 503.
+2. Try candidates in order; move on only while
+   `isFailoverWorthy(normalizeHttpError(response.status))`.
+3. Delete `body.provider`, `DEFAULT_OPENAI_MODEL`, `DEFAULT_GROQ_MODEL`,
+   `getProvider`, `getFallbackProvider`, `AIProvider`; `GET` reports keys
+   through `providerApiKey`.
+4. Unchanged: auth, usage guard, tenant guards, context assembly, policy
+   order, D3 codes and messages, bounded provider-body log, SSE framing,
+   response shape. The route keeps its own `fetch`/SSE transport (not
+   moved onto `chatCompletion` / `chatCompletionStream` in this step).
+5. Out of scope: `/api/files/analyze` and `/api/agents` (same env-model
+   pattern) — candidates for a later record.
+
+**Guards and mutations planned:** a P2-F08 block in
+`purification-authorities` (no `body.provider`; no `OPENAI_MODEL` /
+`GROQ_MODEL`; no hardcoded vendor URL; plan-aware `failoverCandidates`;
+fallback gated on `isFailoverWorthy(normalizeHttpError(…))`; config from
+`PROVIDER_ENDPOINTS` / `providerApiKey`). Mutations M-a `body.provider`,
+M-b env default model, M-c unconditional fallback, M-d hardcoded vendor
+URL, M-e plan-unaware candidates, M-f usage guard removed (coverage).
+
+#### What changed (uncommitted at `d144ca7`)
+
+- `app/api/chat/route.ts` — imports `PROVIDER_ENDPOINTS`, `providerApiKey`,
+  `ModelDefinition`, `ProviderId` (registry), `failoverCandidates`,
+  `isFailoverWorthy` (failover), `normalizeHttpError` (provider).
+  `ProviderConfig` is now `{ provider: ProviderId, apiKey, baseUrl, model,
+  maxTokens }`, built only by `toProviderConfigs(candidates, maxTokens)`:
+  keyless providers skipped, base URL from `PROVIDER_ENDPOINTS`, model = the
+  candidate's registry id, max tokens = `Math.min(maxTokens,
+  candidate.maxOutputTokens)`. The handler calls
+  `failoverCandidates(policy.policy.model, "chat",
+  guard.entitlement.effectivePlan)`; the first configured candidate answers
+  first, and the loop moves on only while
+  `isFailoverWorthy(normalizeHttpError(response.status))`, logging the
+  hand-over (provider, model, status — no body) and cancelling the
+  abandoned response body. Deleted: `body.provider`, `AIProvider`,
+  `DEFAULT_OPENAI_MODEL`, `DEFAULT_GROQ_MODEL`, `getProvider`,
+  `getFallbackProvider`. `GET` reports keys through `providerApiKey`.
+  Unchanged: auth, usage guard, tenant guards, context assembly, policy
+  order, D3 codes and messages, bounded provider-body log, SSE framing,
+  response shape. 301-line diff; 1,063 → 1,018 non-blank lines.
+- `tests/security/purification-authorities.test.ts` — P2-F08 block, 6 tests.
+- `tests/security/architecture-invariants.test.ts` — §3 paid-call detector
+  gains `PROVIDER_ENDPOINTS\[` (strengthening; see M-f).
+- Totals (`git diff --stat HEAD`): code and tests 3 files, +187 / −180;
+  with docs 5 files, +242 / −181.
+
+#### Verification (each step alone, 300 MB gate before launch)
+
+| # | Step | Command | Result | Free RAM before → after |
+|---|---|---|---|---|
+| 0 | Leftover sweep | search the route for the removed names, env model names, `body.provider`, `process.env`, vendor URLs | **PASS** — no match | — |
+| 1 | Guard suite | `node --test --experimental-strip-types tests/security/purification-authorities.test.ts` | **PASS** — 21 tests, 7 suites: 21 pass, 0 fail (15 earlier + 6 P2-F08). First launch refused at the gate (286 MB) | 300 → 330 MB |
+| 2 | Mutations | 6 mutations, below | **PASS** — 6 of 6 caught; chat route restored to `AFAE18C8651A` after each | 313 … 388 MB per mutation |
+| 3 | Regression suites | `node --test --test-concurrency=1 …` `ai-provider`, `defect-remediation`, `observability-redaction`, `usage-enforcement`, `memory-isolation`, `api-auth-boundary`, `middleware-gate`, `architecture-invariants` | **PASS** — exit 0; 478 tests, 65 suites: 471 pass, 0 fail, 7 todo | 329 → 310 MB |
+| 4 | Typecheck | `npx tsc --noEmit -p tsconfig.json` (`--max-old-space-size=1536`) | **PASS** — exit 0, 0 `error TS` lines | 374 → 703 MB |
+| 5 | Full suite | `npm run test:lowmem` | **PASS** — exit 0; 1,821 tests, 344 suites: 1,814 pass, 0 fail, 0 skipped, 7 todo (59.3 s) | 345 → 615 MB |
+| 6 | Lint | `npx eslint app/api/chat/route.ts tests/security/purification-authorities.test.ts tests/security/architecture-invariants.test.ts` (`--max-old-space-size=768`) | **PASS** — exit 0, 0 errors, 0 warnings | 521 → 357 MB |
+
+**Test-count delta accounted:** 1,821 vs 1,815 (previous final state) = the
+6 new P2-F08 tests; 344 vs 343 suites = the one new `describe`. No test
+removed. The 7 todos are the documented limitations, unchanged. In steps
+3 and 5 the log prints "failing tests:" followed by those todo entries
+(`assert.ok(false)` placeholders); 0 tests failed.
+
+#### Mutation testing
+
+Each mutation re-created one defect in `app/api/chat/route.ts`, ran the
+guard that owns it, and restored the original bytes in a `finally` block;
+the file was backed up to the scratchpad first. SHA-256, first 12 hex.
+
+| # | Defect re-created | Guard | Result | Hash before = after |
+|---|---|---|---|---|
+| M-a | Route reads `body.provider` again (`if (!provider \|\| body.provider === "groq")`) | `purification-authorities` | **Caught** — 20 / 1: "the client cannot choose the provider" | `AFAE18C8651A` ✔ |
+| M-b | Env default model (`model: process.env.GROQ_MODEL ?? candidate.id`) | `purification-authorities` | **Caught** — 20 / 1: "no model comes from the environment" | `AFAE18C8651A` ✔ |
+| M-c | Unconditional fallback (`if (response.ok) {` without `isFailoverWorthy`) | `purification-authorities` | **Caught** — 20 / 1: "a failed call moves on only when failover is worth it" | `AFAE18C8651A` ✔ |
+| M-d | Hardcoded vendor URL instead of `PROVIDER_ENDPOINTS[…].baseUrl` | `purification-authorities` | **Caught** — 20 / 1: "endpoints and keys come from the registry" | `AFAE18C8651A` ✔ |
+| M-e | Plan-unaware candidates (`"enterprise"` instead of `guard.entitlement.effectivePlan`; 1 occurrence) | `purification-authorities` | **Caught** — 20 / 1: "candidates are the plan-aware failover candidates" | `AFAE18C8651A` ✔ |
+| M-f | Usage guard removed (`await noUsageCheck(`) — coverage of the paid-call detector | `architecture-invariants`; `usage-enforcement` | **Caught** by both — `architecture-invariants` 44 / 1: "every route that reaches a paid model is metered before the call" (possible only because the detector now matches `PROVIDER_ENDPOINTS[`); `usage-enforcement` 52 / 2: "app/api/chat/route.ts enforces usage before doing work" | `AFAE18C8651A` ✔ |
+
+`git status --short` identical before and after every mutation run.
+**Memory:** the run was interrupted three times at the gate before a
+mutation started (M-a first attempt 283 MB, M-b first attempt 291 MB, M-c
+first attempt 285 MB); each resumed at the next unrun mutation, none
+repeated. Two memory-only watchers were used between runs; one was killed
+by the OS for low memory (it ran nothing). No mutation started below
+300 MB.
+
+#### Known limitations
+
+- `/api/chat` keeps its own `fetch` / SSE transport; moving it onto
+  `chatCompletion` / `chatCompletionStream` is a separate step.
+- A thrown timeout or network error does not fail over (unchanged; it was
+  never retried) — only HTTP statuses are classified.
+- A 404 now fails over (it is `PROVIDER_ERROR`); before, any non-OK status
+  did. A 400 / 422 no longer buys a second call.
+- If the deployment sets `OPENAI_MODEL` / `GROQ_MODEL`, chat no longer
+  reads them; the fallback is the registry's next approved candidate.
+  Production environment variable names were not inspected.
+- `/api/files/analyze` and `/api/agents` still read env model names (out
+  of scope; not yet recorded).
+- No live provider call or browser check: behaviour against a real
+  provider is proven only by source guards, types and the suites above.
+- No production build was run.
+
+#### Not done
+
+No commit, push, deploy, build, migration, or secret / OAuth change.
+`syraven-audit.zip` (untracked, not created by this work) was not opened,
+moved, deleted or staged.
+
+**RESULT (P2-F08):** implemented and verified — all steps PASS. **Not
+committed**; awaiting founder instruction.
+
 ### Later groups
 
 Recorded as each batch is prepared: routes (P2-G), documentation (P2-H).
