@@ -25,6 +25,19 @@ import { randomUUID } from "node:crypto";
 const PRODUCTION_PROJECT_REF = "wpmbumtpcuahyqmdeqgf";
 const FLAG = "--i-understand-this-writes-to-the-test-project";
 
+// PostgREST turns `return=representation` into INSERT ... RETURNING, and
+// RETURNING re-checks the new row against the SELECT policy. On
+// organization_members that policy is is_organization_member(organization_id),
+// a STABLE function that cannot see the row its own statement is inserting, so
+// an owner's first membership is refused on the read-back rather than on the
+// write. app/api/workspaces/route.ts inserts that row without .select(), so
+// supabase-js sends `return=minimal` and no RETURNING is produced. Every
+// organization_members insert below therefore uses MINIMAL: the probe must
+// test what the application actually does. The WITH CHECK expression is
+// evaluated either way, so the hostile inserts stay hostile.
+const REPRESENTATION = "return=representation";
+const MINIMAL = "return=minimal";
+
 function loadTestEnvironment() {
   const values = { ...process.env };
   const file = join(process.cwd(), ".env.e2e.local");
@@ -91,14 +104,14 @@ async function signIn(user) {
   return { token: body.access_token, id: body.user.id };
 }
 
-async function rest(session, method, path, payload) {
+async function rest(session, method, path, payload, prefer = REPRESENTATION) {
   const response = await fetch(`${url}/rest/v1/${path}`, {
     method,
     headers: {
       apikey: anonKey,
       Authorization: `Bearer ${session.token}`,
       "Content-Type": "application/json",
-      Prefer: "return=representation",
+      Prefer: prefer,
     },
     body: payload === undefined ? undefined : JSON.stringify(payload),
   });
@@ -137,18 +150,18 @@ try {
 
   const own = await rest(A, "POST", "organization_members", {
     organization_id: orgId, user_id: A.id, role: "owner", status: "active",
-  });
+  }, MINIMAL);
   expect("A creates its own owner membership", allowed(own), own);
 
   // I1: A cannot insert B, with any role.
   const injectMember = await rest(A, "POST", "organization_members", {
     organization_id: orgId, user_id: B.id, role: "member", status: "active",
-  });
+  }, MINIMAL);
   expect("A cannot insert B as a member", denied(injectMember), injectMember);
 
   const injectOwner = await rest(A, "POST", "organization_members", {
     organization_id: orgId, user_id: B.id, role: "owner", status: "active",
-  });
+  }, MINIMAL);
   expect("A cannot insert B as an owner", denied(injectOwner), injectOwner);
 
   // I2 / I4: the owner row cannot be rewritten or removed by a client.
@@ -202,7 +215,7 @@ try {
   created.bOrgs.push(bOrgId);
   await rest(B, "POST", "organization_members", {
     organization_id: bOrgId, user_id: B.id, role: "owner", status: "active",
-  });
+  }, MINIMAL);
 
   const resolved = await rest(
     B,
