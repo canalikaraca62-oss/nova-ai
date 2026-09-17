@@ -18,15 +18,42 @@ was removed.
 
 ## Servers
 
-Both come from the repository's own `@playwright/test` 1.63.0
-(`npx playwright …`), pinned by `package-lock.json`. Project-scoped
-servers require the founder's approval in Claude Code before any session
-can use them.
+The two Playwright servers come from the repository's own
+`@playwright/test` 1.63.0 (`npx playwright …`), pinned by
+`package-lock.json`. `supabase-test` (added 2026-09-17, founder-approved)
+is `@supabase/mcp-server-supabase` pinned to an exact version. Every
+project-scoped server needs the founder's approval in Claude Code
+(`enabledMcpjsonServers`) before any session can use it.
 
 | Name | Purpose | Data access | Write access | Necessity |
 |---|---|---|---|---|
 | `playwright` | Exploration and debugging of the running local build | Pages it opens; `--isolated` keeps the profile in memory | `.playwright-mcp/` (gitignored) and the workspace root | Browser verification and visual QA |
 | `playwright-test` | Backing server for the planner / generator / healer agents | The app under `playwright.config.ts`, with its production guard | Plans in `specs/`, tests in `tests/e2e/` (through the agents' scope rules) | Required by the Playwright agents |
+| `supabase-test` | Catalog verification and founder-authorized migration/behaviour checks for Phase 3 security batches | The **TEST** project `akhkukajdgayqwhedeoo` only, as `postgres`: every schema, including `auth` | Read **and write** on TEST (DDL and DML); founder decision 2026-09-17 | Replaces copy-paste SQL Editor round trips for TEST verification |
+
+### `supabase-test` — pinned configuration
+
+Enforced exactly by `tests/security/engineering-control-plane.test.ts`:
+
+| Setting | Value | Why |
+|---|---|---|
+| Package | `@supabase/mcp-server-supabase@0.12.0` | Exact version; an unpinned `npx` pulls whatever `latest` is at launch |
+| `--project-ref` | `akhkukajdgayqwhedeoo` | The test project in `E2E_SAFETY.md`. Production (`wpmbumtpcuahyqmdeqgf`) must not appear anywhere in the server definition |
+| `--features` | `database,docs` | `account` (project listing/creation — the group that could reach other projects), `branching`, `storage`, `functions`, `development` and `debugging` stay off |
+| `--read-only` | absent | TEST is read/write by founder decision |
+| Credential | `env.SUPABASE_ACCESS_TOKEN = "${SUPABASE_ACCESS_TOKEN}"` | A reference expanded from the launching shell. No token in the file, no `--access-token` argument |
+
+Tools exposed with these features (as announced to the session on
+2026-09-17; no separate handshake was run): `execute_sql`,
+`apply_migration`, `list_tables`, `list_extensions`, `list_migrations`,
+`search_docs`.
+
+**The project-ref pin is a configuration boundary, not an identity
+boundary.** A Supabase personal access token is account-scoped: the same
+token can reach production. What confines this server to TEST is
+`--project-ref` plus the absence of the `account` group — the same class
+of control as `--blocked-origins` above. The connected ref also cannot be
+read back from inside the connection with these features.
 
 `playwright` runs with `--headless --browser msedge --isolated
 --output-dir .playwright-mcp --blocked-origins https://wpmbumtpcuahyqmdeqgf.supabase.co`
@@ -157,6 +184,17 @@ Not enabled: `--caps` (vision, pdf, devtools), `--storage-state`,
 5. **Re-running `npx playwright init-agents`** regenerates the agent files
    and `.mcp.json`; `tests/security/engineering-control-plane.test.ts`
    fails if that removes the scope rules or the protections.
+6. **`supabase-test`'s token is account-scoped.** A mistyped or removed
+   `--project-ref` would point the same credential at production. The
+   guard pins the exact arguments; the token itself cannot be narrowed.
+7. **`supabase-test` writes to TEST as `postgres`** (superuser). A wrong
+   statement changes TEST schema or data immediately. Mitigation: TEST
+   holds no production data; destructive or schema changes follow the
+   phase protocol, and behaviour checks run inside transactions that roll
+   back.
+8. **`execute_sql` returns database content** that may carry text written
+   by any TEST user. The server fences it as untrusted data; it is never
+   treated as instructions.
 
 ## Not added, and why
 
@@ -165,7 +203,8 @@ Not enabled: `--caps` (vision, pdf, devtools), `--storage-state`,
 | `@playwright/mcp` (npm, 0.0.80) | Same server as `npx playwright mcp`, but a second, unpinned version |
 | `@playwright/cli` (npm, 0.1.19) | `npx playwright cli` is bundled in 1.63 already |
 | Playwright agent skills (`init-skills`) | A second browser-control channel beside MCP for the same job |
-| Any other MCP (GitHub, database, filesystem, …) | No concrete need; a database MCP would put production data one tool call away |
+| A production database MCP | Never: it would put production data one tool call away. Production reads and writes stay founder-run in the SQL Editor |
+| Any other MCP (GitHub, filesystem, …) | No concrete need |
 
 ## Verification
 

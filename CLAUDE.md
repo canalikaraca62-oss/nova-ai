@@ -155,8 +155,17 @@ INSPECT → UNDERSTAND → PLAN → IMPLEMENT → TEST → ADVERSARIAL REVIEW
     - The pre-existing lint error in `app/settings/page.tsx`.
 
   See `docs/engineering/PHASE_STATE.md`.
-- **PHASE 3: NOT STARTED.** It starts only on the founder's explicit
-  instruction.
+- **PHASE 3 — Security Fortress: IN PROGRESS.** Started on the
+  founder's instruction.
+  - **Closed PASS:** Batch 1, B2-A, B2-A2 and B2-C.
+  - **On production (founder-applied):** Batch 1 (as the founder reported),
+    B2-A and B2-A2.
+  - **B2-B:** PASS on repository and TEST only; **not applied to
+    production, not approved**.
+  - **Not started:** B2-D onwards. Every batch and every TEST or
+    production application needs its own explicit instruction.
+  - **Current state:** `docs/engineering/SECURITY_EVIDENCE.md` ("Current
+    state") and `docs/engineering/PHASE_STATE.md` ("Phase 3 — progress").
 - **Vercel Git integration is connected:** any push or PR deploys. Never
   push, open a PR or merge without explicit founder approval.
 - For client writes the database is the boundary of record (ADR-003): a

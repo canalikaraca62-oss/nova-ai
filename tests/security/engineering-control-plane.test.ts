@@ -31,20 +31,30 @@ function read(...parts: string[]): string {
 
 const PRODUCTION_REF = "wpmbumtpcuahyqmdeqgf";
 
+/** The E2E / test Supabase project (docs/engineering/E2E_SAFETY.md). */
+const TEST_REF = "akhkukajdgayqwhedeoo";
+
+const PLAYWRIGHT_SERVERS = ["playwright", "playwright-test"] as const;
+
 interface McpServer {
   command: string;
   args: string[];
+  env?: Record<string, string>;
 }
 
 const MCP = JSON.parse(read(".mcp.json")) as { mcpServers: Record<string, McpServer> };
 
-void describe("MCP servers are the audited two, with narrow authority", () => {
+void describe("MCP servers are the audited three, with narrow authority", () => {
   void test("exactly the audited servers are configured", () => {
-    assert.deepEqual(Object.keys(MCP.mcpServers).sort(), ["playwright", "playwright-test"]);
+    assert.deepEqual(Object.keys(MCP.mcpServers).sort(), ["playwright", "playwright-test", "supabase-test"]);
   });
 
-  void test("both run the repository's pinned Playwright, not a floating package", () => {
-    for (const [name, server] of Object.entries(MCP.mcpServers)) {
+  void test("both Playwright servers run the repository's pinned Playwright, not a floating package", () => {
+    for (const name of PLAYWRIGHT_SERVERS) {
+      const server = MCP.mcpServers[name];
+
+      assert.ok(server, `${name} is missing.`);
+
       const args = server.args.join(" ");
 
       assert.match(args, /\bnpx playwright (mcp|run-test-mcp-server)\b/, `${name} must use the local @playwright/test.`);
@@ -81,6 +91,64 @@ void describe("MCP servers are the audited two, with narrow authority", () => {
 
     assert.equal(args[args.indexOf("-c") + 1], "playwright.config.ts");
     assert.ok(args.includes("--headless"));
+  });
+});
+
+void describe("The Supabase MCP server is TEST-only, pinned and narrow", () => {
+  const server = MCP.mcpServers["supabase-test"];
+
+  void test("its launch is exactly the audited TEST configuration", () => {
+    assert.ok(server, "supabase-test is missing.");
+    assert.equal(server.command, "cmd");
+    assert.deepEqual(server.args, [
+      "/c",
+      "npx",
+      "-y",
+      "@supabase/mcp-server-supabase@0.12.0",
+      `--project-ref=${TEST_REF}`,
+      "--features=database,docs",
+    ]);
+  });
+
+  void test("it targets the test project named in E2E_SAFETY.md, never production", () => {
+    const refs = (server?.args ?? []).filter((arg) => arg.startsWith("--project-ref="));
+    const safety = read("docs", "engineering", "E2E_SAFETY.md");
+
+    assert.deepEqual(refs, [`--project-ref=${TEST_REF}`], "Exactly one project ref, and it is TEST's.");
+    assert.match(safety, new RegExp(String.raw`\|\s*Test\s*\|\s*\`${TEST_REF}\``), "TEST_REF no longer matches E2E_SAFETY.md.");
+    assert.ok(!JSON.stringify(server ?? {}).includes(PRODUCTION_REF), "The Supabase MCP server must never reach production.");
+  });
+
+  void test("the package is pinned to an exact version, never floating", () => {
+    const packages = (server?.args ?? []).filter((arg) => arg.includes("@supabase/mcp-server-supabase"));
+
+    assert.deepEqual(packages, ["@supabase/mcp-server-supabase@0.12.0"]);
+    assert.ok(!(server?.args ?? []).some((arg) => /@latest\b|@\^|@~|@\*/.test(arg)));
+  });
+
+  void test("only the database and docs tool groups are enabled", () => {
+    const features = (server?.args ?? []).filter((arg) => arg.startsWith("--features="));
+
+    assert.deepEqual(features, ["--features=database,docs"], "account, branching, storage, functions, development and debugging stay off.");
+  });
+
+  void test("the access token is an environment reference, never a value in the file", () => {
+    assert.deepEqual(server?.env, { SUPABASE_ACCESS_TOKEN: "${SUPABASE_ACCESS_TOKEN}" });
+    assert.ok(!(server?.args ?? []).some((arg) => arg.startsWith("--access-token")), "A token on the command line is a secret in the file.");
+  });
+
+  void test("no server carries a literal credential or a second Supabase connection", () => {
+    for (const [name, entry] of Object.entries(MCP.mcpServers)) {
+      for (const [key, value] of Object.entries(entry.env ?? {})) {
+        assert.match(value, /^\$\{[A-Z_][A-Z0-9_]*\}$/, `${name}.env.${key} is a literal value, not a reference.`);
+      }
+
+      if (name !== "supabase-test") {
+        const definition = JSON.stringify(entry);
+
+        assert.ok(!/mcp-server-supabase|--project-ref|SUPABASE_ACCESS_TOKEN/.test(definition), `${name} opens a second Supabase connection.`);
+      }
+    }
   });
 });
 
@@ -242,8 +310,13 @@ void describe("Browser state and the production guard stay protected", () => {
      * (before the gate) and, before that, NOT STARTED. It now pins the
      * accepted status in exactly those words and, as for Phase 1, what the
      * PASS may not hide: every accepted limitation and follow-up stays
-     * named. Phase 3 is not recorded as started without its own
-     * instruction.
+     * named.
+     *
+     * Phase 3 was started on the founder's instruction and is IN PROGRESS
+     * (reconciled 2026-09-17). This used to pin NOT STARTED. It now pins
+     * the in-progress status and that B2-B is recorded as NOT applied to
+     * production: a batch is never recorded as on production without the
+     * founder's approval.
      */
     const phase = read("docs", "engineering", "PHASE_STATE.md");
 
@@ -276,7 +349,12 @@ void describe("Browser state and the production guard stay protected", () => {
       assert.match(accepted, pattern, `The Phase 2 PASS may not hide ${item}; it must stay documented.`);
     }
 
-    assert.match(phase, /\| Phase 3 \| NOT STARTED \|/, "Phase 3 starts only on the founder's instruction.");
+    assert.match(phase, /^\| Phase 3 — Security Fortress \| IN PROGRESS \| Started on the founder's instruction/m, "Phase 3 is recorded as in progress, started on the founder's instruction.");
+    assert.ok(!/\| Phase 3 \| NOT STARTED \|/.test(phase), "The stale Phase 3 NOT STARTED row is back.");
+
+    const progress = /## Phase 3 — progress\n[\s\S]*?(?=\n## )/.exec(phase)?.[0] ?? "";
+    assert.match(progress, /\| B2-B[^\n]*\*\*NOT applied — not approved\*\*/, "B2-B must stay recorded as not applied to production.");
+    assert.match(progress, /T-B2-1/, "The open tenancy finding T-B2-1 must stay documented.");
   });
 
   void test("the entry documents agree with PHASE_STATE on Phase 2 and Phase 3", () => {
@@ -289,9 +367,15 @@ void describe("Browser state and the production guard stay protected", () => {
     const project = read("docs", "engineering", "PROJECT_STATE.md");
 
     assert.match(claude, /\*\*PHASE 2 — Repository and Architecture Purification: PASS\*\* —\s+documented environment limitations accepted/);
-    assert.match(claude, /\*\*PHASE 3: NOT STARTED\.\*\*/);
+    assert.match(claude, /\*\*PHASE 3 — Security Fortress: IN PROGRESS\.\*\*/);
+    assert.match(claude, /B2-B[^\n]*\n?[^\n]*\*\*not applied to\s+production, not approved\*\*/);
     assert.match(project, /\*\*Phase 2 — Repository and Architecture Purification: PASS\*\* —\s+documented environment limitations accepted/);
-    assert.match(project, /\*\*Phase 3: NOT STARTED\.\*\*/);
+    assert.match(project, /\*\*Phase 3: IN PROGRESS\.\*\*/);
+    assert.match(project, /\*\*not applied to production, not approved\*\*/);
+
+    for (const [name, text] of [["CLAUDE.md", claude], ["PROJECT_STATE.md", project]] as const) {
+      assert.ok(!/PHASE 3: NOT STARTED|Phase 3: NOT STARTED/i.test(text), `${name} still describes Phase 3 as not started.`);
+    }
 
     for (const [name, text] of [["CLAUDE.md", claude], ["PROJECT_STATE.md", project]] as const) {
       assert.ok(

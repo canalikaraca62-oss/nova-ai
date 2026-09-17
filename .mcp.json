@@ -28,6 +28,20 @@
         "-c",
         "playwright.config.ts"
       ]
+    },
+    "supabase-test": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "@supabase/mcp-server-supabase@0.12.0",
+        "--project-ref=akhkukajdgayqwhedeoo",
+        "--features=database,docs"
+      ],
+      "env": {
+        "SUPABASE_ACCESS_TOKEN": "${SUPABASE_ACCESS_TOKEN}"
+      }
     }
   }
 }

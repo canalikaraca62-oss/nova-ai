@@ -1,6 +1,7 @@
 # SYRAVEN — Phase State
 
-**Last updated:** 2026-09-15. Phase 2 was accepted by the founder as
+**Last updated:** 2026-09-17. **Phase 3 is IN PROGRESS** (see "Phase 3 —
+progress" below). Phase 2 was accepted by the founder as
 **PASS — documented environment limitations accepted**; Phase 1 was
 accepted as PASS by the founder on 2026-09-14.
 
@@ -12,7 +13,7 @@ accepted as PASS by the founder on 2026-09-14.
 |---|---|
 | Status | **PASS** — accepted by the founder 2026-09-14, on the evidence in `VERIFICATION_STATE.md` |
 | Passes | First pass 2026-09-13; second pass 2026-09-13; steps 1–7 (migration readiness, TEST verification, remaining gaps) 2026-09-13/14; final gate (step 8) 2026-09-14: PARTIAL; production migrations applied and verified by the founder 2026-09-14; production `projects` boundary verified by the founder 2026-09-14; production build of the Phase 1 tree passed in a secret-free scratch copy 2026-09-14; **founder acceptance 2026-09-14: PASS** |
-| Next allowed action | Phase 1 and Phase 2 are closed, each founder-accepted as PASS (Phase 2 with its environment limitations documented below). Phase 3 starts only on the founder's explicit instruction. Applying any migration, pushing, and committing each need an explicit instruction (the Vercel Git integration deploys any push). |
+| Next allowed action | Phase 1 and Phase 2 are closed, each founder-accepted as PASS (Phase 2 with its environment limitations documented below). Phase 3 is IN PROGRESS on the founder's instruction; each batch, each TEST or production application, each push and each commit needs its own explicit instruction (the Vercel Git integration deploys any push). The next pending founder decision is B2-B production (see "Phase 3 — progress"). |
 
 ## Objective
 
@@ -94,10 +95,32 @@ closes it.
 | Search vs AI-retrieval status distinction | Deliberate, documented: keyword search shows knowledge with status `draft`/`ready`/`active` (`lib/search/query.ts`), while AI retrieval uses `RETRIEVABLE_STATUSES = ["active"]` (`lib/memory/hierarchy.ts`). The fact that `ready` records are never retrieved is the P2-F07 limitation (founder decision 2026-09-14) | A founder decision to widen retrieval |
 | Pre-existing settings lint error | Open: `react-hooks/set-state-in-effect` in `app/settings/page.tsx` (the settings-load effect). It predates Phase 2 and is unrelated to the FG-01 change | A change to that effect, approved on its own |
 
+## Phase 3 — progress
+
+**Phase 3 — Security Fortress: IN PROGRESS.** Started on the founder's instruction (preflight 2026-09-15, HEAD `187e5fd`). Evidence: `SECURITY_EVIDENCE.md` ("Current state" is the reconciled summary). Nothing is committed after `6f60179`; nothing is pushed.
+
+| Batch | TEST | PRODUCTION | Status |
+|---|---|---|---|
+| Batch 1 — tenant / membership fortress (`20260915120000`) | Applied (founder, 2026-09-16); catalog 8/8; probe 15/15 | Applied — founder-reported (2026-09-17); P1–P6 outputs not recorded | PASS |
+| B2-A — profile provisioning + trial on confirmation (`20260917120000`) | Applied, verified | Applied with B2-A2 (founder, 2026-09-17), verified | PASS |
+| B2-A2 — one profile provisioning authority (`20260918120000`) | Applied; real signup proofs 1–7 | Applied, verified; `handle_new_user` owner-only (D10 Option A) | PASS |
+| B2-B — atomic personal-account provisioning (`20260917130000`) | Applied, verified | **NOT applied — not approved** | PASS (repository/TEST) |
+| B2-C — profile backfill + production counts | Backfill applied | Counts done; backfill not needed | PASS — closed |
+| B2-D, B2-E, B2-F, B2-G; Batches 3–10 | — | — | NOT STARTED |
+
+Open, not closed by the batches above:
+
+- T-B2-1: 6 of 7 production users have no owner membership. Investigated read-only (PASS, 2026-09-17): 4 confirmed users (ranks 1, 2, 5, 7) lack an owned org; the only org belongs to rank 6 and satisfies Batch 1; all tenancy conflict counts are 0; the B2-B slug format is unused. **Decision: login-time provisioning via B2-D**; one-time provisioning not approved; B2-B production not approved yet.
+- Register-flow findings P1-B2-1/2/4 and P2-B2-1/2/3; B2-D and B2-F.
+- D7 precedence and the dead trial helpers; B2-E.
+- `supabase_auth_admin` INSERT on `profiles`, the anon/MAINTAIN baseline and `handle_updated_at` PUBLIC EXECUTE; Batch 4.
+- Production `start_trial_on_email_confirmation()` ACL not measured.
+- Migration history not recorded on either project.
+
 ## Phase history
 
 | Phase | Status | Notes |
 |---|---|---|
 | Phase 1 — North Star Architecture | PASS (founder-accepted 2026-09-14) | This file |
 | Phase 2 — Repository and Architecture Purification | PASS — documented environment limitations accepted | Founder acceptance 2026-09-15; the limitations and follow-ups are in the section above. History: started 2026-09-14 on the founder's instruction; stopped as PARTIAL and resumed by the founder the same day, to be completed before Phase 3. P2-A … P2-G committed locally (16 commits after `3314baa`, never pushed); preflight follow-up P2-P committed 2026-09-15 (`f566757`); P2-H (documentation consistency) committed 2026-09-15 (`50346bb`). Phase 2 final gate run 2026-09-15 on `50346bb`: tests, guards, typecheck and lint pass; `/profile` found orphaned (FAIL finding FG-01), subsequently resolved and committed in `cd24c57` (linked from `/settings`). Final gate re-run 2026-09-15 on `cd24c57`: PARTIAL — tests, guards and typecheck pass; 44/44 kept pages reachable; lint 50 of 51 Phase 2 files clean (1 pre-existing error); duplicate authorities PARTIAL; production build BLOCKED (insufficient sustained memory); browser/E2E and visual QA BLOCKED / NOT RUN. Evidence reconciled in `a72be3f`. Evidence: `PURIFICATION_EVIDENCE.md`, `PURIFICATION_SCORECARD.md` |
-| Phase 3 | NOT STARTED | Starts only on the founder's instruction |
+| Phase 3 — Security Fortress | IN PROGRESS | Started on the founder's instruction (preflight 2026-09-15). Batch 1, B2-A, B2-A2 and B2-C closed PASS; B2-B PASS on repository/TEST, production not approved; B2-D onwards not started. Details: "Phase 3 — progress" above |

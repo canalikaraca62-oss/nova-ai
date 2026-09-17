@@ -72,8 +72,22 @@ pushed.
   - The deliberate search vs AI-retrieval status distinction.
   - The pre-existing settings lint error.
 
-**Phase 3: NOT STARTED.** It starts only on the founder's instruction.
-Details: `PHASE_STATE.md`.
+**Phase 3: IN PROGRESS.** Started on the founder's instruction (preflight 2026-09-15).
+
+- **Closed PASS:** Batch 1 (tenant/membership fortress), B2-A (profile provisioning and trial on confirmation), B2-A2 (single profile authority) and B2-C (backfill and production counts).
+- **Applied on production by the founder:** Batch 1 (as the founder reported), B2-A and B2-A2.
+- **B2-B:** PASS on repository and TEST; **not applied to production, not approved**.
+- **Not started:** B2-D onwards.
+- **Open:**
+  - T-B2-1: 6 of 7 production users have no owner membership. Decision
+    (2026-09-17): login-time provisioning via B2-D; no one-time
+    provisioning.
+  - The register-flow findings (B2-D, B2-F).
+  - The Batch 4 privilege baseline.
+
+Nothing after `6f60179` is committed; nothing is pushed. Details:
+`PHASE_STATE.md` ("Phase 3 — progress") and `SECURITY_EVIDENCE.md`
+("Current state").
 
 ## Major blockers
 
