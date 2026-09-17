@@ -258,18 +258,19 @@ void describe("P5: an existing organization is recognised only by the Batch 1 ow
     assert.match(lookup, /order by m\.created_at asc, m\.organization_id asc$/);
   });
 
-  void test("the route's resolveOrganizationId uses the same rule", () => {
+  void test("the application has no second copy of the rule: /api/workspaces delegates to this function", () => {
+    /*
+     * Until Batch 2-D1 the route re-implemented this lookup and the test
+     * cross-checked the two copies. The route now resolves the organisation
+     * through lib/tenancy/personalAccount, which calls this function, so
+     * the Batch 1 rule exists only in the SQL pinned above.
+     */
     const route = readFileSync(join(process.cwd(), "app", "api", "workspaces", "route.ts"), "utf8");
+    const helper = readFileSync(join(process.cwd(), "lib", "tenancy", "personalAccount.ts"), "utf8");
 
-    for (const pattern of [
-      /\.eq\(\s*"user_id",\s*session\.userId\s*\)/,
-      /\.eq\(\s*"status",\s*"active"\s*\)/,
-      /\.eq\(\s*"role",\s*"owner"\s*\)/,
-      /\.eq\(\s*"organizations\.owner_id",\s*session\.userId\s*\)/,
-      /\.order\(\s*"created_at",\s*\{\s*ascending:\s*true\s*\}\s*\)/,
-    ]) {
-      assert.match(route, pattern, "The route and the function disagree on what the caller's organization is.");
-    }
+    assert.match(route, /ensurePersonalAccount\(\s*session\.supabase as unknown as PersonalAccountClient,?\s*\)/);
+    assert.ok(!/\.from\("organization_members"\)|\.from\("organizations"\)/.test(route), "The route must not look up or create organisations itself.");
+    assert.match(helper, /\.rpc\("provision_personal_account"\)/);
   });
 });
 

@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -144,6 +145,19 @@ interface WorkspaceProviderProps {
   initialWorkspaces?: Workspace[];
 }
 
+/** The body of GET /api/workspaces, as this provider reads it. */
+interface WorkspaceListPayload {
+  success?: boolean;
+  workspaces?: {
+    id: string;
+    name: string;
+    slug: string;
+    description: string | null;
+    created_at: string;
+    updated_at: string;
+  }[];
+}
+
 export function WorkspaceProvider({
   children,
   initialWorkspaces = [],
@@ -214,6 +228,15 @@ export function WorkspaceProvider({
     [workspaces]
   );
 
+  /*
+   * At most ONE provisioning attempt per mounted provider (Phase 3, Batch
+   * 2-D1; founder decision D-B2D-2). A failure is shown and not retried
+   * automatically, so a refused or unavailable provisioning can never turn
+   * into a request loop. Creating a workspace from the dashboard resolves
+   * the organisation through the same authority and is the manual retry.
+   */
+  const provisionAttemptedRef = useRef(false);
+
   const refreshWorkspaces = useCallback(async () => {
     setIsLoading(true);
     setError(null);
@@ -247,17 +270,47 @@ export function WorkspaceProvider({
         throw new Error("Failed to fetch workspaces.");
       }
 
-      const payload = (await response.json()) as {
-        success?: boolean;
-        workspaces?: {
-          id: string;
-          name: string;
-          slug: string;
-          description: string | null;
-          created_at: string;
-          updated_at: string;
-        }[];
-      };
+      let payload = (await response.json()) as WorkspaceListPayload;
+
+      /*
+       * PERSONAL ACCOUNT PROVISIONING FOR AN EXISTING SESSION.
+       *
+       * Login provisions the caller's organisation and workspace, but a
+       * user who already holds a session never signs in again. When the
+       * list loads empty, ask the server once to provision; it derives
+       * identity from the session and sends nothing but the request itself.
+       * Only a successful provisioning reloads the list — a failure is an
+       * error state, never an empty-but-fine dashboard.
+       */
+      if ((payload.workspaces ?? []).length === 0 && !provisionAttemptedRef.current) {
+        provisionAttemptedRef.current = true;
+
+        const provision = await fetch("/api/account/provision", {
+          method: "POST",
+          cache: "no-store",
+          headers: { Accept: "application/json" },
+        });
+
+        if (!provision.ok) {
+          throw new Error(
+            provision.status === 403
+              ? "Confirm your email address to set up your workspace."
+              : "Your workspace could not be set up. Please try again.",
+          );
+        }
+
+        const reload = await fetch("/api/workspaces", {
+          method: "GET",
+          cache: "no-store",
+          headers: { Accept: "application/json" },
+        });
+
+        if (!reload.ok) {
+          throw new Error("Failed to fetch workspaces.");
+        }
+
+        payload = (await reload.json()) as WorkspaceListPayload;
+      }
 
       const rows = payload.workspaces ?? [];
 

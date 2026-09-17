@@ -162,7 +162,10 @@ INSPECT → UNDERSTAND → PLAN → IMPLEMENT → TEST → ADVERSARIAL REVIEW
     B2-A and B2-A2.
   - **B2-B:** PASS on repository and TEST only; **not applied to
     production, not approved**.
-  - **Not started:** B2-D onwards. Every batch and every TEST or
+  - **B2-D1** (application provisioning): PARTIAL (founder-accepted) on
+    repository and TEST; route-level check PASS, browser E2E BLOCKED;
+    uncommitted; not deployable before B2-B production.
+  - **Not started:** B2-D2 onwards. Every batch and every TEST or
     production application needs its own explicit instruction.
   - **Current state:** `docs/engineering/SECURITY_EVIDENCE.md` ("Current
     state") and `docs/engineering/PHASE_STATE.md` ("Phase 3 — progress").

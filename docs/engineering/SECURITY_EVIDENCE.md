@@ -11,7 +11,8 @@ record that replaces it. The table below is the reconciled current state.
 ## Current state (reconciled 2026-09-17)
 
 **Phase 3: IN PROGRESS.** Batch 1, B2-A, B2-A2, B2-B (TEST) and B2-C are
-done; B2-D and later are not started.
+done; B2-D1 is implemented on repository and TEST (PARTIAL, uncommitted);
+B2-D2 and later are not started.
 
 | Migration / artifact | Repository (SHA-256) | TEST (`akhkukajdgayqwhedeoo`) | PRODUCTION (`wpmbumtpcuahyqmdeqgf`) |
 |---|---|---|---|
@@ -31,7 +32,8 @@ done; B2-D and later are not started.
 | B2-A2: one profile provisioning authority | **PASS**, TEST (real signup proofs 1–7) and production |
 | B2-B: atomic personal-account provisioning | **PASS** on repository and TEST; production not approved |
 | B2-C: profile backfill + production counts | **PASS**, closed; no production backfill needed |
-| B2-D, B2-E, B2-F, B2-G, Batches 3–10 | NOT STARTED |
+| B2-D1: application provisioning (login, `POST /api/account/provision`, `/api/workspaces`) | **PARTIAL** on repository/TEST: tests, mutations 21/21, TEST live + concurrency PASS; route-level check through a running Next server **PASS 40/40**; browser E2E BLOCKED. Founder-accepted as PARTIAL. Uncommitted; not deployable before B2-B production |
+| B2-D2, B2-E, B2-F, B2-G, Batches 3–10 | NOT STARTED |
 
 **Open findings carried forward:**
 
@@ -39,7 +41,8 @@ done; B2-D and later are not started.
   membership, so creating a workspace fails closed. Investigated
   read-only (PASS). **Founder decision: login-time provisioning via
   B2-D.** No one-time provisioning; B2-B production not approved yet.
-- Register flow: P1-B2-1, P1-B2-2, P1-B2-4, P2-B2-1/2/3. Owners: B2-D and
+  Wiring implemented in B2-D1 (repository/TEST); not deployed.
+- Register flow: P1-B2-1, P1-B2-2, P1-B2-4, P2-B2-1/2/3. Owners: B2-D2 and
   B2-F.
 - D7 trial/paid precedence and the dead trial helpers. Owner: B2-E.
 - `supabase_auth_admin` INSERT on `profiles`, the anon/MAINTAIN privilege
@@ -1541,7 +1544,7 @@ was used.
 | T-B2-1 handling | **Login-time provisioning via B2-D.** A user without a Batch 1-owned organization is provisioned through `provision_personal_account()` on their next signed-in request (login and `/api/workspaces`) |
 | One-time provisioning of existing production users | **Not approved** |
 | B2-B production application (`20260917130000`) | **Not approved yet** |
-| B2-D implementation | **Not started** (it needs its own instruction) |
+| B2-D implementation | **Not started** (it needs its own instruction). **Superseded:** B2-D1 implemented on repository/TEST — see "Batch 2-D1" |
 | Production writes | **None** |
 
 **Rationale:**
@@ -1565,3 +1568,231 @@ approval.
   were created) is not recorded here beyond the founder-reported PASS.
 - The production `start_trial_on_email_confirmation()` ACL is not
   measured.
+
+## Batch 2-D1 — Personal-account provisioning in the application (founder-authorized 2026-09-17)
+
+**Scope:** repository and TEST only. No production write, no B2-B
+production application, no production Auth change, no T-B2-1
+provisioning, no deploy, no push, no commit. B2-D2 (register/confirm) is
+deferred until after B2-F.
+
+### Founder decisions applied
+
+| Decision | Ruling |
+|---|---|
+| D-B2D-1 | Login provisioning failure → sign-out (local scope) + 403 (refused) / 503 (anything else). Strict fail-closed |
+| D-B2D-2 | Existing sessions provision through `POST /api/account/provision`. `GET /api/workspaces` never provisions |
+| D-B2D-3 | Only B2-D1 now; B2-D2 register/confirm after B2-F |
+
+### What changed (uncommitted)
+
+| File | Change |
+|---|---|
+| `lib/tenancy/personalAccountResult.ts` (new) | Pure classifier `interpretProvisioning(data, error)`: success only for the exact key set `created, organization_id, workspace_id` with uuid ids and a boolean `created`; error `42501` → `FORBIDDEN`; everything else → `UNAVAILABLE` |
+| `lib/tenancy/personalAccount.ts` (new, `server-only`) | `ensurePersonalAccount(client)`: the **only** application caller of `rpc("provision_personal_account")`, with no arguments; exceptions → `UNAVAILABLE`; logs reason/code only |
+| `app/api/account/provision/route.ts` (new) | `POST` only, `withAuth`; reads nothing from the request; 200 `{ success, created }` / 403 / 503; `Cache-Control: private, no-store`; returns no ids |
+| `app/api/auth/login/route.ts` | After a successful sign-in, provisions on the same (now authenticated) client. On failure: `signOut({ scope: "local" })` (a sign-out error is logged, never hides the failure) and 403 / 503. Success is returned only after provisioning succeeds |
+| `app/api/workspaces/route.ts` | `resolveOrganizationId` delegates to `ensurePersonalAccount`. The route's own membership lookup, organisation/membership inserts and compensating delete are removed (second authority gone). `GET` is unchanged and read-only |
+| `app/context/WorkspaceContext.tsx` | When the list loads empty, calls `POST /api/account/provision` once per mount (ref guard, no body), throws on failure without reloading, reloads the list only on success |
+| `types/database.ts` | `provision_personal_account: { Args: Record<PropertyKey, never>; Returns: Json }` |
+
+### Tests
+
+- New `tests/security/personal-account-provisioning.test.ts`: **43/43
+  PASS**. Classifier unit tests (success, 42501, 17 malformed/hostile
+  shapes), single-caller and no-argument guards, `server-only` and no
+  service role, login ordering / local sign-out / 403-503 / single
+  success, provision route shape and middleware non-public, `GET`
+  read-only, provider once-per-mount and failure handling.
+- Pinned tests of the removed route resolver were **deliberately
+  rewritten**, keeping their security intent (the rule now lives in SQL):
+  `tests/schema/personal-account-provisioning-migration.test.ts` (1),
+  `tests/security/membership-fortress.test.ts` (sections C and E),
+  `tests/security/workspaces-route.test.ts` (resolver, provisioning and
+  rollback describes). Affected files: **163/163 PASS**. One
+  `prefer-template` lint fix in `workspaces-route.test.ts` (pre-existing
+  line, no behaviour change).
+
+### TEST live verification (`akhkukajdgayqwhedeoo`; `scratchpad/b2d1-live.mjs` over PostgREST, classified by the repository's `interpretProvisioning`)
+
+| Check | Result |
+|---|---|
+| Sequential calls, user A | `created` true → false, same organisation and workspace ids |
+| **Concurrency: two parallel PostgREST calls**, user B | `created` [false, true] — exactly one creator, same ids |
+| Burst of 5 parallel calls after provisioning | all `created: false`, same ids |
+| Tenant separation | A and B receive distinct organisations |
+| Anonymous call | 401 / `42501` → `FORBIDDEN` |
+| Hostile argument body | 404 / `PGRST202` → `UNAVAILABLE` (no overload accepts an id) |
+| Database after the run | 2 orgs, 2 memberships, 2 workspaces, 2 `account.provisioned` audit rows; each confirmed user exactly one; no duplicates; 0 advisory locks held |
+| Unconfirmed real TEST user (rolled-back SQL) | `42501` "A confirmed email address is required…", 0 organisations |
+| Cleanup | provisioned rows and audit rows deleted; baseline restored: 3 users, 3 profiles (hash `50914c968bfb91f6e745c4b0024ab1c6` unchanged), 0 orgs / memberships / workspaces / audit rows, 0 locks |
+
+### Mutation testing (`scratchpad/mutate-b2d1.mjs`, gate 324 MB)
+
+**21/21 CAUGHT** (D01–D21: argument passed, exception → success,
+extra/missing keys, uuid skipped, error ignored, login ignores failure /
+no sign-out / global sign-out / success on 503 / service role, route reads
+body / returns org id / exports GET / becomes public, GET provisions,
+route inserts an organisation, provider flag removed / reloads on failure
+/ sends identity, second RPC caller, caller passes an id). Baseline fail
+0; final fail 0; all 7 files restored by SHA-256.
+
+### Repository verification (300 MB gate, reading logged before each step)
+
+| Step | Gate (MB) | Result |
+|---|---|---|
+| `npx tsc --noEmit` | 323 | **PASS**, exit 0, 0 errors |
+| `npx eslint` on the 11 B2-D1 files | 485, then 315 | 10 files clean. **1 error, pre-existing:** `react-hooks/set-state-in-effect` in `app/context/WorkspaceContext.tsx` (the active-workspace effect, line 765). The HEAD version fails identically (line 712, gate 801 MB). Not introduced and not changed by B2-D1 |
+| `npm run test:lowmem` | 847 | **PASS**, exit 0: 2,093 tests, 396 suites, 2,087 pass, 0 fail, 0 cancelled, 6 todo |
+
+### NOT RUN / BLOCKED
+
+- **Route-level HTTP probe** (the three route handlers against TEST
+  through a running Next server): **NOT RUN** — memory. **Superseded:**
+  run and PASS 40/40 — see "Batch 2-D1 — Route-level verification". The database
+  function and the repository classifier were exercised live; the route
+  handlers themselves are verified by static guards and mutations only.
+- **Browser E2E** (login → dashboard → provisioning): **BLOCKED / NOT
+  RUN** — the production build does not fit in machine memory (same
+  limitation as Phase 2).
+
+### Deploy dependency (recorded, not approved)
+
+The application now calls `provision_personal_account()`, which does
+**not exist on production**. Deploying B2-D1 before B2-B is applied to
+production would make every login fail closed with 503 (signed out) and
+every workspace creation fail with 503. B2-B production must be applied
+before, or together with, any deploy containing B2-D1. Both need their
+own founder approval.
+
+### Residual, recorded
+
+- The pre-existing `set-state-in-effect` lint error above.
+- Production Auth "Confirm email" setting is unmeasured; with it off,
+  unconfirmed users receive 403 at login after B2-D1.
+- B2-D2 (register/confirm flow), B2-E, B2-F: not started.
+
+### Status: B2-D1 PARTIAL (repository and TEST) — awaiting founder decision
+
+Everything that ran passed. It is PARTIAL only because the route-level
+HTTP probe is NOT RUN and browser E2E is BLOCKED.
+
+The founder accepted B2-D1 as PARTIAL (2026-09-17) and ordered the
+route-level check; it has since PASSED (below). B2-D1 remains PARTIAL only
+for browser E2E.
+
+## Batch 2-D1 — Route-level verification (founder-ordered 2026-09-17)
+
+**Scope:** the B2-D1 route handlers through a running Next.js server
+against TEST. No production, no browser, no code change, no commit.
+
+### Harness (scratchpad; nothing in the repository changed)
+
+- **Secret-free scratch copy** of the working tree (`scratchpad/b`):
+  - 328 files, 0 hash mismatches.
+  - 0 `.env*` files, no `supabase/.temp`.
+  - `syraven-audit.zip` excluded by name and never read.
+  - The 8 B2-D1 / auth-boundary files are hash-identical to the
+    repository.
+- **`next dev` (16.3.4, Turbopack) on `127.0.0.1:3100`**, started by
+  `rl-start-next.mjs`:
+  - Every secret-named variable is removed.
+  - Only `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` and
+    `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` are set.
+  - There is no service-role key in the server, so every database call is
+    the caller's own under RLS.
+- **Supabase proxy** (`rl-proxy.mjs`, `127.0.0.1:54399`):
+  - The server's Supabase URL points at it, and it forwards to TEST.
+  - It refuses to start for any upstream other than
+    `akhkukajdgayqwhedeoo`.
+  - It records each server request as method + path + query **keys**
+    only (no bodies, headers, tokens or ids).
+- **Fault injection**, only on
+  `POST /rest/v1/rpc/provision_personal_account`, switched per check:
+
+  | Mode | Injected response |
+  |---|---|
+  | `forbidden` | 403 / `42501`, the shape TEST returns for an unconfirmed user |
+  | `internal` | 500 / `XX000` |
+  | `missing` | 404 / `PGRST202` |
+  | `malformed` | 200 with an extra key |
+  | `nonuuid` | 200 with a non-uuid id |
+  | `reset` | connection destroyed |
+
+  **No DDL, ACL, `auth.users` or data change was used to create a
+  failure.**
+- **Probe:** `rl-probe.mjs`. It prints statuses, booleans and upstream
+  paths only.
+
+### Results — 40/40 PASS (second run)
+
+| # | Check | Result |
+|---|---|---|
+| R01 | `POST /api/account/provision` unauthenticated | 401, no upstream call |
+| R02 | `GET` / `POST /api/workspaces` unauthenticated | 401 / 401, no upstream call |
+| R03 | provision with a forged bearer | 401, only `GET /auth/v1/user`, no RPC |
+| R04 | `GET /api/account/provision` | 405, no RPC |
+| R05 | `GET /api/workspaces`, user without an organisation | 200 `[]`; upstream only `GET /auth/v1/user` + `GET /rest/v1/workspaces`; **no RPC, no write** |
+| R06 | provision with hostile body (`organization_id`, `user_id`, `owner_id`) and `?user_id=` | 200 `{created: true, success}` (exact keys), `Cache-Control: private, no-store`; upstream exactly `GET /auth/v1/user` + one RPC; no direct organisation writes |
+| R07 | provision again | 200 `created: false` |
+| R08 | `GET /api/workspaces` after provisioning | 1 workspace, no RPC, no write |
+| R09 | **two parallel provision requests through the server** (user A) | both 200, `created` [false, true] |
+| R10 | login, wrong password | 401; upstream only the token grant; **provisioning never called** |
+| R11 | login success | 200 `{success: true}` only; session cookie set; upstream: token grant **then** one RPC; no logout |
+| R12 | provision with the login cookie session | 200 `created: false` |
+| R13 | `GET /api/workspaces` (cookie) | 1 workspace, read-only, organisation ≠ B's |
+| R14 | `POST /api/workspaces` with **B's `organization_id`**, forged `created_by` / `owner_id` in the body | 201 in **A's own organisation** (not B's); upstream: auth, one RPC, one `POST /rest/v1/workspaces`; **no `organizations` / `organization_members` call, no DELETE** |
+| R15 | login with provisioning `forbidden` | **403** "Confirm your email address before signing in."; upstream token → RPC → `POST /auth/v1/logout?scope`; auth cookie cleared; the returned cookie jar → 401 |
+| R16 | the earlier R11 session after R15's sign-out | still valid (403, not 401): the sign-out was local, not global |
+| R17a–c | `forbidden`: provision / `POST /api/workspaces` / `GET /api/workspaces` | 403 / 403 with no workspace insert / 200 without an RPC |
+| R18, R20, R22, R24, R26 | login with `internal`, `missing`, `malformed`, `nonuuid`, `reset` | each **503** "Account setup is temporarily unavailable.", local logout, cookie cleared, jar → 401 |
+| R19, R21, R23, R25, R27 (a–c) | the same five modes: provision / `POST /api/workspaces` / `GET /api/workspaces` | 503 / 503 with no workspace insert / 200 without an RPC |
+| R28 | injection off: login, then `GET /api/workspaces` | 200; 2 workspaces (personal + R14), all in A's organisation |
+
+**Database after the run** (read-only SQL, before cleanup):
+
+- 2 organisations, 2 active owner memberships, 3 workspaces.
+- 2 `account.provisioned` audit rows: R09 created one account, not two.
+- 0 users with several memberships.
+- 0 organisations without an owner membership.
+- 0 workspaces outside their creator's organisation.
+- 0 organisations for unconfirmed users.
+- 0 advisory locks.
+- Function ACL `{postgres=X/postgres,authenticated=X/postgres}` and
+  source md5 `fe797dd8…52b8` unchanged.
+
+### First attempt (recorded, not hidden)
+
+1. **Incomplete scratch `node_modules`.** `next/dist/compiled/webpack`
+   held 2 of 28 files, the same defect seen in Phase 2, and the server
+   exited with `MODULE_NOT_FOUND`. Repaired by `robocopy /MIR` of
+   `node_modules` into the scratch copy only (exit 1 = files copied). The
+   directory counts then matched.
+2. **Server exit during the first probe run.**
+   - R01–R08 PASS, then the Next dev process exited silently at R09
+     (`ECONNRESET`).
+   - There was no application error and no crash event; free memory was
+     162–206 MB on a 3.9 GB machine. Probable cause: memory pressure (not
+     proven).
+   - R09's requests never reached the proxy.
+   - The state R06 wrote (1 organisation, 1 membership, 1 workspace,
+     1 audit row) was verified and cleaned to baseline.
+   - The whole probe was then run again, unchanged, after the 300 MB gate
+     (server start 300 MB, probe start 397 MB): 40/40 PASS, server alive
+     afterwards.
+
+### Cleanup
+
+- Only the server and proxy started for this check were stopped; ports
+  3100 and 54399 are closed.
+- TEST restored to baseline: 3 users, 3 profiles (profile md5
+  `5baf2912…148f`, identical to the pre-run baseline), 0 organisations /
+  memberships / workspaces / audit rows, 0 advisory locks. Function ACL
+  and source unchanged.
+- Repository working tree unchanged: 26 entries, HEAD `6f60179`.
+
+### Status
+
+- Route-level check: **PASS** (40/40).
+- B2-D1 stays **PARTIAL** (founder-accepted) only because browser E2E is
+  BLOCKED / NOT RUN.

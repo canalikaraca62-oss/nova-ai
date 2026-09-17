@@ -2,6 +2,11 @@ import { NextResponse, type NextRequest } from "next/server";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 
+import {
+  ensurePersonalAccount,
+  type PersonalAccountClient,
+} from "@/lib/tenancy/personalAccount";
+
 /*
   SYRAVEN — Sign in
 
@@ -238,6 +243,45 @@ export async function POST(
     console.error("SYRAVEN AUTH LOGIN: no session returned.");
 
     return fail(503, "Sign in is temporarily unavailable.");
+  }
+
+  /*
+   * PERSONAL ACCOUNT PROVISIONING (Phase 3, Batch 2-D1; founder decision
+   * D-B2D-1).
+   *
+   * A signed-in user must have an organisation and workspace to use the
+   * product. provision_personal_account() is called on THIS client, which
+   * now carries the new session's JWT, so identity is auth.uid() — no id
+   * is passed. It returns the existing organisation without writing, or
+   * creates it atomically; it refuses an unconfirmed email.
+   *
+   * STRICT FAIL-CLOSED. Login succeeds only if provisioning succeeds. On
+   * any failure the session just created is signed out (local scope: this
+   * session only) and the page receives an error, so it never navigates
+   * to a dashboard the account cannot use. A signOut failure is logged
+   * and the error response is returned regardless.
+   */
+  const account = await ensurePersonalAccount(
+    supabase as unknown as PersonalAccountClient,
+  );
+
+  if (!account.ok) {
+    try {
+      const { error: signOutError } = await supabase.auth.signOut({ scope: "local" });
+
+      if (signOutError) {
+        console.error("SYRAVEN AUTH LOGIN: sign-out after failed provisioning failed.", {
+          name: signOutError.name,
+          status: signOutError.status ?? null,
+        });
+      }
+    } catch {
+      console.error("SYRAVEN AUTH LOGIN: sign-out after failed provisioning threw.");
+    }
+
+    return account.reason === "FORBIDDEN"
+      ? fail(403, "Confirm your email address before signing in.")
+      : fail(503, "Account setup is temporarily unavailable.");
   }
 
   /*

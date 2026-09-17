@@ -3259,6 +3259,10 @@ export type Database = {
           similarity: number
         }[]
       }
+      provision_personal_account: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
     }
     Enums: {
       [_ in never]: never

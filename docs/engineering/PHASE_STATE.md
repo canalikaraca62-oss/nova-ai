@@ -106,12 +106,13 @@ closes it.
 | B2-A2 — one profile provisioning authority (`20260918120000`) | Applied; real signup proofs 1–7 | Applied, verified; `handle_new_user` owner-only (D10 Option A) | PASS |
 | B2-B — atomic personal-account provisioning (`20260917130000`) | Applied, verified | **NOT applied — not approved** | PASS (repository/TEST) |
 | B2-C — profile backfill + production counts | Backfill applied | Counts done; backfill not needed | PASS — closed |
-| B2-D, B2-E, B2-F, B2-G; Batches 3–10 | — | — | NOT STARTED |
+| B2-D1 — application provisioning (login, `POST /api/account/provision`, `/api/workspaces`, provider) | Live RPC + concurrency PASS; route-level server check PASS 40/40; cleaned to baseline | Not deployed; needs B2-B production first | PARTIAL — founder-accepted (repository/TEST; route-level check PASS 40/40; browser E2E BLOCKED) |
+| B2-D2, B2-E, B2-F, B2-G; Batches 3–10 | — | — | NOT STARTED |
 
 Open, not closed by the batches above:
 
-- T-B2-1: 6 of 7 production users have no owner membership. Investigated read-only (PASS, 2026-09-17): 4 confirmed users (ranks 1, 2, 5, 7) lack an owned org; the only org belongs to rank 6 and satisfies Batch 1; all tenancy conflict counts are 0; the B2-B slug format is unused. **Decision: login-time provisioning via B2-D**; one-time provisioning not approved; B2-B production not approved yet.
-- Register-flow findings P1-B2-1/2/4 and P2-B2-1/2/3; B2-D and B2-F.
+- T-B2-1: 6 of 7 production users have no owner membership. Investigated read-only (PASS, 2026-09-17): 4 confirmed users (ranks 1, 2, 5, 7) lack an owned org; the only org belongs to rank 6 and satisfies Batch 1; all tenancy conflict counts are 0; the B2-B slug format is unused. **Decision: login-time provisioning via B2-D**; one-time provisioning not approved; B2-B production not approved yet. Wiring implemented in B2-D1 (repository/TEST, uncommitted, not deployed).
+- Register-flow findings P1-B2-1/2/4 and P2-B2-1/2/3; B2-D2 (after B2-F) and B2-F.
 - D7 precedence and the dead trial helpers; B2-E.
 - `supabase_auth_admin` INSERT on `profiles`, the anon/MAINTAIN baseline and `handle_updated_at` PUBLIC EXECUTE; Batch 4.
 - Production `start_trial_on_email_confirmation()` ACL not measured.
@@ -123,4 +124,4 @@ Open, not closed by the batches above:
 |---|---|---|
 | Phase 1 — North Star Architecture | PASS (founder-accepted 2026-09-14) | This file |
 | Phase 2 — Repository and Architecture Purification | PASS — documented environment limitations accepted | Founder acceptance 2026-09-15; the limitations and follow-ups are in the section above. History: started 2026-09-14 on the founder's instruction; stopped as PARTIAL and resumed by the founder the same day, to be completed before Phase 3. P2-A … P2-G committed locally (16 commits after `3314baa`, never pushed); preflight follow-up P2-P committed 2026-09-15 (`f566757`); P2-H (documentation consistency) committed 2026-09-15 (`50346bb`). Phase 2 final gate run 2026-09-15 on `50346bb`: tests, guards, typecheck and lint pass; `/profile` found orphaned (FAIL finding FG-01), subsequently resolved and committed in `cd24c57` (linked from `/settings`). Final gate re-run 2026-09-15 on `cd24c57`: PARTIAL — tests, guards and typecheck pass; 44/44 kept pages reachable; lint 50 of 51 Phase 2 files clean (1 pre-existing error); duplicate authorities PARTIAL; production build BLOCKED (insufficient sustained memory); browser/E2E and visual QA BLOCKED / NOT RUN. Evidence reconciled in `a72be3f`. Evidence: `PURIFICATION_EVIDENCE.md`, `PURIFICATION_SCORECARD.md` |
-| Phase 3 — Security Fortress | IN PROGRESS | Started on the founder's instruction (preflight 2026-09-15). Batch 1, B2-A, B2-A2 and B2-C closed PASS; B2-B PASS on repository/TEST, production not approved; B2-D onwards not started. Details: "Phase 3 — progress" above |
+| Phase 3 — Security Fortress | IN PROGRESS | Started on the founder's instruction (preflight 2026-09-15). Batch 1, B2-A, B2-A2 and B2-C closed PASS; B2-B PASS on repository/TEST, production not approved; B2-D1 PARTIAL on repository/TEST (uncommitted); B2-D2 onwards not started. Details: "Phase 3 — progress" above |

@@ -99,7 +99,8 @@ void describe("/api/workspaces requires a verified session", () => {
   void test("every query runs on the caller's client", () => {
     const queries = CODE.match(/\.\s*from\s*\(\s*["'`][a-z_]+["'`]\s*\)/g) ?? [];
 
-    assert.ok(queries.length >= 3, "Expected queries to inspect.");
+    /* GET list + POST insert. Organisation resolution is an RPC (B2-D1). */
+    assert.ok(queries.length >= 2, "Expected queries to inspect.");
 
     /* Each `.from(` must be reached through session.supabase. */
     const sessionQueries = CODE.match(/session\s*\.\s*supabase\s*\n?\s*\.\s*from/g) ?? [];
@@ -182,7 +183,7 @@ void describe("Ownership and tenancy cannot be supplied by the caller", () => {
     );
   });
 
-  void test("the organisation is resolved from the caller's own membership", () => {
+  void test("the organisation is resolved by the provisioning authority for the verified session", () => {
     const resolver = CODE.slice(
       CODE.indexOf("async function resolveOrganizationId"),
       CODE.indexOf("export const GET"),
@@ -192,44 +193,22 @@ void describe("Ownership and tenancy cannot be supplied by the caller", () => {
 
     assert.match(
       resolver,
-      /\.\s*eq\s*\(\s*["'`]user_id["'`]\s*,\s*session\.userId\s*\)/,
-      "Membership lookup must be scoped to the session user.",
+      /ensurePersonalAccount\(\s*session\.supabase as unknown as PersonalAccountClient,?\s*\)/,
+      "The organisation must come from provision_personal_account(), bound to auth.uid().",
     );
 
-    assert.match(
-      resolver,
-      /\.\s*eq\s*\(\s*["'`]status["'`]\s*,\s*["'`]active["'`]\s*\)/,
-      "Only an ACTIVE membership may grant access.",
-    );
+    for (const forbidden of ["body", "record", "input", "parsed", "request"]) {
+      assert.ok(
+        !new RegExp(`\\b${forbidden}\\b`).test(resolver),
+        `CRITICAL: organisation resolution reads ${forbidden}.`,
+      );
+    }
   });
 
-  void test("a provisioned organisation is owned by the caller", () => {
-    const resolver = CODE.slice(
-      CODE.indexOf("async function resolveOrganizationId"),
-      CODE.indexOf("export const GET"),
-    );
-
-    assert.match(
-      resolver,
-      /owner_id:\s*session\.userId/,
-      "A new organisation must be owned by the verified caller.",
-    );
-
-    assert.match(
-      resolver,
-      /user_id:\s*session\.userId/,
-      "The owner membership must be for the verified caller.",
-    );
-
-    /*
-     * Self-provisioning must never attach the caller to an EXISTING
-     * organisation — it may only create one they own.
-     */
+  void test("the route cannot look up or create an organisation itself", () => {
     assert.ok(
-      !/\.\s*from\s*\(\s*["'`]organizations["'`]\s*\)\s*\n?\s*\.\s*select/.test(
-        resolver,
-      ),
-      "The resolver must not look up organisations it did not create.",
+      !/\.\s*from\s*\(\s*["'`](?:organizations|organization_members)["'`]\s*\)/.test(CODE),
+      "A second provisioning path would bypass the atomic, owner-bound authority.",
     );
   });
 });
@@ -459,18 +438,15 @@ void describe("The dashboard dead end is resolved", () => {
 /* -------------------------------------------------------------------------- */
 
 /*
- * The provisioning path is the highest-risk part of this route: it is the
- * only place in the application that creates an organisation and a
- * membership, which together decide tenancy for everything else.
- *
- * These assertions cover the SHAPE of that code. The RLS behaviour it
- * depends on was verified separately against the live schema, inside
- * rolled-back transactions:
- *
- *   without the migration   org=t  member=f  workspace=f
- *   with the migration      org=t  member=t  workspace=t
- *   attacker (user A)       cannot join B's org, cannot add B to A's org
- *   rollback                deletes only the caller's own organisation
+ * Organisation provisioning used to live in this route: a membership
+ * lookup, an organisation insert, an owner-membership insert and a
+ * compensating delete. Batch 2-D1 moved it to the single authority,
+ * provision_personal_account() (20260917130000), which is atomic,
+ * idempotent under a per-user lock, owner-bound to auth.uid() and refuses
+ * an unconfirmed email. Its SQL is pinned by
+ * tests/schema/personal-account-provisioning-migration.test.ts and its
+ * behaviour was verified on TEST. What remains here is the route's side of
+ * that contract.
  */
 
 const MIGRATION = read(
@@ -479,147 +455,51 @@ const MIGRATION = read(
   "20260907120000_syraven_owner_self_membership.sql",
 );
 
-void describe("First-use organisation provisioning", () => {
+const PROVISIONING_SQL = read(
+  "supabase",
+  "migrations",
+  "20260917130000_syraven_personal_account_provisioning.sql",
+)
+  .split("\n")
+  .filter((line) => !line.trim().startsWith("--"))
+  .join("\n");
+
+void describe("Organisation resolution uses the single provisioning authority", () => {
   const resolver = CODE.slice(
     CODE.indexOf("async function resolveOrganizationId"),
     CODE.indexOf("export const GET"),
   );
 
-  void test("an existing membership is reused rather than duplicated", () => {
-    /*
-     * Provisioning must be the exception. Creating an organisation on
-     * every call would give one user many tenants.
-     */
-    assert.match(
-      resolver,
-      /if\s*\(\s*membership\?\.\s*organization_id\s*\)/,
-      "An existing membership must short-circuit provisioning.",
-    );
+  void test("an existing organisation is reused, never duplicated", () => {
+    /* Enforced in the function: it creates only when the owner lookup finds none. */
+    assert.match(PROVISIONING_SQL, /if org_id is null then\s+insert into public\.organizations/);
   });
 
-  void test("the created organisation is owned by the caller", () => {
-    assert.match(resolver, /owner_id:\s*session\.userId/);
+  void test("a refusal is 403, any other failure 503, and nothing is inserted", () => {
+    assert.match(resolver, /return \{ ok: false, status: account\.reason === "FORBIDDEN" \? 403 : 503 \};/);
+
+    const post = CODE.slice(CODE.indexOf("export const POST"));
+
+    assert.ok(post.indexOf("if (!organization.ok)") < post.indexOf('.from("workspaces")'));
   });
 
-  void test("the membership is for the caller, as owner", () => {
-    assert.match(resolver, /user_id:\s*session\.userId/);
-    assert.match(resolver, /role:\s*["'`]owner["'`]/);
-    assert.match(resolver, /status:\s*["'`]active["'`]/);
+  void test("the resolved id is the one the authority returned", () => {
+    assert.match(resolver, /return \{ ok: true, organizationId: account\.organizationId \};/);
   });
 
-  void test("no identity in provisioning comes from the request", () => {
-    for (const forbidden of ["body", "record", "input", "parsed", "request"]) {
-      assert.ok(
-        !new RegExp(`owner_id:\s*${forbidden}`).test(resolver),
-        `CRITICAL: owner_id derived from ${forbidden}.`,
-      );
-      assert.ok(
-        !new RegExp(`user_id:\s*${forbidden}`).test(resolver),
-        `CRITICAL: user_id derived from ${forbidden}.`,
-      );
-    }
-  });
-
-  void test("provisioning runs on the caller's RLS client", () => {
-    assert.ok(
-      !/supabaseAdmin|service_role/.test(resolver),
-      "CRITICAL: provisioning must not bypass RLS.",
-    );
-
-    const inserts = resolver.match(/\.\s*from\s*\(\s*["'`][a-z_]+["'`]\s*\)/g) ?? [];
-    const scoped = resolver.match(/session\s*\.\s*supabase/g) ?? [];
-
-    assert.ok(
-      scoped.length >= inserts.length,
-      "Every provisioning query must go through session.supabase.",
-    );
+  void test("provisioning runs on the caller's RLS client, never the service role", () => {
+    assert.ok(!/supabaseAdmin|service_role/.test(resolver), "CRITICAL: provisioning must not bypass RLS.");
+    assert.match(resolver, /session\.supabase/);
   });
 });
 
-void describe("Rollback leaves no orphan organisation", () => {
-  const resolver = CODE.slice(
-    CODE.indexOf("async function resolveOrganizationId"),
-    CODE.indexOf("export const GET"),
-  );
-
-  void test("a failed membership deletes the organisation just created", () => {
-    const failureBranch = resolver.slice(resolver.indexOf("if (memberError)"));
-
-    assert.match(
-      failureBranch,
-      /\.\s*from\s*\(\s*["'`]organizations["'`]\s*\)\s*\n?\s*\.\s*delete\s*\(\s*\)/,
-      "A failed membership must roll the organisation back.",
-    );
+void describe("Provisioning is atomic: the route has nothing to roll back", () => {
+  void test("the route deletes nothing", () => {
+    assert.ok(!/\.\s*delete\s*\(\s*\)/.test(CODE), "A compensating delete means a non-atomic provisioning path is back.");
   });
 
-  void test("the rollback is bounded to the row created in this request", () => {
-    const failureBranch = resolver.slice(resolver.indexOf("if (memberError)"));
-
-    assert.match(
-      failureBranch,
-      /\.\s*eq\s*\(\s*["'`]id["'`]\s*,\s*organization\.id\s*\)/,
-      "Only the organisation created in this request may be deleted.",
-    );
-
-    assert.match(
-      failureBranch,
-      /\.\s*eq\s*\(\s*["'`]owner_id["'`]\s*,\s*session\.userId\s*\)/,
-      "A second, independent bound on top of RLS.",
-    );
-  });
-
-  void test("the delete cannot target an arbitrary organisation", () => {
-    const failureBranch = resolver.slice(resolver.indexOf("if (memberError)"));
-
-    /*
-     * A positive assertion: capture the value the rollback filters on
-     * and require it to be the id returned by the insert in THIS
-     * request. Stronger than denying a list of names, because it also
-     * rejects an identifier nobody thought to blocklist.
-     */
-    const target =
-      /\.\s*eq\s*\(\s*[`'"]id[`'"]\s*,\s*([A-Za-z0-9_.]+)\s*\)/.exec(
-        failureBranch,
-      );
-
-    assert.ok(target, "Could not find the rollback id filter.");
-
-    assert.equal(
-      target[1],
-      "organization.id",
-      "CRITICAL: the rollback filters on an id that did not come from " +
-        "the insert in this request.",
-    );
-  });
-
-  void test("a failed rollback is reported rather than swallowed", () => {
-    const failureBranch = resolver.slice(resolver.indexOf("if (memberError)"));
-
-    assert.match(failureBranch, /rollbackError/);
-    assert.match(
-      failureBranch,
-      /orphan remains/i,
-      "A rollback failure must be identifiable in logs.",
-    );
-  });
-
-  void test("retries cannot accumulate orphans", () => {
-    /*
-     * Every failure path in the resolver either rolls back or never
-     * created an organisation, so N attempts leave at most the orphans
-     * that an explicitly-logged rollback failure produced.
-     */
-    const failureBranch = resolver.slice(resolver.indexOf("if (memberError)"));
-
-    const returnsBeforeRollback = failureBranch.slice(
-      0,
-      failureBranch.indexOf(".delete()"),
-    );
-
-    assert.ok(
-      !/return\s*\{\s*ok:\s*false/.test(returnsBeforeRollback),
-      "The handler must not return before rolling back.",
-    );
+  void test("the authority commits all rows together or none", () => {
+    assert.ok(!/\bexception\s+when\b|\bcommit\b|\brollback\b/i.test(PROVISIONING_SQL), "A handler or transaction control would allow a partial provisioning.");
   });
 });
 
@@ -743,7 +623,7 @@ void describe("Creating a workspace is reachable in every state", () => {
     assert.equal(
       ids.length,
       1,
-      "Duplicate create forms produce a duplicate id: " + ids.join(", "),
+      `Duplicate create forms produce a duplicate id: ${ids.join(", ")}`,
     );
   });
 });

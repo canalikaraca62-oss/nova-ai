@@ -2,6 +2,10 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { withAuth } from "@/lib/api/withAuth";
 import type { AuthenticatedSession } from "@/lib/auth/session";
+import {
+  ensurePersonalAccount,
+  type PersonalAccountClient,
+} from "@/lib/tenancy/personalAccount";
 
 /*
   SYRAVEN — Workspaces
@@ -30,26 +34,23 @@ import type { AuthenticatedSession } from "@/lib/auth/session";
   ORGANISATION IDENTITY IS NEVER TAKEN FROM THE REQUEST
 
   `workspaces.organization_id` is NOT NULL, so a workspace must belong to
-  an organisation. That id is resolved from the caller's own membership
-  rows — never from the body. Accepting it would be an IDOR: a caller
+  an organisation. That id is resolved by the database for the verified
+  caller (auth.uid()) — never from the body. Accepting it would be an IDOR: a caller
   could name another tenant's organisation and, if RLS ever regressed,
   plant a workspace inside it.
 
   `created_by` is likewise taken from `session.userId`, not the body.
 
-  SELF-PROVISIONING FOR ACCOUNTS WITHOUT AN ORGANISATION
+  ORGANISATION RESOLUTION HAS ONE AUTHORITY (Phase 3, Batch 2-D1)
 
-  Registration provisions an organisation and an owner membership, but
-  accounts created before that route existed have neither — verified in
-  production: 7 users, 0 organisations, 0 memberships. For them
-  `is_organization_member` returns false and RLS refuses every workspace
-  insert, which is the dead end again one layer down.
-
-  POST therefore provisions a personal organisation on first use when the
-  caller has none. This is not a privilege escalation: it creates an
-  organisation the caller owns, exactly as registration would have, and
-  grants membership only in that new organisation. It cannot attach the
-  caller to an existing one.
+  The caller's organisation comes from provision_personal_account()
+  (20260917130000) through lib/tenancy/personalAccount. It returns the
+  organisation the caller owns under the Batch 1 rule (an active owner
+  membership whose organisation's owner_id is the caller, oldest first),
+  or — for an account without one — creates it atomically with its owner
+  membership and default workspace. Identity is auth.uid(); nothing is
+  passed. This route used to provision an organisation itself, in several
+  steps with a compensating delete; that second authority is gone.
 */
 
 export const runtime = "nodejs";
@@ -174,140 +175,28 @@ function deriveSlug(name: string): string {
 /* -------------------------------------------------------------------------- */
 
 /**
- * Returns an organisation the caller OWNS, creating a personal one if they
- * own none.
+ * Returns the organisation the caller owns, provisioning a personal one
+ * (with its owner membership and default workspace) if they own none.
  *
- * Read through the caller's RLS client, so the membership rows returned
- * are provably their own. The id is never accepted from the request.
+ * Delegates entirely to the single provisioning authority. The id comes
+ * back from the database function, bound to auth.uid(); it is never taken
+ * from the request and never looked up here.
  *
- * OWNER-BOUND AND DETERMINISTIC (Phase 3, Batch 1; SECURITY_EVIDENCE.md).
- * This used to take ANY active membership with an unordered `.limit(1)`.
- * A membership can exist in an organisation the caller does not own, and
- * while an organisation admin could insert arbitrary users, that let an
- * attacker land a victim's next workspace in the attacker's organisation.
- * Only an active OWNER membership whose organisation's server-side
- * owner_id is the caller qualifies, oldest first, so several owned
- * organisations resolve the same way on every call. No other membership
- * is ever a fallback: with no owned organisation, a personal one is
- * provisioned below.
+ * FAIL CLOSED: a refused call (unconfirmed email) is 403, anything else
+ * is 503. No workspace is inserted without a resolved organisation.
  */
 async function resolveOrganizationId(
   session: AuthenticatedSession,
 ): Promise<{ ok: true; organizationId: string } | { ok: false; status: number }> {
-  const { data: membership, error: membershipError } = await session.supabase
-    .from("organization_members")
-    .select("organization_id, organizations!inner(owner_id)")
-    .eq("user_id", session.userId)
-    .eq("status", "active")
-    .eq("role", "owner")
-    .eq("organizations.owner_id", session.userId)
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
+  const account = await ensurePersonalAccount(
+    session.supabase as unknown as PersonalAccountClient,
+  );
 
-  if (membershipError) {
-    console.error("SYRAVEN WORKSPACES: membership lookup failed.", {
-      userId: session.userId,
-      error: membershipError.message,
-    });
-
-    return { ok: false, status: 503 };
+  if (!account.ok) {
+    return { ok: false, status: account.reason === "FORBIDDEN" ? 403 : 503 };
   }
 
-  if (membership?.organization_id) {
-    return { ok: true, organizationId: membership.organization_id };
-  }
-
-  /*
-   * No organisation. Provision a personal one, owned by this caller.
-   *
-   * `organizations` INSERT is policied WITH CHECK (owner_id = auth.uid()),
-   * so RLS itself guarantees the caller can only create an organisation
-   * they own — this cannot be steered at someone else's tenant.
-   */
-  const { data: organization, error: organizationError } = await session.supabase
-    .from("organizations")
-    .insert({
-      name: "Personal",
-      slug: deriveSlug("personal"),
-      owner_id: session.userId,
-    })
-    .select("id")
-    .maybeSingle();
-
-  if (organizationError || !organization) {
-    console.error("SYRAVEN WORKSPACES: organisation provisioning failed.", {
-      userId: session.userId,
-      error: organizationError?.message ?? "no row returned",
-    });
-
-    return { ok: false, status: 503 };
-  }
-
-  /*
-   * Owner membership. Without it `is_organization_member` returns false
-   * and the workspace insert below would be refused by RLS — the caller
-   * would own an organisation they could not use.
-   */
-  const { error: memberError } = await session.supabase
-    .from("organization_members")
-    .insert({
-      organization_id: organization.id,
-      user_id: session.userId,
-      role: "owner",
-      status: "active",
-    });
-
-  if (memberError) {
-    console.error("SYRAVEN WORKSPACES: owner membership failed.", {
-      userId: session.userId,
-      error: memberError.message,
-    });
-
-    /*
-     * COMPENSATING DELETE.
-     *
-     * The organisation was created a moment ago and the caller cannot
-     * use it: without the owner membership `is_organization_member` is
-     * false, so every workspace insert against it is refused. Leaving it
-     * behind would accumulate one dead organisation per attempt —
-     * `deriveSlug` appends a random suffix, so there is no unique
-     * constraint to stop a retry inserting another.
-     *
-     * ONLY the organisation created in THIS request is removed. `newly`
-     * is the id returned by the insert above, never an id from the
-     * request or from a lookup, so a pre-existing organisation cannot be
-     * reached by this path. The `owner_id` filter is a second,
-     * independent bound on top of RLS.
-     *
-     * This mirrors the compensating delete in
-     * app/api/auth/register/route.ts, which removes a half-provisioned
-     * signup for the same reason.
-     */
-    const { error: rollbackError } = await session.supabase
-      .from("organizations")
-      .delete()
-      .eq("id", organization.id)
-      .eq("owner_id", session.userId);
-
-    if (rollbackError) {
-      /*
-       * Rollback itself failed. Reported at a higher severity because it
-       * leaves state a later request cannot clean up, and the id is
-       * logged so it can be found — it is a row identifier, not user
-       * content.
-       */
-      console.error("SYRAVEN WORKSPACES: rollback FAILED; orphan remains.", {
-        userId: session.userId,
-        organizationId: organization.id,
-        error: rollbackError.message,
-      });
-    }
-
-    return { ok: false, status: 503 };
-  }
-
-  return { ok: true, organizationId: organization.id };
+  return { ok: true, organizationId: account.organizationId };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -359,8 +248,8 @@ export const GET = withAuth(
  * ORDER OF OPERATIONS:
  *
  *   1. Validate the body — only name and description are read.
- *   2. Resolve the organisation from the caller's own membership,
- *      provisioning a personal one if they have none.
+ *   2. Resolve the organisation the caller owns through the single
+ *      provisioning authority (created atomically if they have none).
  *   3. Insert with organization_id and created_by taken from the server,
  *      never from the request.
  *
@@ -386,7 +275,9 @@ export const POST = withAuth(
     if (!organization.ok) {
       return fail(
         organization.status,
-        "Workspaces are temporarily unavailable.",
+        organization.status === 403
+          ? "Confirm your email address to create a workspace."
+          : "Workspaces are temporarily unavailable.",
       );
     }
 

@@ -370,6 +370,14 @@ void describe("B. organizations: no client owner transfer", () => {
 /* -------------------------------------------------------------------------- */
 
 void describe("C. a workspace lands only in an organization the caller owns", () => {
+  /*
+   * Batch 2-D1: the route no longer resolves the organisation with its own
+   * membership lookup. It delegates to provision_personal_account()
+   * (20260917130000) through lib/tenancy/personalAccount, and the Batch 1
+   * ownership rule is enforced there, in SQL. These tests pin both halves:
+   * the route has no second lookup, and the function's lookup is owner-only,
+   * owner-bound, deterministic and without fallback.
+   */
   const route = read("app", "api", "workspaces", "route.ts")
     .replace(/\/\*[\s\S]*?\*\//g, "")
     .replace(/^\s*\/\/.*$/gm, "");
@@ -379,52 +387,53 @@ void describe("C. a workspace lands only in an organization the caller owns", ()
     route.indexOf("export const GET"),
   );
 
-  const lookupStart = resolver.indexOf('.from("organization_members")');
-  const lookup = resolver.slice(lookupStart, resolver.indexOf(".maybeSingle()", lookupStart));
+  const fn = read("supabase", "migrations", "20260917130000_syraven_personal_account_provisioning.sql")
+    .split("\n")
+    .filter((line) => !line.trim().startsWith("--"))
+    .join("\n")
+    .replace(/\s+/g, " ")
+    .toLowerCase();
 
-  void test("the resolver and its membership lookup are found", () => {
-    assert.ok(resolver.length > 0 && lookupStart !== -1 && lookup.length > 0);
+  const lookupStart = fn.indexOf("select m.organization_id into org_id");
+  const lookup = lookupStart === -1 ? "" : fn.slice(lookupStart, fn.indexOf("limit 1;", lookupStart) + "limit 1;".length);
+
+  void test("the resolver delegates to the single provisioning authority", () => {
+    assert.ok(resolver.length > 0 && lookup.length > 0);
+    assert.match(resolver, /ensurePersonalAccount\(\s*session\.supabase as unknown as PersonalAccountClient,?\s*\)/);
+    assert.ok(!/\.from\(/.test(resolver), "The resolver must not query tables itself.");
   });
 
-  void test("only an active OWNER membership of the session user qualifies", () => {
-    assert.match(lookup, /\.eq\(\s*"user_id",\s*session\.userId\s*\)/);
-    assert.match(lookup, /\.eq\(\s*"status",\s*"active"\s*\)/);
-    assert.match(lookup, /\.eq\(\s*"role",\s*"owner"\s*\)/, "A non-owner membership can redirect workspace creation.");
+  void test("only an active OWNER membership of the caller qualifies", () => {
+    assert.match(lookup, /m\.user_id = caller/);
+    assert.match(lookup, /m\.status = 'active'/);
+    assert.match(lookup, /m\.role = 'owner'/, "A non-owner membership can redirect workspace creation.");
   });
 
   void test("the membership is bound to the organization's server-side owner", () => {
-    assert.match(lookup, /organizations!inner\(owner_id\)/, "Without an inner join the owner filter does not constrain the row.");
-    assert.match(
-      lookup,
-      /\.eq\(\s*"organizations\.owner_id",\s*session\.userId\s*\)/,
-      "A membership whose organization the caller does not own can redirect workspace creation.",
-    );
+    assert.match(lookup, /join public\.organizations o on o\.id = m\.organization_id/, "Without the join the owner filter does not constrain the row.");
+    assert.match(lookup, /o\.owner_id = caller/, "A membership whose organization the caller does not own can redirect workspace creation.");
   });
 
   void test("the selection is deterministic: ordered, then limited", () => {
-    const orderAt = lookup.search(/\.order\(\s*"created_at",\s*\{\s*ascending:\s*true\s*\}\s*\)/);
-    const limitAt = lookup.indexOf(".limit(1)");
+    const orderAt = lookup.indexOf("order by m.created_at asc");
+    const limitAt = lookup.indexOf("limit 1;");
 
-    assert.ok(orderAt !== -1, "CRITICAL: an unordered .limit(1) picks an arbitrary organization.");
+    assert.ok(orderAt !== -1, "CRITICAL: an unordered limit 1 picks an arbitrary organization.");
     assert.ok(limitAt > orderAt, "The order must be applied before the limit.");
   });
 
   void test("there is no fallback to any other membership", () => {
-    const lookups = resolver.split('.from("organization_members")').slice(1);
-    const selects = lookups.filter((segment) => {
-      const next = segment.indexOf(".from(");
-      return /\.select\(/.test(next === -1 ? segment : segment.slice(0, next));
-    });
-
-    assert.equal(selects.length, 1, "A second membership lookup is a fallback to an arbitrary organization.");
+    assert.equal([...fn.matchAll(/from public\.organization_members/g)].length, 1, "A second membership lookup is a fallback to an arbitrary organization.");
+    assert.ok(!/\.from\("organization_members"\)/.test(route), "The route must not add its own membership lookup.");
   });
 
-  void test("a lookup failure fails closed before any provisioning", () => {
-    const failAt = resolver.search(/if\s*\(\s*membershipError\s*\)\s*\{[\s\S]*?return\s*\{\s*ok:\s*false,\s*status:\s*503\s*\}/);
-    const provisionAt = resolver.indexOf('.from("organizations")');
+  void test("a resolution failure fails closed before any workspace insert", () => {
+    const post = route.slice(route.indexOf("export const POST"));
+    const failAt = post.search(/if \(!organization\.ok\) \{[\s\S]*?return fail\(/);
+    const insertAt = post.indexOf('.from("workspaces")');
 
-    assert.ok(failAt !== -1, "A membership lookup error must answer 503.");
-    assert.ok(provisionAt > failAt, "A lookup error must stop before an organization is provisioned.");
+    assert.match(resolver, /if \(!account\.ok\) \{\s*return \{ ok: false, status: account\.reason === "FORBIDDEN" \? 403 : 503 \};/);
+    assert.ok(failAt !== -1 && insertAt > failAt, "A resolution failure must stop before a workspace is inserted.");
   });
 });
 
@@ -595,16 +604,18 @@ void describe("E. legitimate paths keep working", () => {
     assert.ok(names.includes("owners can create their own membership"));
   });
 
-  void test("the route's owner membership insert names only granted columns", () => {
+  void test("the route writes no membership itself; the owner membership comes from the provisioning authority", () => {
+    /*
+     * Batch 2-D1 removed the route's own owner-membership insert (and its
+     * compensating delete). The membership is created atomically by
+     * provision_personal_account(), SECURITY DEFINER, bound to auth.uid().
+     * The client column grants still apply to any direct PostgREST insert.
+     */
     const route = read("app", "api", "workspaces", "route.ts");
-    const insert = /\.from\("organization_members"\)\s*\.insert\(\{([\s\S]*?)\}\)/.exec(route)?.[1] ?? "";
-    const columns = [...insert.matchAll(/(\w+):/g)].map((match) => match[1]).sort();
     const granted = sorted(effectivePrivileges("organization_members").columns.get("insert"));
 
-    assert.ok(columns.length > 0);
-    for (const column of columns) {
-      assert.ok(granted.includes(column ?? ""), `The route inserts ${column}, which clients may no longer write.`);
-    }
+    assert.ok(!/\.from\("organization_members"\)/.test(route), "The route must not insert memberships itself.");
+    assert.deepEqual(granted, ["joined_at", "organization_id", "role", "status", "user_id"]);
   });
 });
 
