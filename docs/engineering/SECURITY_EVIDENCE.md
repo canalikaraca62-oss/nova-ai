@@ -48,6 +48,9 @@ B2-D2 and later are not started.
 - `supabase_auth_admin` INSERT on `profiles`, the anon/MAINTAIN privilege
   baseline and `handle_updated_at` PUBLIC EXECUTE. Owner: Batch 4.
 - Production `start_trial_on_email_confirmation()` ACL not measured.
+- Production Auth "Confirm email": **ON** (founder-verified read-only
+  2026-09-17, unchanged). Not an open finding; recorded because B2-D1 and
+  T-B2-1 depend on it.
 - Migration history not recorded on either project.
 
 ---
@@ -1584,6 +1587,24 @@ deferred until after B2-F.
 | D-B2D-2 | Existing sessions provision through `POST /api/account/provision`. `GET /api/workspaces` never provisions |
 | D-B2D-3 | Only B2-D1 now; B2-D2 register/confirm after B2-F |
 
+D-B2D-1, D-B2D-2 and D-B2D-3 were **APPROVED** by the founder (2026-09-17).
+
+**Production Auth "Confirm email" = ON** — verified read-only by the
+founder (2026-09-17); **no Auth setting was changed**. Consequences for
+B2-D1:
+
+- GoTrue refuses sign-in for an unconfirmed address, so login answers 401
+  with the shared credential message before provisioning is reached. The
+  403 path stays as the fail-closed answer for a `42501` from the
+  function itself (unconfirmed at the database, no identity, or no
+  EXECUTE).
+- The 2 unconfirmed production users (T-B2-1) cannot sign in at all until
+  they confirm; on their first sign-in after confirming they are
+  provisioned. No one-time provisioning is needed for them.
+- `provision_personal_account()` keeps its own
+  `email_confirmed_at` check: the Auth setting is a GoTrue configuration,
+  not a database guarantee, and PostgREST can be called directly.
+
 ### What changed (uncommitted)
 
 | File | Change |
@@ -1668,8 +1689,9 @@ own founder approval.
 ### Residual, recorded
 
 - The pre-existing `set-state-in-effect` lint error above.
-- Production Auth "Confirm email" setting is unmeasured; with it off,
-  unconfirmed users receive 403 at login after B2-D1.
+- Production Auth "Confirm email" is **ON** (founder-verified read-only,
+  2026-09-17, nothing changed): unconfirmed users are refused at sign-in
+  by GoTrue (401), so they never reach provisioning.
 - B2-D2 (register/confirm flow), B2-E, B2-F: not started.
 
 ### Status: B2-D1 PARTIAL (repository and TEST) — awaiting founder decision

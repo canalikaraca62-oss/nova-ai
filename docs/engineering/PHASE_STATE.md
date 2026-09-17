@@ -116,6 +116,7 @@ Open, not closed by the batches above:
 - D7 precedence and the dead trial helpers; B2-E.
 - `supabase_auth_admin` INSERT on `profiles`, the anon/MAINTAIN baseline and `handle_updated_at` PUBLIC EXECUTE; Batch 4.
 - Production `start_trial_on_email_confirmation()` ACL not measured.
+- Production Auth "Confirm email" is ON (founder-verified read-only 2026-09-17; no setting changed). B2-D1 decisions D-B2D-1/2/3 APPROVED. Unconfirmed users are refused by GoTrue at sign-in, so the 2 unconfirmed production users of T-B2-1 are provisioned on their first sign-in after confirming.
 - Migration history not recorded on either project.
 
 ## Phase history

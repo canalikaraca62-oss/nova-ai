@@ -84,6 +84,9 @@ pushed.
     (2026-09-17): login-time provisioning via B2-D; no one-time
     provisioning. Wiring implemented in B2-D1.
   - The register-flow findings (B2-D2, B2-F).
+  - Production Auth "Confirm email" is ON (founder-verified read-only
+    2026-09-17; unchanged), so unconfirmed users cannot sign in and are
+    provisioned on their first sign-in after confirming.
   - The Batch 4 privilege baseline.
 
 Nothing after `6f60179` is committed; nothing is pushed. Details:
