@@ -67,7 +67,13 @@ const ROUTE_FILES = findRouteFiles(API_DIR);
  */
 const PUBLIC_ROUTES: Record<string, string> = {
   "app/api/auth/register/route.ts":
-    "Account creation: the caller has no session yet by definition.",
+    "Account creation: the caller has no session yet by definition. Since " +
+    "Batch 2-D2 it uses the anon-key client and GoTrue signUp, creates no " +
+    "tenancy, and returns no session.",
+  "app/api/auth/confirm/route.ts":
+    "Email confirmation: the link is followed by a browser with no " +
+    "session. The route verifies a token GoTrue issued and grants nothing " +
+    "on its own; an absent, expired or forged token redirects to /login.",
   "app/api/billing/webhook/route.ts":
     "Stripe webhook: authenticated by request signature, not a user session.",
   "app/api/auth/login/route.ts":

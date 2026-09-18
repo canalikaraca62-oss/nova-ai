@@ -78,7 +78,8 @@ pushed.
 - **Applied on production by the founder:** Batch 1 (as the founder reported), B2-A and B2-A2.
 - **B2-B:** PASS on repository, TEST and **production** (founder-applied 2026-09-17; postcheck PASS). The B2-D1 deploy is no longer blocked by the database, but remains unapproved.
 - **B2-D1** (application provisioning): PARTIAL, founder-accepted, on repository/TEST (route-level check PASS 40/40; browser E2E BLOCKED). **Deployed to production 2026-09-18** (`7b3e612`, 88 commits pushed to `main`); post-deploy read-only verification **PASS** — one `account.provisioned` event correlated with the smoke test, tenancy integrity all 0, T-B2-1 now 5 of 7. The Vercel build log is NOT RECORDED here.
-- **Not started:** B2-D2 onwards.
+- **B2-D2** (registration through confirmed signup): **READY FOR FOUNDER ACCEPTANCE** on repository and TEST — not PASS. D15/D16 NOT VERIFIED / RESOURCE BLOCKED. Uncommitted; not deployable before B2-F2.
+- **Not started:** B2-E onwards.
 - **Open:**
   - T-B2-1: 6 of 7 production users have no owner membership. Decision
     (2026-09-17): login-time provisioning via B2-D; no one-time

@@ -37,6 +37,15 @@ const PUBLIC_API_ROUTES: readonly string[] = [
   "/api/auth/register",
 
   /*
+   * Email confirmation landing (Batch 2-D2) — the link in a confirmation
+   * email is followed by a browser that has no session: proving the
+   * address is what produces one. The route grants nothing on its own;
+   * it verifies a token GoTrue issued, and a wrong, expired or missing
+   * token redirects to /login with no session created.
+   */
+  "/api/auth/confirm",
+
+  /*
    * Sign in — likewise, the caller has no session; obtaining one is the
    * entire purpose of the request. Credentials are verified by Supabase
    * GoTrue inside the route, so "public" here means "no session

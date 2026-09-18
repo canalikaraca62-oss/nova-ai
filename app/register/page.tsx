@@ -1,9 +1,7 @@
 "use client";
 
-import type { FormEvent} from "react";
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import {
   ArrowRight,
   Check,
@@ -29,8 +27,6 @@ interface FormErrors {
 }
 
 export default function RegisterPage() {
-  const router = useRouter();
-
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -135,11 +131,12 @@ export default function RegisterPage() {
         );
       }
 
+      /*
+       * Batch 2-D2: registration no longer creates a session. The account
+       * is unconfirmed until the emailed link is followed, so navigating
+       * to /dashboard here would land on a page the caller cannot load.
+       */
       setIsSuccess(true);
-
-      window.setTimeout(() => {
-        router.push("/dashboard");
-      }, 1200);
     } catch (error) {
       setErrors({
         general:
@@ -663,15 +660,20 @@ function SuccessState() {
       </div>
 
       <h2 className="mt-7 text-3xl font-semibold tracking-tight text-foreground">
-        Welcome to SYRAVEN
+        Check your email
       </h2>
 
       <p className="mt-4 max-w-sm text-sm leading-6 text-muted-foreground">
-        Your account has been created successfully. Preparing your
-        intelligent workspace...
+        If the address can be registered, a confirmation link is on its
+        way. Follow it to activate your account, then sign in.
       </p>
 
-      <Loader2 className="mt-8 h-6 w-6 animate-spin text-primary" />
+      <Link
+        href="/login"
+        className="mt-8 text-sm font-medium text-primary underline-offset-4 hover:underline"
+      >
+        Go to sign in
+      </Link>
     </div>
   );
 }

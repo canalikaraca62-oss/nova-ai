@@ -2,37 +2,70 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import { z } from "zod";
-import crypto from "node:crypto";
 
 /*
-  SERVICE ROLE CLIENT — justification (ARCHITECTURE_AUDIT.md §8.6)
+  SYRAVEN — Registration (Phase 3, Batch 2-D2)
 
-  Registration necessarily runs with elevated privileges: it creates the
-  auth user and provisions the owning organization before any session
-  exists, so there is no caller identity for RLS to evaluate.
+  WHAT CHANGED AND WHY
 
-  This route is intentionally public (see middleware.ts) and is the one
-  place where an unauthenticated caller reaches the admin client.
+  This route used to call `admin.auth.admin.createUser(..., email_confirm:
+  true)` with the SERVICE ROLE, then insert an organization, an owner
+  membership, a workspace and an audit row in four non-atomic steps, with
+  best-effort compensating deletes, and finally sign the user in.
 
-  Note the compensating delete further down: if organization provisioning
-  fails after the auth user is created, the user is removed so a partial
-  signup is not left behind.
+  Every part of that was a defect:
+
+    - `email_confirm: true` created users who were ALREADY confirmed, so
+      no confirmation email was ever sent and the address was never
+      proven. It also skipped the `email_confirmed_at` transition, which
+      is what starts the 14-day trial (20260917120000), so registered
+      users silently got no trial.
+    - The four inserts could half-succeed. A failure between them left an
+      organization its owner could not use, and the compensating delete
+      could itself fail.
+    - It was a SECOND tenancy authority, competing with
+      `provision_personal_account()` (20260917130000), which is atomic,
+      safe to repeat and refuses unconfirmed users.
+    - Registration was the one public route holding the RLS-bypassing
+      client.
+
+  NOW: this route only asks GoTrue to create an unconfirmed user and send
+  a confirmation email. It writes NOTHING itself.
+
+    profile        public.handle_new_user() on auth.users insert
+                   (20260918120000) — one row, plan 'free', inactive
+    trial          public.start_trial_on_email_confirmation() on the
+                   email_confirmed_at transition (20260917120000)
+    organization   provision_personal_account() through
+    + workspace    lib/tenancy/personalAccount, at confirmation
+                   (/api/auth/confirm) or at login (/api/auth/login)
+
+  NO SERVICE ROLE. The anon-key client is used, exactly as the login
+  route does, so this route can no longer bypass RLS at all. It is public
+  by necessity (middleware.ts): a caller creating an account has no
+  session by definition.
+
+  CLIENT-SUPPLIED METADATA IS NOT TRUSTED
+
+  Only the display name is forwarded. The old route copied plan,
+  account_status, trial_active, trial_started_at, trial_ends_at and
+  permanent_free_tier into user metadata; `handle_new_user()` ignores all
+  of it (proven in B2-A2, D10 proofs 1-7), but sending it invited the
+  belief that metadata decides entitlements. It does not, and now nothing
+  in the request even reaches those fields.
+
+  ACCOUNT ENUMERATION
+
+  The reply is the SAME for a new address and one already registered.
+  The old route returned 409 "An account with this email already exists",
+  which let anyone test an address without a password. GoTrue itself
+  sends the "someone tried to register your address" mail in that case;
+  the API says nothing.
 */
-import {
-  getSupabaseAdminClient,
-} from "@/lib/supabaseAdmin";
-
-/* -------------------------------------------------------------------------- */
-/* CONFIGURATION                                                              */
-/* -------------------------------------------------------------------------- */
 
 export const runtime = "nodejs";
 
 export const dynamic = "force-dynamic";
-
-const DEFAULT_PLAN = "free" as const;
-
-const TRIAL_DURATION_DAYS = 14;
 
 const MAX_BODY_BYTES = 32 * 1024;
 
@@ -46,6 +79,15 @@ const MAX_NAME_LENGTH = 100;
 
 const MAX_EMAIL_LENGTH = 320;
 
+/**
+ * The single reply for every accepted registration attempt.
+ *
+ * It states what the user must do next and reveals nothing about whether
+ * the address was already registered.
+ */
+const CHECK_YOUR_EMAIL =
+  "Check your email. If the address can be registered, a confirmation link is on its way.";
+
 /* -------------------------------------------------------------------------- */
 /* VALIDATION                                                                 */
 /* -------------------------------------------------------------------------- */
@@ -54,26 +96,15 @@ const registerSchema = z.object({
   name: z
     .string()
     .trim()
-    .min(
-      MIN_NAME_LENGTH,
-      "Your name must contain at least 2 characters.",
-    )
-    .max(
-      MAX_NAME_LENGTH,
-      "Your name is too long.",
-    ),
+    .min(MIN_NAME_LENGTH, "Your name must contain at least 2 characters.")
+    .max(MAX_NAME_LENGTH, "Your name is too long."),
 
   email: z
     .string()
     .trim()
     .toLowerCase()
-    .email(
-      "Please enter a valid email address.",
-    )
-    .max(
-      MAX_EMAIL_LENGTH,
-      "Email address is too long.",
-    ),
+    .email("Please enter a valid email address.")
+    .max(MAX_EMAIL_LENGTH, "Email address is too long."),
 
   password: z
     .string()
@@ -81,77 +112,34 @@ const registerSchema = z.object({
       MIN_PASSWORD_LENGTH,
       "Your password must contain at least 8 characters.",
     )
-    .max(
-      MAX_PASSWORD_LENGTH,
-      "Your password is too long.",
-    ),
+    .max(MAX_PASSWORD_LENGTH, "Your password is too long."),
 });
 
-/* -------------------------------------------------------------------------- */
-/* TYPES                                                                      */
-/* -------------------------------------------------------------------------- */
-
-type RegisterInput = z.infer<
-  typeof registerSchema
->;
-
-interface CreatedResources {
-  userId: string | null;
-  organizationId: string | null;
-  workspaceId: string | null;
-}
+type RegisterInput = z.infer<typeof registerSchema>;
 
 /* -------------------------------------------------------------------------- */
 /* POST                                                                       */
 /* -------------------------------------------------------------------------- */
 
-export async function POST(
-  request: Request,
-) {
-  const resources: CreatedResources = {
-    userId: null,
-    organizationId: null,
-    workspaceId: null,
-  };
-
+export async function POST(request: Request) {
   try {
     /* ---------------------------------------------------------------------- */
     /* REQUEST SAFETY                                                         */
     /* ---------------------------------------------------------------------- */
 
-    const contentLength =
-      request.headers.get(
-        "content-length",
-      );
+    const contentLength = request.headers.get("content-length");
 
-    if (
-      contentLength &&
-      Number(contentLength) >
-        MAX_BODY_BYTES
-    ) {
-      return jsonError(
-        "Request body is too large.",
-        413,
-      );
+    if (contentLength && Number(contentLength) > MAX_BODY_BYTES) {
+      return jsonError("Request body is too large.", 413);
     }
 
-    const contentType =
-      request.headers.get(
-        "content-type",
-      );
+    const contentType = request.headers.get("content-type");
 
     if (
       contentType &&
-      !contentType
-        .toLowerCase()
-        .startsWith(
-          "application/json",
-        )
+      !contentType.toLowerCase().startsWith("application/json")
     ) {
-      return jsonError(
-        "Request must use application/json.",
-        415,
-      );
+      return jsonError("Request must use application/json.", 415);
     }
 
     /* ---------------------------------------------------------------------- */
@@ -163,765 +151,167 @@ export async function POST(
     try {
       body = await request.json();
     } catch {
-      return jsonError(
-        "Invalid JSON request body.",
-        400,
-      );
+      return jsonError("Invalid JSON request body.", 400);
     }
 
-    const parsed =
-      registerSchema.safeParse(body);
+    const parsed = registerSchema.safeParse(body);
 
     if (!parsed.success) {
-      const firstIssue =
-        parsed.error.issues[0];
+      const firstIssue = parsed.error.issues[0];
 
       return jsonError(
-        firstIssue?.message ??
-          "Invalid registration data.",
+        firstIssue?.message ?? "Invalid registration data.",
         400,
       );
     }
 
-    const input: RegisterInput =
-      parsed.data;
+    const input: RegisterInput = parsed.data;
 
-    /* ---------------------------------------------------------------------- */
-    /* PASSWORD QUALITY                                                       */
-    /* ---------------------------------------------------------------------- */
-
-    const passwordError =
-      validatePassword(
-        input.password,
-      );
+    const passwordError = validatePassword(input.password);
 
     if (passwordError) {
-      return jsonError(
-        passwordError,
-        400,
-      );
+      return jsonError(passwordError, 400);
     }
 
     /* ---------------------------------------------------------------------- */
     /* ENVIRONMENT                                                            */
     /* ---------------------------------------------------------------------- */
 
-    const supabaseUrl =
-      process.env
-        .NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 
     const supabaseAnonKey =
-      process.env
-        .NEXT_PUBLIC_SUPABASE_ANON_KEY;
+      process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-    if (
-      !supabaseUrl ||
-      !supabaseAnonKey
-    ) {
-      console.error(
-        "[REGISTER] Supabase public configuration is missing.",
-      );
+    if (!supabaseUrl || !supabaseAnonKey) {
+      console.error("[REGISTER] Supabase public configuration is missing.");
 
       return jsonError(
         "Authentication service is not configured correctly.",
-        500,
+        503,
       );
     }
 
-    /* ---------------------------------------------------------------------- */
-    /* ADMIN CLIENT                                                           */
-    /* ---------------------------------------------------------------------- */
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL;
 
-    const admin =
-      getSupabaseAdminClient();
-
-    /* ---------------------------------------------------------------------- */
-    /* NORMALIZE DATA                                                         */
-    /* ---------------------------------------------------------------------- */
-
-    const normalizedEmail =
-      normalizeEmail(
-        input.email,
-      );
-
-    const normalizedName =
-      normalizeName(
-        input.name,
-      );
-
-    const now =
-      new Date();
-
-    const trialStartedAt =
-      now.toISOString();
-
-    const trialEndsAt =
-      getTrialEndDate(
-        now,
-      ).toISOString();
-
-    const userMetadata = {
-      full_name:
-        normalizedName,
-
-      name:
-        normalizedName,
-
-      plan:
-        DEFAULT_PLAN,
-
-      account_plan:
-        DEFAULT_PLAN,
-
-      account_status:
-        "trial",
-
-      trial_enabled:
-        true,
-
-      trial_active:
-        true,
-
-      trial_started_at:
-        trialStartedAt,
-
-      trial_ends_at:
-        trialEndsAt,
-
-      trial_duration_days:
-        TRIAL_DURATION_DAYS,
-
-      trial_auto_convert:
-        false,
-
-      permanent_free_tier:
-        true,
-
-      onboarding_completed:
-        false,
-
-      created_via:
-        "web_registration",
-
-      registration_version:
-        "v1",
-    };
-
-    /* ---------------------------------------------------------------------- */
-    /* CREATE AUTH USER                                                       */
-    /* ---------------------------------------------------------------------- */
-
-    const {
-      data: authData,
-      error: authError,
-    } =
-      await admin.auth.admin.createUser(
-        {
-          email:
-            normalizedEmail,
-
-          password:
-            input.password,
-
-          email_confirm:
-            true,
-
-          user_metadata:
-            userMetadata,
-        },
-      );
-
-    if (authError) {
-      console.error(
-        "[REGISTER] Auth user creation failed:",
-        sanitizeSupabaseError(
-          authError,
-        ),
-      );
-
-      return mapAuthRegistrationError(
-        authError,
-      );
-    }
-
-    const user =
-      authData.user;
-
-    if (!user?.id) {
-      console.error(
-        "[REGISTER] Supabase returned no user after creation.",
-      );
-
-      return jsonError(
-        "Unable to create your account.",
-        500,
-      );
-    }
-
-    resources.userId =
-      user.id;
-
-    /* ---------------------------------------------------------------------- */
-    /* ORGANIZATION                                                          */
-    /* ---------------------------------------------------------------------- */
-
-    const organizationName =
-      buildOrganizationName(
-        normalizedName,
-      );
-
-    const organizationSlug =
-      buildUniqueSlug(
-        normalizedName,
-      );
-
-    const organizationMetadata =
-      {
-        created_via:
-          "web_registration",
-
-        owner_user_id:
-          user.id,
-
-        plan:
-          DEFAULT_PLAN,
-
-        account_status:
-          "trial",
-
-        trial_enabled:
-          true,
-
-        trial_active:
-          true,
-
-        trial_started_at:
-          trialStartedAt,
-
-        trial_ends_at:
-          trialEndsAt,
-
-        trial_duration_days:
-          TRIAL_DURATION_DAYS,
-
-        trial_auto_convert:
-          false,
-
-        permanent_free_tier:
-          true,
-
-        onboarding_completed:
-          false,
-      };
-
-    const {
-      data:
-        organization,
-      error:
-        organizationError,
-    } =
-      await admin
-        .from(
-          "organizations",
-        )
-        .insert({
-          name:
-            organizationName,
-
-          slug:
-            organizationSlug,
-
-          description:
-            "SYRAVEN workspace",
-
-          plan:
-            DEFAULT_PLAN,
-
-          status:
-            "active",
-
-          owner_id:
-            user.id,
-
-          metadata:
-            organizationMetadata,
-        })
-        .select(
-          "id",
-        )
-        .single();
-
-    if (
-      organizationError ||
-      !organization?.id
-    ) {
-      console.error(
-        "[REGISTER] Organization creation failed:",
-        sanitizeSupabaseError(
-          organizationError,
-        ),
-      );
-
-      await cleanupRegistration(
-        admin,
-        resources,
-      );
-
-      return jsonError(
-        "Unable to initialize your workspace.",
-        500,
-      );
-    }
-
-    resources.organizationId =
-      organization.id;
-
-    /* ---------------------------------------------------------------------- */
-    /* ORGANIZATION MEMBERSHIP                                                */
-    /* ---------------------------------------------------------------------- */
-
-    const {
-      error:
-        membershipError,
-    } =
-      await admin
-        .from(
-          "organization_members",
-        )
-        .insert({
-          organization_id:
-            organization.id,
-
-          user_id:
-            user.id,
-
-          role:
-            "owner",
-
-          status:
-            "active",
-
-          joined_at:
-            now.toISOString(),
-        });
-
-    if (membershipError) {
-      console.error(
-        "[REGISTER] Organization membership creation failed:",
-        sanitizeSupabaseError(
-          membershipError,
-        ),
-      );
-
-      await cleanupRegistration(
-        admin,
-        resources,
-      );
-
-      return jsonError(
-        "Unable to initialize your account membership.",
-        500,
-      );
-    }
-
-    /* ---------------------------------------------------------------------- */
-    /* WORKSPACE                                                              */
-    /* ---------------------------------------------------------------------- */
-
-    const workspaceName =
-      `${normalizedName}'s Workspace`;
-
-    const workspaceSlug =
-      buildWorkspaceSlug(
-        normalizedName,
-      );
-
-    const {
-      data:
-        workspace,
-      error:
-        workspaceError,
-    } =
-      await admin
-        .from(
-          "workspaces",
-        )
-        .insert({
-          organization_id:
-            organization.id,
-
-          name:
-            workspaceName,
-
-          slug:
-            workspaceSlug,
-
-          description:
-            "Your personal SYRAVEN workspace.",
-
-          created_by:
-            user.id,
-
-          metadata: {
-            created_via:
-              "web_registration",
-
-            owner_user_id:
-              user.id,
-
-            plan:
-              DEFAULT_PLAN,
-
-            account_status:
-              "trial",
-
-            trial_started_at:
-              trialStartedAt,
-
-            trial_ends_at:
-              trialEndsAt,
-
-            trial_auto_convert:
-              false,
-          },
-        })
-        .select(
-          "id",
-        )
-        .single();
-
-    if (
-      workspaceError ||
-      !workspace?.id
-    ) {
-      console.error(
-        "[REGISTER] Workspace creation failed:",
-        sanitizeSupabaseError(
-          workspaceError,
-        ),
-      );
-
-      await cleanupRegistration(
-        admin,
-        resources,
-      );
-
-      return jsonError(
-        "Unable to create your workspace.",
-        500,
-      );
-    }
-
-    resources.workspaceId =
-      workspace.id;
-
-    /* ---------------------------------------------------------------------- */
-    /* AUDIT LOG                                                              */
-    /* ---------------------------------------------------------------------- */
-
-    const {
-      error:
-        auditError,
-    } =
-      await admin
-        .from(
-          "audit_logs",
-        )
-        .insert({
-          organization_id:
-            organization.id,
-
-          workspace_id:
-            workspace.id,
-
-          user_id:
-            user.id,
-
-          action:
-            "account.created",
-
-          resource_type:
-            "user",
-
-          resource_id:
-            user.id,
-
-          description:
-            "User account, organization and workspace created.",
-
-          metadata: {
-            registration_method:
-              "email_password",
-
-            plan:
-              DEFAULT_PLAN,
-
-            trial:
-              true,
-
-            trial_duration_days:
-              TRIAL_DURATION_DAYS,
-
-            trial_started_at:
-              trialStartedAt,
-
-            trial_ends_at:
-              trialEndsAt,
-          },
-        });
-
-    if (auditError) {
+    if (!appUrl) {
       /*
-       * Audit logging should not make an otherwise valid account unusable.
-       * We log the failure and continue.
+       * FAIL CLOSED. Without an absolute origin the confirmation link has
+       * no destination, so the account would be created and never be
+       * confirmable. Better to refuse than to strand a user.
        */
-      console.error(
-        "[REGISTER] Audit log creation failed:",
-        sanitizeSupabaseError(
-          auditError,
-        ),
+      console.error("[REGISTER] NEXT_PUBLIC_APP_URL is not configured.");
+
+      return jsonError(
+        "Registration is temporarily unavailable. Please try again later.",
+        503,
       );
     }
 
     /* ---------------------------------------------------------------------- */
-    /* CREATE AUTH SESSION                                                    */
+    /* SIGN UP                                                                */
     /* ---------------------------------------------------------------------- */
 
-    const cookieStore =
-      await cookies();
-
-    const supabase =
-      createServerClient(
-        supabaseUrl,
-        supabaseAnonKey,
-        {
-          cookies: {
-            getAll() {
-              return cookieStore.getAll();
-            },
-
-            setAll(
-              cookiesToSet,
-            ) {
-              try {
-                for (
-                  const {
-                    name,
-                    value,
-                    options,
-                  } of cookiesToSet
-                ) {
-                  cookieStore.set(
-                    name,
-                    value,
-                    options,
-                  );
-                }
-              } catch {
-                /*
-                 * Route handlers can normally mutate cookies.
-                 * If a framework/runtime restriction prevents it,
-                 * Supabase authentication still remains valid and
-                 * the client can authenticate again through login.
-                 */
-              }
-            },
-          },
-        },
-      );
-
-    const {
-      data:
-        sessionData,
-      error:
-        sessionError,
-    } =
-      await supabase.auth.signInWithPassword(
-        {
-          email:
-            normalizedEmail,
-
-          password:
-            input.password,
-        },
-      );
-
-    if (
-      sessionError ||
-      !sessionData.session
-    ) {
-      console.error(
-        "[REGISTER] Automatic session creation failed:",
-        sanitizeSupabaseError(
-          sessionError,
-        ),
-      );
-
-      /*
-       * The account itself is already valid.
-       * We intentionally do NOT delete it here.
-       *
-       * The frontend can redirect the user to login if necessary.
-       */
-      return jsonSuccess({
-        authenticated:
-          false,
-
-        user: {
-          id:
-            user.id,
-
-          email:
-            normalizedEmail,
-
-          name:
-            normalizedName,
-        },
-
-        organization: {
-          id:
-            organization.id,
-
-          name:
-            organizationName,
-
-          slug:
-            organizationSlug,
-        },
-
-        workspace: {
-          id:
-            workspace.id,
-
-          name:
-            workspaceName,
-
-          slug:
-            workspaceSlug,
-        },
-
-        subscription: {
-          plan:
-            DEFAULT_PLAN,
-
-          status:
-            "trial",
-
-          trialActive:
-            true,
-
-          trialStartedAt,
-
-          trialEndsAt,
-
-          trialDurationDays:
-            TRIAL_DURATION_DAYS,
-
-          autoConvertToPaid:
-            false,
-        },
-
-        message:
-          "Account created successfully. Please sign in to continue.",
-      });
-    }
-
-    /* ---------------------------------------------------------------------- */
-    /* SUCCESS                                                                */
-    /* ---------------------------------------------------------------------- */
-
-    return jsonSuccess({
-      authenticated:
-        true,
-
-      user: {
-        id:
-          user.id,
-
-        email:
-          normalizedEmail,
-
-        name:
-          normalizedName,
-      },
-
-      organization: {
-        id:
-          organization.id,
-
-        name:
-          organizationName,
-
-        slug:
-          organizationSlug,
-
-        role:
-          "owner",
-      },
-
-      workspace: {
-        id:
-          workspace.id,
-
-        name:
-          workspaceName,
-
-        slug:
-          workspaceSlug,
-      },
-
-      subscription: {
-        plan:
-          DEFAULT_PLAN,
-
-        status:
-          "trial",
-
-        trialActive:
-          true,
-
-        trialStartedAt,
-
-        trialEndsAt,
-
-        trialDurationDays:
-          TRIAL_DURATION_DAYS,
-
-        autoConvertToPaid:
-          false,
-
-        permanentFreeTier:
-          true,
-      },
-
-      message:
-        "Account created successfully.",
-    });
-  } catch (error) {
-    console.error(
-      "[REGISTER] Unexpected registration error:",
-      error,
-    );
+    const cookieStore = await cookies();
 
     /*
-     * Only cleanup resources that we know were created.
-     * This is best-effort because the failure may happen after
-     * one or more successful database operations.
+     * The anon-key client, cookie-backed, as in the login route. The
+     * cookie writer matters even though sign-up issues no session: the
+     * PKCE code verifier is stored here, and /api/auth/confirm needs it
+     * when GoTrue returns a `code` rather than a `token_hash`.
      */
-    try {
-      const admin =
-        getSupabaseAdminClient();
+    const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll();
+        },
 
-      await cleanupRegistration(
-        admin,
-        resources,
-      );
-    } catch (cleanupError) {
-      console.error(
-        "[REGISTER] Cleanup failed:",
-        cleanupError,
-      );
+        setAll(cookiesToSet) {
+          try {
+            for (const { name, value, options } of cookiesToSet) {
+              cookieStore.set(name, value, options);
+            }
+          } catch {
+            /*
+             * A runtime restriction on cookie writes does not invalidate
+             * the sign-up; the token_hash confirmation path needs no
+             * cookie at all.
+             */
+          }
+        },
+      },
+    });
+
+    const { error } = await supabase.auth.signUp({
+      email: input.email,
+      password: input.password,
+
+      options: {
+        /*
+         * WHITELIST. Only the display name travels. Nothing here grants
+         * a plan, a trial, a role or a tenant: handle_new_user() reads
+         * none of it.
+         */
+        data: {
+          full_name: normalizeName(input.name),
+          name: normalizeName(input.name),
+        },
+
+        emailRedirectTo: `${appUrl.replace(/\/$/, "")}/api/auth/confirm`,
+      },
+    });
+
+    if (error) {
+      /*
+       * Logged, never returned. GoTrue distinguishes "already
+       * registered" from a genuine fault, and forwarding that
+       * distinction is the enumeration oracle this route must not be.
+       *
+       * The address is not logged either: a log of registration attempts
+       * is a list of real email addresses.
+       */
+      console.error("[REGISTER] Sign-up rejected.", {
+        status: error.status ?? null,
+        name: error.name,
+      });
+
+      /*
+       * A provider fault (5xx) is reported as temporarily unavailable so
+       * a caller can tell "try again" from "your input was wrong". Rate
+       * limiting (429) is passed through as such.
+       */
+      if (typeof error.status === "number" && error.status >= 500) {
+        return jsonError(
+          "Registration is temporarily unavailable. Please try again later.",
+          503,
+        );
+      }
+
+      if (error.status === 429) {
+        return jsonError(
+          "Too many attempts. Please wait a moment and try again.",
+          429,
+        );
+      }
+
+      /*
+       * Everything else — including "already registered" — answers with
+       * the SAME body as success. The caller learns nothing about the
+       * address.
+       */
+      return jsonSuccess();
     }
+
+    /*
+     * No session is returned and none is created: the account is
+     * unconfirmed until the link is followed. `data.user` is deliberately
+     * not inspected — with confirmations enabled GoTrue returns an
+     * obfuscated user for an address that already exists, and reading it
+     * would re-introduce the oracle.
+     */
+    return jsonSuccess();
+  } catch (error) {
+    console.error("[REGISTER] Unexpected registration error:", error);
 
     return jsonError(
       "Unable to create your account right now. Please try again.",
@@ -934,401 +324,57 @@ export async function POST(
 /* HELPERS                                                                    */
 /* -------------------------------------------------------------------------- */
 
-function normalizeEmail(
-  email: string,
-): string {
-  return email
-    .trim()
-    .toLowerCase();
+function normalizeName(name: string): string {
+  return name.trim().replace(/\s+/g, " ");
 }
 
-function normalizeName(
-  name: string,
-): string {
-  return name
-    .trim()
-    .replace(
-      /\s+/g,
-      " ",
-    );
-}
-
-function validatePassword(
-  password: string,
-): string | null {
-  if (
-    password.length <
-    MIN_PASSWORD_LENGTH
-  ) {
+function validatePassword(password: string): string | null {
+  if (password.length < MIN_PASSWORD_LENGTH) {
     return `Your password must contain at least ${MIN_PASSWORD_LENGTH} characters.`;
   }
 
-  if (
-    password.length >
-    MAX_PASSWORD_LENGTH
-  ) {
+  if (password.length > MAX_PASSWORD_LENGTH) {
     return `Your password must contain fewer than ${MAX_PASSWORD_LENGTH + 1} characters.`;
   }
 
   /*
-   * Keep this compatible with the current registration UI:
-   * minimum length is mandatory while uppercase/number are encouraged
-   * by the frontend strength indicator.
+   * Length only, as before: the registration UI encourages uppercase and
+   * digits through its strength indicator, and GoTrue enforces the
+   * project's own policy.
    */
   return null;
-}
-
-function getTrialEndDate(
-  start: Date,
-): Date {
-  const end =
-    new Date(
-      start.getTime(),
-    );
-
-  end.setUTCDate(
-    end.getUTCDate() +
-      TRIAL_DURATION_DAYS,
-  );
-
-  return end;
-}
-
-function buildOrganizationName(
-  name: string,
-): string {
-  const firstName =
-    name
-      .split(" ")
-      .filter(Boolean)[0] ??
-      "My";
-
-  return `${firstName}'s Organization`;
-}
-
-function buildUniqueSlug(
-  name: string,
-): string {
-  const base =
-    slugify(name) ||
-    "organization";
-
-  const suffix =
-    crypto
-      .randomUUID()
-      .replace(
-        /-/g,
-        "",
-      )
-      .slice(
-        0,
-        10,
-      );
-
-  return `${base}-${suffix}`;
-}
-
-function buildWorkspaceSlug(
-  name: string,
-): string {
-  const base =
-    slugify(name) ||
-    "workspace";
-
-  const suffix =
-    crypto
-      .randomUUID()
-      .replace(
-        /-/g,
-        "",
-      )
-      .slice(
-        0,
-        10,
-      );
-
-  return `${base}-workspace-${suffix}`;
-}
-
-function slugify(
-  value: string,
-): string {
-  return value
-    .normalize("NFKD")
-    .replace(
-      /[\u0300-\u036f]/g,
-      "",
-    )
-    .toLowerCase()
-    .replace(
-      /[^a-z0-9]+/g,
-      "-",
-    )
-    .replace(
-      /^-+|-+$/g,
-      "",
-    )
-    .slice(
-      0,
-      60,
-    );
-}
-
-/* -------------------------------------------------------------------------- */
-/* CLEANUP                                                                    */
-/* -------------------------------------------------------------------------- */
-
-async function cleanupRegistration(
-  admin: ReturnType<
-    typeof getSupabaseAdminClient
-  >,
-  resources: CreatedResources,
-): Promise<void> {
-  /*
-   * Delete children first.
-   *
-   * organizations.owner_id references auth.users with ON DELETE RESTRICT,
-   * so organization must be deleted before the auth user.
-   */
-
-  if (
-    resources.workspaceId
-  ) {
-    const {
-      error,
-    } =
-      await admin
-        .from(
-          "workspaces",
-        )
-        .delete()
-        .eq(
-          "id",
-          resources.workspaceId,
-        );
-
-    if (error) {
-      console.error(
-        "[REGISTER] Workspace cleanup failed:",
-        sanitizeSupabaseError(
-          error,
-        ),
-      );
-    }
-  }
-
-  if (
-    resources.organizationId
-  ) {
-    const {
-      error,
-    } =
-      await admin
-        .from(
-          "organizations",
-        )
-        .delete()
-        .eq(
-          "id",
-          resources.organizationId,
-        );
-
-    if (error) {
-      console.error(
-        "[REGISTER] Organization cleanup failed:",
-        sanitizeSupabaseError(
-          error,
-        ),
-      );
-    }
-  }
-
-  if (
-    resources.userId
-  ) {
-    try {
-      const {
-        error,
-      } =
-        await admin.auth.admin.deleteUser(
-          resources.userId,
-        );
-
-      if (error) {
-        console.error(
-          "[REGISTER] Auth user cleanup failed:",
-          sanitizeSupabaseError(
-            error,
-          ),
-        );
-      }
-    } catch (error) {
-      console.error(
-        "[REGISTER] Auth cleanup exception:",
-        error,
-      );
-    }
-  }
-}
-
-/* -------------------------------------------------------------------------- */
-/* ERROR HANDLING                                                             */
-/* -------------------------------------------------------------------------- */
-
-function mapAuthRegistrationError(
-  error: unknown,
-): NextResponse {
-  const message =
-    getErrorMessage(
-      error,
-    );
-
-  const normalized =
-    message.toLowerCase();
-
-  /*
-   * Do not reveal unnecessary internal
-   * Supabase implementation details.
-   */
-
-  if (
-    normalized.includes(
-      "already registered",
-    ) ||
-    normalized.includes(
-      "already exists",
-    ) ||
-    normalized.includes(
-      "user already",
-    ) ||
-    normalized.includes(
-      "duplicate",
-    )
-  ) {
-    return jsonError(
-      "An account with this email already exists. Please sign in instead.",
-      409,
-    );
-  }
-
-  if (
-    normalized.includes(
-      "password",
-    )
-  ) {
-    return jsonError(
-      "The password does not meet the authentication requirements.",
-      400,
-    );
-  }
-
-  if (
-    normalized.includes(
-      "email",
-    )
-  ) {
-    return jsonError(
-      "Please provide a valid email address.",
-      400,
-    );
-  }
-
-  console.error(
-    "[REGISTER] Supabase authentication error:",
-    sanitizeSupabaseError(
-      error,
-    ),
-  );
-
-  return jsonError(
-    "Unable to create your account. Please try again.",
-    500,
-  );
-}
-
-function getErrorMessage(
-  error: unknown,
-): string {
-  if (
-    error instanceof Error
-  ) {
-    return error.message;
-  }
-
-  if (
-    typeof error ===
-    "object" &&
-    error !== null &&
-    "message" in error
-  ) {
-    const message =
-      (
-        error as {
-          message?: unknown;
-        }
-      ).message;
-
-    if (
-      typeof message ===
-      "string"
-    ) {
-      return message;
-    }
-  }
-
-  return "Unknown error";
-}
-
-function sanitizeSupabaseError(
-  error: unknown,
-): {
-  message: string;
-} | null {
-  if (!error) {
-    return null;
-  }
-
-  return {
-    message:
-      getErrorMessage(
-        error,
-      ),
-  };
 }
 
 /* -------------------------------------------------------------------------- */
 /* RESPONSE HELPERS                                                           */
 /* -------------------------------------------------------------------------- */
 
-function jsonSuccess(
-  data: Record<
-    string,
-    unknown
-  >,
-) {
+/**
+ * The single success shape.
+ *
+ * No user id, no email, no organization, no workspace, no trial dates:
+ * nothing exists yet but an unconfirmed auth user, and echoing an id
+ * would leak whether the address was already taken.
+ */
+function jsonSuccess() {
   return NextResponse.json(
     {
       success: true,
-      ...data,
+      confirmationRequired: true,
+      message: CHECK_YOUR_EMAIL,
     },
     {
-      status: 201,
+      status: 202,
 
       headers: {
-        "Cache-Control":
-          "no-store, max-age=0",
-
-        "X-Content-Type-Options":
-          "nosniff",
+        "Cache-Control": "no-store, max-age=0",
+        "X-Content-Type-Options": "nosniff",
       },
     },
   );
 }
 
-function jsonError(
-  message: string,
-  status: number,
-) {
+function jsonError(message: string, status: number) {
   return NextResponse.json(
     {
       success: false,
@@ -1338,11 +384,8 @@ function jsonError(
       status,
 
       headers: {
-        "Cache-Control":
-          "no-store, max-age=0",
-
-        "X-Content-Type-Options":
-          "nosniff",
+        "Cache-Control": "no-store, max-age=0",
+        "X-Content-Type-Options": "nosniff",
       },
     },
   );

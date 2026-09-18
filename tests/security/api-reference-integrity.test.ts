@@ -439,6 +439,7 @@ void describe("The login route is safe by construction", () => {
     assert.deepEqual(
       routes,
       [
+        '"/api/auth/confirm"',
         '"/api/auth/login"',
         '"/api/auth/logout"',
         '"/api/auth/register"',

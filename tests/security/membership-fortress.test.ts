@@ -592,11 +592,30 @@ void describe("D. a workspace delete never destroys or detaches another user's d
 /* -------------------------------------------------------------------------- */
 
 void describe("E. legitimate paths keep working", () => {
-  void test("registration still provisions its owner membership through the service role", () => {
+  void test("registration writes no membership at all (Batch 2-D2)", () => {
+    /*
+     * Batch 1 pinned the opposite: registration created the owner
+     * membership itself, with the service role. Batch 2-D2 removed that
+     * whole path. Registration now only asks GoTrue for an unconfirmed
+     * user; the owner membership is created by provision_personal_account(),
+     * atomically, bound to auth.uid(), after the address is proven.
+     *
+     * The question this test asks is unchanged — does the owner membership
+     * come from one trusted authority? — but the answer moved into SQL.
+     */
     const register = read("app", "api", "auth", "register", "route.ts");
 
-    assert.match(register, /admin\s*\.from\(\s*"organization_members",?\s*\)\s*\.insert\(/);
-    assert.match(register, /role:\s*"owner"/);
+    assert.ok(
+      !/\.from\(\s*"organization_members",?\s*\)/.test(register),
+      "Registration must not write memberships.",
+    );
+
+    assert.ok(
+      !/supabaseAdmin|getSupabaseAdminClient/.test(register),
+      "Registration must not hold the RLS-bypassing client.",
+    );
+
+    assert.match(register, /supabase\.auth\.signUp\(/);
   });
 
   void test("the owner self-membership policy is still in force", () => {

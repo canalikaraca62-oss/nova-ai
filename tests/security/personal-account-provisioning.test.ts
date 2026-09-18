@@ -59,6 +59,8 @@ const HELPER = "lib/tenancy/personalAccount.ts";
 const LOGIN = "app/api/auth/login/route.ts";
 const PROVISION = "app/api/account/provision/route.ts";
 const WORKSPACES = "app/api/workspaces/route.ts";
+/* Batch 2-D2 added the fourth caller: the email-confirmation landing. */
+const CONFIRM = "app/api/auth/confirm/route.ts";
 const CONTEXT = "app/context/WorkspaceContext.tsx";
 
 const code = (file: string) => stripComments(read(file));
@@ -141,7 +143,7 @@ void describe("provision_personal_account() has exactly one application caller",
   void test("the helper is server-only and never uses the service role", () => {
     assert.match(code(HELPER), /^import "server-only";$/m);
 
-    for (const file of [HELPER, LOGIN, PROVISION, WORKSPACES]) {
+    for (const file of [HELPER, LOGIN, PROVISION, WORKSPACES, CONFIRM]) {
       assert.ok(
         !/supabaseAdmin|getSupabaseAdminClient|SUPABASE_SERVICE_ROLE|SUPABASE_SECRET_KEY|service_role/.test(code(file)),
         `${file} must provision on the caller's RLS client.`,
@@ -160,10 +162,16 @@ void describe("provision_personal_account() has exactly one application caller",
     assert.match(helper, /catch \{[\s\S]*?return \{ ok: false, reason: "UNAVAILABLE" \};/);
   });
 
-  void test("exactly three files call ensurePersonalAccount, each with its own RLS client", () => {
+  void test("exactly four files call ensurePersonalAccount, each with its own RLS client", () => {
+    /*
+     * Batch 2-D1 pinned three callers. Batch 2-D2 added /api/auth/confirm,
+     * which provisions on the session that email confirmation produced,
+     * through the same helper and with no identity passed. The count is
+     * pinned so a fifth caller cannot appear unnoticed.
+     */
     const callers = APP_FILES.filter((file) => file !== HELPER && /ensurePersonalAccount\(/.test(code(file))).sort();
 
-    assert.deepEqual(callers, [PROVISION, LOGIN, WORKSPACES].sort());
+    assert.deepEqual(callers, [PROVISION, LOGIN, WORKSPACES, CONFIRM].sort());
 
     for (const file of callers) {
       const calls = [...code(file).matchAll(/ensurePersonalAccount\(\s*([^)]*?)\s*\)/g)].map((match) => match[1]?.trim());

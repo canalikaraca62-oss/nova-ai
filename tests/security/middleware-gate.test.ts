@@ -21,6 +21,11 @@ import { join } from "node:path";
 const PUBLIC_API_ROUTES: readonly string[] = [
   "/api/auth/register",
   /*
+   * Email confirmation landing (Batch 2-D2). The link is followed by a
+   * browser with no session; proving the address is what creates one.
+   */
+  "/api/auth/confirm",
+  /*
    * Sign in and password recovery. Both are public for the same reason
    * as registration: the caller has no session, and obtaining (or
    * regaining) one is the entire purpose of the request. Neither route
@@ -206,6 +211,18 @@ void describe("Only intended routes are public", () => {
   void test("registration is reachable anonymously", () => {
     assert.equal(
       wouldReject("/api/auth/register", "POST", null, NO_COOKIES),
+      false,
+    );
+  });
+
+  void test("email confirmation is reachable anonymously", () => {
+    /*
+     * A confirmation link arrives in an email client, so the request
+     * carries no session. Behind the gate it would answer 401 and no
+     * account could ever be confirmed.
+     */
+    assert.equal(
+      wouldReject("/api/auth/confirm", "GET", null, NO_COOKIES),
       false,
     );
   });

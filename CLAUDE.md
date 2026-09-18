@@ -168,7 +168,10 @@ INSPECT → UNDERSTAND → PLAN → IMPLEMENT → TEST → ADVERSARIAL REVIEW
     read-only verification PASS — one `account.provisioned` event
     correlated with the smoke test, tenancy integrity all 0. The Vercel
     build log is NOT RECORDED here.
-  - **Not started:** B2-D2 onwards. Every batch and every TEST or
+  - **B2-D2** (registration through confirmed signup): READY FOR
+    FOUNDER ACCEPTANCE on repository and TEST, not PASS; D15/D16 NOT
+    VERIFIED / RESOURCE BLOCKED; uncommitted.
+  - **Not started:** B2-E onwards. Every batch and every TEST or
     production application needs its own explicit instruction.
   - **Current state:** `docs/engineering/SECURITY_EVIDENCE.md` ("Current
     state") and `docs/engineering/PHASE_STATE.md` ("Phase 3 — progress").

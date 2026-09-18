@@ -57,8 +57,13 @@ const ROUTE_FILES = findRouteFiles(API_DIR);
  * Adding an entry here is a security decision, not a convenience.
  */
 const ELEVATED_ALLOWLIST: Record<string, string> = {
-  "app/api/auth/register/route.ts":
-    "No caller identity: creates the user and org before any session exists.",
+  /*
+   * app/api/auth/register/route.ts left this list in Batch 2-D2: it no
+   * longer calls admin.auth.admin.createUser and writes no organization,
+   * so it holds no service-role access at all. Registration now uses the
+   * anon-key client and GoTrue's signUp, and tenancy is created by
+   * provision_personal_account() under the caller's own identity.
+   */
   "app/api/billing/webhook/route.ts":
     "No caller identity: authenticated by Stripe signature, not a session.",
   /*

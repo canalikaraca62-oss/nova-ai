@@ -107,7 +107,8 @@ closes it.
 | B2-B — atomic personal-account provisioning (`20260917130000`) | Applied, verified | **Applied** (founder, 2026-09-17); postcheck PASS: owner postgres, SECURITY DEFINER, empty search_path, ACL `{postgres=X/postgres,authenticated=X/postgres}`, authenticated-only, body equal after CRLF normalisation, tenancy baseline unchanged | PASS |
 | B2-C — profile backfill + production counts | Backfill applied | Counts done; backfill not needed | PASS — closed |
 | B2-D1 — application provisioning (login, `POST /api/account/provision`, `/api/workspaces`, provider) | Live RPC + concurrency PASS; route-level server check PASS 40/40; cleaned to baseline | **Deployed 2026-09-18** — `git push origin main`, `fd73f2b..7b3e612`, 88 commits; post-deploy read-only verification **PASS** (1 `account.provisioned`, all correlation booleans true, tenancy integrity all 0); Vercel build log NOT RECORDED | PARTIAL — founder-accepted (repository/TEST; route-level check PASS 40/40; browser E2E BLOCKED) |
-| B2-D2, B2-E, B2-F, B2-G; Batches 3–10 | — | — | NOT STARTED |
+| B2-D2 — registration through confirmed signup (`signUp` + `/api/auth/confirm`) | DB proofs PASS; route-level 15/17; cleaned to baseline | Not deployed; needs B2-F2 (redirect allowlist + email template) first | **READY FOR FOUNDER ACCEPTANCE** — not PASS; D15/D16 NOT VERIFIED / RESOURCE BLOCKED; uncommitted |
+| B2-E, B2-F, B2-G; Batches 3–10 | — | — | NOT STARTED |
 
 Open, not closed by the batches above:
 
@@ -118,6 +119,8 @@ Open, not closed by the batches above:
 - Production `start_trial_on_email_confirmation()` ACL not measured.
 - Production Auth "Confirm email" is ON (founder-verified read-only 2026-09-17; no setting changed). B2-D1 decisions D-B2D-1/2/3 APPROVED. Unconfirmed users are refused by GoTrue at sign-in, so the 2 unconfirmed production users of T-B2-1 are provisioned on their first sign-in after confirming.
 - Migration history not recorded on either project.
+- B2-D2 (2026-09-18): D15 and D16 — a provisioning failure after a successful email verification — are NOT VERIFIED / RESOURCE BLOCKED (three live-harness runs killed by the low-memory watchdog). Compensating evidence and residual risk are in `SECURITY_EVIDENCE.md`; they are carried to the Phase 3 final gate.
+- B2-D2 is not deployable until B2-F2 sets the redirect allowlist and the email template; `NEXT_PUBLIC_APP_URL` must be present in production, or registration refuses with 503 by design.
 - B2-D1 was deployed on 2026-09-18 (`7b3e6121aecf1f1ad3ced84c8523b2b55efddb94`, 88 commits). The post-deploy production verification is **PASS** (founder-run read-only): the smoke test correlates with exactly one `account.provisioned` event, and every tenancy-integrity count is 0. The Vercel build log is NOT RECORDED: this session has no Vercel access.
 
 ## Phase history
@@ -126,4 +129,4 @@ Open, not closed by the batches above:
 |---|---|---|
 | Phase 1 — North Star Architecture | PASS (founder-accepted 2026-09-14) | This file |
 | Phase 2 — Repository and Architecture Purification | PASS — documented environment limitations accepted | Founder acceptance 2026-09-15; the limitations and follow-ups are in the section above. History: started 2026-09-14 on the founder's instruction; stopped as PARTIAL and resumed by the founder the same day, to be completed before Phase 3. P2-A … P2-G committed locally (16 commits after `3314baa`, never pushed); preflight follow-up P2-P committed 2026-09-15 (`f566757`); P2-H (documentation consistency) committed 2026-09-15 (`50346bb`). Phase 2 final gate run 2026-09-15 on `50346bb`: tests, guards, typecheck and lint pass; `/profile` found orphaned (FAIL finding FG-01), subsequently resolved and committed in `cd24c57` (linked from `/settings`). Final gate re-run 2026-09-15 on `cd24c57`: PARTIAL — tests, guards and typecheck pass; 44/44 kept pages reachable; lint 50 of 51 Phase 2 files clean (1 pre-existing error); duplicate authorities PARTIAL; production build BLOCKED (insufficient sustained memory); browser/E2E and visual QA BLOCKED / NOT RUN. Evidence reconciled in `a72be3f`. Evidence: `PURIFICATION_EVIDENCE.md`, `PURIFICATION_SCORECARD.md` |
-| Phase 3 — Security Fortress | IN PROGRESS | Started on the founder's instruction (preflight 2026-09-15). Batch 1, B2-A, B2-A2 and B2-C closed PASS; B2-B PASS and applied to production (2026-09-17); B2-D1 PARTIAL on repository/TEST (committed locally, not deployed); B2-D2 onwards not started. Details: "Phase 3 — progress" above |
+| Phase 3 — Security Fortress | IN PROGRESS | Started on the founder's instruction (preflight 2026-09-15). Batch 1, B2-A, B2-A2 and B2-C closed PASS; B2-B PASS and applied to production (2026-09-17); B2-D1 PARTIAL, deployed 2026-09-18; B2-D2 READY FOR FOUNDER ACCEPTANCE (repository/TEST, uncommitted); B2-E onwards not started. Details: "Phase 3 — progress" above |

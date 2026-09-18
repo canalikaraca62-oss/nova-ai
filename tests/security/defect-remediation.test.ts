@@ -290,6 +290,12 @@ void describe("D4: /api/auth/logout ends a session", () => {
   });
 
   void test("allowlisting logout did not open anything else", () => {
+    /*
+     * Batch 2-D2 added /api/auth/confirm: a confirmation link is followed
+     * by a browser with no session, and the route grants nothing on its
+     * own (an absent, expired or forged token redirects to /login). The
+     * list is pinned so nothing else can join it unnoticed.
+     */
     const block = MIDDLEWARE.slice(
       MIDDLEWARE.indexOf("PUBLIC_API_ROUTES"),
       MIDDLEWARE.indexOf("PUBLIC_STATUS_GET_ROUTES"),
@@ -300,6 +306,7 @@ void describe("D4: /api/auth/logout ends a session", () => {
     assert.deepEqual(
       routes.sort(),
       [
+        "/api/auth/confirm",
         "/api/auth/login",
         "/api/auth/logout",
         "/api/auth/register",

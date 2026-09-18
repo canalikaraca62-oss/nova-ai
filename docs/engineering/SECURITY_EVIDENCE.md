@@ -11,9 +11,10 @@ record that replaces it. The table below is the reconciled current state.
 ## Current state (reconciled 2026-09-17)
 
 **Phase 3: IN PROGRESS.** Batch 1, B2-A, B2-A2, B2-B (TEST) and B2-C are
-done, B2-B now on production too; B2-D1 is implemented on repository and
-TEST (PARTIAL, committed locally, not deployed); B2-D2 and later are not
-started.
+done, B2-B now on production too; B2-D1 is implemented, committed and
+deployed to production; B2-D2 is implemented on repository and TEST
+(READY FOR FOUNDER ACCEPTANCE, uncommitted, two checks not verified);
+B2-E and later are not started.
 
 | Migration / artifact | Repository (SHA-256) | TEST (`akhkukajdgayqwhedeoo`) | PRODUCTION (`wpmbumtpcuahyqmdeqgf`) |
 |---|---|---|---|
@@ -34,7 +35,8 @@ started.
 | B2-B: atomic personal-account provisioning | **PASS**, repository, TEST and production (founder-applied 2026-09-17) |
 | B2-C: profile backfill + production counts | **PASS**, closed; no production backfill needed |
 | B2-D1: application provisioning (login, `POST /api/account/provision`, `/api/workspaces`) | **PARTIAL** on repository/TEST: tests, mutations 21/21, TEST live + concurrency PASS; route-level check through a running Next server **PASS 40/40**; browser E2E BLOCKED. Founder-accepted as PARTIAL. Uncommitted; not deployable before B2-B production |
-| B2-D2, B2-E, B2-F, B2-G, Batches 3–10 | NOT STARTED |
+| B2-D2: registration through confirmed signup | **READY FOR FOUNDER ACCEPTANCE** (repository/TEST): tsc, lint, 2,128 tests, 16/16 mutations, DB proofs, route-level 15/17. D15 and D16 **NOT VERIFIED / RESOURCE BLOCKED**. Not PASS, uncommitted, not deployable before B2-F2 |
+| B2-E, B2-F, B2-G, Batches 3–10 | NOT STARTED |
 
 **Open findings carried forward:**
 
@@ -45,7 +47,9 @@ started.
   B2-D.** No one-time provisioning; B2-B production not approved yet.
   Wiring implemented in B2-D1 (repository/TEST); not deployed.
 - Register flow: P1-B2-1, P1-B2-2, P1-B2-4, P2-B2-1/2/3. Owners: B2-D2 and
-  B2-F.
+  B2-F. B2-D2 rebuilt the register flow on 2026-09-18 (see its record),
+  but these findings are **not marked closed**: their text lives in the
+  2026-09-15 preflight, not in this repository.
 - D7 trial/paid precedence and the dead trial helpers. Owner: B2-E.
 - `supabase_auth_admin` INSERT on `profiles`, the anon/MAINTAIN privilege
   baseline and `handle_updated_at` PUBLIC EXECUTE. Owner: Batch 4.
@@ -692,6 +696,11 @@ each.
   trial (T2). Today's register route creates users with
   `email_confirm: true`, so until B2-D replaces it, such users get a
   profile (403 removed) but no trial.
+  **Superseded (2026-09-18, Batch 2-D2):** the register route no longer
+  pre-confirms anyone. It calls GoTrue `signUp`, so the trial starts on
+  the real `email_confirmed_at` transition. The sentence above is kept as
+  the state at the time of Batch 2-A. Existing users created by the old
+  path keep their missing trial; nothing backfills it.
 - **`service_role` EXECUTE:** it keeps EXECUTE through default
   privileges, as Batch 1's guard function does. These are trigger
   functions and are not callable outside a trigger.
@@ -2052,3 +2061,162 @@ this tree; the build log itself was not reported to this session.
 - T-B2-1: **6 → 5**. One user was provisioned by their own sign-in through
   the deployed path; the remaining 5 are provisioned on their next sign-in
   once confirmed. No user was provisioned by hand.
+
+## Batch 2-D2 — Registration through confirmed signup (founder-authorized 2026-09-18)
+
+**Scope:** repository and TEST only. No production write, no production
+Auth or Vercel change, no migration, no deploy, no push. B2-F2 and B2-G
+were not started.
+
+**Status: READY FOR FOUNDER ACCEPTANCE**, with D15 and D16 recorded below
+as **NOT VERIFIED / RESOURCE BLOCKED**. This batch is **not** declared
+PASS.
+
+### The defect this closes
+
+Registration called `admin.auth.admin.createUser(..., email_confirm: true)`
+with the SERVICE ROLE, then created an organization, an owner membership,
+a workspace and an audit row in four non-atomic steps with best-effort
+compensating deletes, and finally signed the user in. Consequences:
+
+- the address was never proven — no confirmation email was ever sent;
+- `email_confirmed_at` was set at insert, so the transition that starts
+  the 14-day trial (`20260917120000`) never happened and registered users
+  silently got **no trial**;
+- a failure between steps left an organization its owner could not use;
+- it was a second tenancy authority competing with
+  `provision_personal_account()` (`20260917130000`);
+- it was the only public route holding the RLS-bypassing client;
+- a 409 reply for an existing address made registration an account
+  enumeration oracle.
+
+### What changed (uncommitted)
+
+| File | Change |
+|---|---|
+| `app/api/auth/register/route.ts` | Rewritten, 1,379 lines removed. Anon-key client + `supabase.auth.signUp` with `emailRedirectTo` → `/api/auth/confirm`. No service role, no `email_confirm`, no organization/membership/workspace/audit write, no compensating delete, no auto sign-in. Metadata whitelisted to `full_name` and `name`. Fails closed with 503 when `NEXT_PUBLIC_APP_URL` is absent, rather than creating an unconfirmable account. One reply (202) for a new address, an existing address and an unexpected GoTrue error; 503 for a provider fault and 429 for a rate limit |
+| `app/api/auth/confirm/route.ts` (new) | GET only. Accepts `token_hash` + `type` (`verifyOtp`) or `code` (`exchangeCodeForSession`) — which one arrives is a B2-F2 template decision, so both are supported. OTP type allowlist; verification strictly before provisioning; provisioning through `ensurePersonalAccount` (the single authority, no identity passed); on failure a local sign-out and a redirect to `/login` with an error marker; on success `/dashboard`. Writes no table. Exactly one `NextResponse.redirect`, built from a relative path and this request's own origin |
+| `middleware.ts` | `/api/auth/confirm` added to `PUBLIC_API_ROUTES` with its reason: the link is followed by a browser with no session |
+| `app/register/page.tsx` | Success state is "Check your email" with a sign-in link; the `/dashboard` redirect and `useRouter` are gone (there is no session). A pre-existing duplicate `react` import was merged, which ESLint flagged once the file entered scope |
+
+### Tests
+
+- **New:** `tests/security/registration-confirmation.test.ts` — signUp path,
+  no tenancy writes, metadata whitelist, no enumeration, verification
+  order, the public-route decision, page honesty, and B2-D1 contracts.
+- **Seven pinned tests deliberately updated**, each with a written reason:
+  `data-access` (register removed from the service-role allowlist — it no
+  longer qualifies, so leaving it would grant unused permission),
+  `middleware-gate`, `api-reference-integrity`, `api-auth-boundary`,
+  `personal-account-provisioning` (helper callers 3 → 4),
+  `defect-remediation` (public list), and `membership-fortress`, whose
+  Batch 1 test required registration to create the owner membership and
+  now requires it to create nothing.
+
+### Verification (300 MB gate, foreground to avoid the low-memory watchdog)
+
+| Step | Result |
+|---|---|
+| `npx tsc --noEmit` | **PASS** — exit 0, 0 errors |
+| `npx eslint` on the 12 changed files | **PASS** — exit 0, 0 problems |
+| `npm run test:lowmem` | **PASS** — 2,128 tests, 2,122 pass, 0 fail, 6 todo, exit 0 |
+| Mutations (`scratchpad/mutate-b2d2.mjs`) | **PASS** — 16/16 CAUGHT, all files restored by SHA-256 |
+| TEST baseline/integrity | **PASS** — unchanged before and after |
+
+### TEST database proofs (one rolled-back transaction, no residue)
+
+| Check | Result |
+|---|---|
+| Profile after signup | exactly 1 |
+| Hostile metadata (`plan: enterprise`, `trial_active`, `role: owner`, `organization_id`) | ignored: `free` / `inactive` / no trial |
+| Provisioning while unconfirmed | refused `42501`, 0 organizations |
+| Trial on confirmation | exactly one, **14 days** |
+| Re-confirmation | trial unchanged |
+| Provisioning after confirmation | `created` true → false, same ids; 1 org, 1 owner membership, 1 workspace, 1 audit row |
+| A second, unconfirmed user | profile, no trial, no tenancy |
+| Other users | untouched |
+
+### Route-level verification (TEST) — 15 of 17
+
+Harness: `next dev` in a secret-free scratch copy, Supabase URL pointed at
+a TEST-only proxy that refuses any other project, with injected GoTrue
+responses so **no real user was created and no email was sent**.
+
+| Checks | Result |
+|---|---|
+| D01–D08 registration: 202 with a generic body, only `full_name`/`name` reaching GoTrue, hostile body fields dropped, an existing address byte-identical to a new one, 503 / 429 mapping, 400 / 415 before any upstream call | PASS |
+| D09–D12 confirmation refused: no token, a type outside the allowlist, an invalid token, a bogus code — each redirects to the invalid marker with no provisioning | PASS |
+| D13–D14 verified confirmation: one verify, exactly one RPC, `/dashboard`; confirming twice writes nothing new | PASS |
+| D17 a caller-supplied `redirect_to` is ignored | PASS |
+
+### D15 and D16 — NOT VERIFIED / RESOURCE BLOCKED
+
+- **D15:** after a successful verification, a provisioning `42501` must
+  produce a local sign-out and the `confirmation_forbidden` redirect.
+- **D16:** the same for any other provisioning failure, producing
+  `setup_unavailable`.
+
+**Why not verified:** three attempts to run the live route harness were
+killed by the machine's low-memory watchdog (3.9 GB machine; free memory
+157–273 MB). Verifying them in-process would require module mocking of
+`next/headers` and `@supabase/ssr` — there is **no precedent in this test
+suite for importing and invoking a route handler** — or extracting the
+mapping into a new module. Both were refused as a new test architecture
+and a scope expansion. They are **not** reported as passing.
+
+**Compensating evidence, all from this batch:**
+
+- Static guards require a local sign-out (`scope: "local"`), the
+  `forbidden` / `setupFailed` destinations, and that the failure branch
+  never reaches `confirmed`.
+- Mutation **M09** (dashboard despite failed provisioning) and **M10**
+  (global sign-out instead of local): both CAUGHT.
+- `interpretProvisioning` is unit-tested on the real module: `42501` →
+  FORBIDDEN, everything else → UNAVAILABLE.
+- D13 and D14 exercised the same helper, the same `account.ok` branch and
+  the same redirect helper at runtime, on the success path.
+
+**Residual risk:** only the live wiring between two verified halves is
+unproven. If it were wrong, the worst case is a confirmed user landing on
+`/dashboard` with a session but no organization; the dashboard then calls
+`POST /api/account/provision` (B2-D1, verified 40/40), which fails closed
+with 403/503, so the user sees an error rather than a usable account. A
+wrong redirect cannot grant anything: the session is one GoTrue issued for
+a genuinely confirmed address, and no tenancy exists because provisioning
+is the only writer and it just refused. **Risk: low, contained, with no
+privilege or tenancy consequence.** Carried to the Phase 3 final gate as
+NOT VERIFIED / resource blocked; to be closed by a harness re-run with
+memory headroom, or by B2-G's real signup proof.
+
+### Mutation testing (16/16, one guard defect found and fixed)
+
+M01 pre-confirm restored · M02 service role restored · M03 organization
+insert restored · M04 409 restored · M05 plan metadata forwarded · M06
+auto sign-in restored · M07 link trusted unverified · M08 provisioning
+before verification · M09 dashboard despite failure · M10 global sign-out
+· M11 any OTP type · M12 caller-supplied redirect · M13 POST handler ·
+M14 direct RPC call · M15 route removed from the allowlist · M16 page
+navigating to the dashboard.
+
+**M12 was MISSED on the first run** and is recorded rather than hidden:
+the guard matched only `searchParams.get("redirect…")` while the route
+aliases it as `params`. The guard now pins the construction — exactly one
+`NextResponse.redirect`, built from `new URL(path, request.nextUrl.origin)`
+— and M12 is caught. This is why the batch runs mutations: the guard, not
+the code, was weak.
+
+### Residual, recorded
+
+- D15 and D16 above.
+- B2-D2 is **not deployable** until B2-F2 configures the redirect
+  allowlist (`https://syraven.com/api/auth/confirm`) and decides the email
+  template. `{{ .TokenHash }}` is recommended: the `code` path needs the
+  PKCE verifier cookie and therefore the same browser.
+- Production must have `NEXT_PUBLIC_APP_URL` set, or registration now
+  refuses with 503 by design.
+- Production SMTP delivery is unproven, and two production confirmations
+  remain pending (B2-F measurement, 2026-09-18).
+- The preflight-numbered register-flow findings (P1-B2-1, P1-B2-2,
+  P1-B2-4, P2-B2-1/2/3) are **not** marked closed here: their text is not
+  in this repository, so this record cannot claim to have closed them.
+  What the register flow now does is described above.
