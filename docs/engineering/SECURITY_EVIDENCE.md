@@ -11,8 +11,9 @@ record that replaces it. The table below is the reconciled current state.
 ## Current state (reconciled 2026-09-17)
 
 **Phase 3: IN PROGRESS.** Batch 1, B2-A, B2-A2, B2-B (TEST) and B2-C are
-done; B2-D1 is implemented on repository and TEST (PARTIAL, uncommitted);
-B2-D2 and later are not started.
+done, B2-B now on production too; B2-D1 is implemented on repository and
+TEST (PARTIAL, committed locally, not deployed); B2-D2 and later are not
+started.
 
 | Migration / artifact | Repository (SHA-256) | TEST (`akhkukajdgayqwhedeoo`) | PRODUCTION (`wpmbumtpcuahyqmdeqgf`) |
 |---|---|---|---|
@@ -21,7 +22,7 @@ B2-D2 and later are not started.
 | `20260908120000` canvases | `A0DB540D…5DE2` (pinned) | applied (founder) | table present (created before Phase 3) |
 | `20260915120000` Batch 1 membership fortress | `2AF2E963…B55B` | **applied** (founder, 2026-09-16); catalog 8/8, probe 15/15 | **applied, founder-reported** (2026-09-17); P1–P6 not recorded here |
 | `20260917120000` B2-A profile provisioning | `44C91FD3…8FE9` | applied | **applied** (founder, 2026-09-17, together with B2-A2) |
-| `20260917130000` B2-B personal-account provisioning | `DBD0DEC2…9F47` | applied, PASS | **NOT applied, NOT approved** |
+| `20260917130000` B2-B personal-account provisioning | `DBD0DEC2…9F47` | applied, PASS | **applied** (founder, 2026-09-17), postcheck PASS; body CRLF-normalised equal |
 | `20260918120000` B2-A2 single profile authority | `EA5CCA30…5662` | applied, PASS | **applied** (founder, 2026-09-17), read-only verification PASS |
 | `scripts/sql/b2c-profile-backfill.sql` B2-C | `46308AE9…1F5D` | applied | not needed (7/7 profiles) |
 
@@ -30,7 +31,7 @@ B2-D2 and later are not started.
 | Batch 1: tenant and membership fortress | **PASS** on TEST (founder-applied, catalog 8/8, probe 15/15). Production applied as reported by the founder |
 | B2-A: profile provisioning + trial on confirmation | **PASS**, TEST and production |
 | B2-A2: one profile provisioning authority | **PASS**, TEST (real signup proofs 1–7) and production |
-| B2-B: atomic personal-account provisioning | **PASS** on repository and TEST; production not approved |
+| B2-B: atomic personal-account provisioning | **PASS**, repository, TEST and production (founder-applied 2026-09-17) |
 | B2-C: profile backfill + production counts | **PASS**, closed; no production backfill needed |
 | B2-D1: application provisioning (login, `POST /api/account/provision`, `/api/workspaces`) | **PARTIAL** on repository/TEST: tests, mutations 21/21, TEST live + concurrency PASS; route-level check through a running Next server **PASS 40/40**; browser E2E BLOCKED. Founder-accepted as PARTIAL. Uncommitted; not deployable before B2-B production |
 | B2-D2, B2-E, B2-F, B2-G, Batches 3–10 | NOT STARTED |
@@ -1818,3 +1819,112 @@ against TEST. No production, no browser, no code change, no commit.
 - Route-level check: **PASS** (40/40).
 - B2-D1 stays **PARTIAL** (founder-accepted) only because browser E2E is
   BLOCKED / NOT RUN.
+
+## Batch 2-B — Production application (founder-approved and founder-executed, 2026-09-17)
+
+**Scope:** the migration `20260917130000_syraven_personal_account_provisioning.sql`
+only. No row was created or changed, no user provisioned, no Auth setting
+touched, no deploy, no push. Every production step was run by the founder
+in the SQL Editor; this session has no production connection.
+
+### What was applied
+
+One `create or replace function`, one `revoke`, one `grant`, inside a
+single transaction that ended with an in-transaction verification block.
+The function creates no rows of its own; the application does not call it
+until B2-D1 is deployed.
+
+### Precheck (founder-run, read-only, PASS)
+
+A single statement, validated against TEST before it was handed over.
+Every STOP condition was checked and none triggered:
+
+| Check | Required | Result |
+|---|---|---|
+| `provision_personal_account()` already present | false | **absent** |
+| Runtime: `auth.uid()`, `gen_random_uuid`, `hashtextextended`, `pg_advisory_xact_lock`, `auth.users.email_confirmed_at` | all present | **PASS** |
+| `postgres` may read `auth.users` | true | **PASS** |
+| Table owner / FORCE RLS on the four tables | `postgres` / false | **PASS** |
+| INSERT trigger on the four tables | none | **none** |
+| `workspaces` unique index | `(organization_id, slug)`, not a global `(slug)` | **PASS** |
+| NOT NULL column without default that the function does not write | none | **none** |
+| B2-B slug format (`personal-` + 16 hex) already in use | 0 | **0** |
+
+### Application
+
+Run as one transaction. The verification block would have raised — and
+rolled the whole transaction back — on a wrong `search_path`, a
+non-definer function, arguments, a wrong return type, a body that differs
+from the TEST-verified source, an unexpected ACL, or executable-by-`anon`
+/ `service_role`. It committed, and reported the CRLF notice described
+below.
+
+### Postcheck (founder-run, read-only, PASS)
+
+| Property | Production value |
+|---|---|
+| Function present | **yes** |
+| Owner | `postgres` |
+| SECURITY DEFINER | **true** |
+| `search_path` | **empty** (`search_path=""`) |
+| ACL | `{postgres=X/postgres,authenticated=X/postgres}` |
+| `authenticated` EXECUTE | **true** |
+| `anon` EXECUTE | **false** |
+| `service_role` EXECUTE | **false** |
+| Tenancy baseline | **unchanged**: users 7, confirmed users 5, organizations 1, memberships 1, workspaces 1, audit rows 89 |
+
+### Body equivalence: production stores CRLF, the repository stores LF
+
+The live body hashes to `a63ac26462dea250612970ab387541de`, not to the
+canonical `fe797dd80cdd833004b849cb836852b8`. It is the **CRLF variant of
+the same bytes**, predicted from the source *before* the migration was
+run, which is why the verification block compares the LF-normalised hash
+and only raises a notice for CRLF.
+
+| Form | Bytes | md5 |
+|---|---|---|
+| Migration body, LF (canonical, repository) | 2,586 | `fe797dd80cdd833004b849cb836852b8` |
+| The same body with every LF → CRLF | 2,682 | `a63ac26462dea250612970ab387541de` |
+| Live production body (founder-reported) | — | `a63ac26462dea250612970ab387541de` |
+
+- The delta is 96 bytes and the body has exactly 96 newlines: one CR per
+  line, nothing else. Any other difference would change the hash.
+- The comparison is a local, read-only computation on the migration file
+  plus the reported hashes. No production access was used.
+- **Behaviour is identical.** The body has 23 single-quoted literals and
+  none spans a line, so no CR can enter a string (error messages, `'owner'`,
+  `'active'`, the slug prefix, the audit action and the advisory-lock key
+  are unchanged), there is no nested dollar-quoting, and CR is whitespace
+  to the SQL and PL/pgSQL lexers.
+- **Consequence to remember:** a future `md5(prosrc)` check on production
+  must compare against `a63ac264…41de`, or normalise CRLF → LF first. The
+  normalising form is the one to keep. Re-applying the migration to
+  "correct" the line endings would be a pointless production write and is
+  not planned.
+
+### What this does and does not prove
+
+- Proven on production: identity, privileges, definer, `search_path` and
+  that the body is the TEST-verified one.
+- **Not re-proved on production:** idempotency, the advisory-lock
+  serialisation, the email-confirmation refusal and the Batch 1 ownership
+  rule. They need calls that write, and no live provisioning proof was
+  run. They are proved on TEST (sequential, two parallel calls, a 5-call
+  burst, unconfirmed refusal, 40/40 route-level) and carried over by the
+  body equality above.
+
+### Expected side effect, recorded
+
+Since the grant is live, any **authenticated** production user can call
+the RPC directly through PostgREST before B2-D1 is deployed. This is by
+design and fail-closed: it provisions only the caller's own account, and
+only with a confirmed email address. The 2 unconfirmed users cannot use
+it at all.
+
+### Status
+
+- B2-B: **PASS** on repository, TEST and production.
+- T-B2-1 is not resolved by this: no user was provisioned. Those users are
+  provisioned on their next sign-in once B2-D1 is deployed.
+- The B2-D1 deploy is no longer blocked by the database. It is still
+  **not approved**, and any push deploys every unpushed commit.

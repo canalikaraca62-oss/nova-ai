@@ -104,7 +104,7 @@ closes it.
 | Batch 1 — tenant / membership fortress (`20260915120000`) | Applied (founder, 2026-09-16); catalog 8/8; probe 15/15 | Applied — founder-reported (2026-09-17); P1–P6 outputs not recorded | PASS |
 | B2-A — profile provisioning + trial on confirmation (`20260917120000`) | Applied, verified | Applied with B2-A2 (founder, 2026-09-17), verified | PASS |
 | B2-A2 — one profile provisioning authority (`20260918120000`) | Applied; real signup proofs 1–7 | Applied, verified; `handle_new_user` owner-only (D10 Option A) | PASS |
-| B2-B — atomic personal-account provisioning (`20260917130000`) | Applied, verified | **NOT applied — not approved** | PASS (repository/TEST) |
+| B2-B — atomic personal-account provisioning (`20260917130000`) | Applied, verified | **Applied** (founder, 2026-09-17); postcheck PASS: owner postgres, SECURITY DEFINER, empty search_path, ACL `{postgres=X/postgres,authenticated=X/postgres}`, authenticated-only, body equal after CRLF normalisation, tenancy baseline unchanged | PASS |
 | B2-C — profile backfill + production counts | Backfill applied | Counts done; backfill not needed | PASS — closed |
 | B2-D1 — application provisioning (login, `POST /api/account/provision`, `/api/workspaces`, provider) | Live RPC + concurrency PASS; route-level server check PASS 40/40; cleaned to baseline | Not deployed; needs B2-B production first | PARTIAL — founder-accepted (repository/TEST; route-level check PASS 40/40; browser E2E BLOCKED) |
 | B2-D2, B2-E, B2-F, B2-G; Batches 3–10 | — | — | NOT STARTED |
@@ -118,6 +118,7 @@ Open, not closed by the batches above:
 - Production `start_trial_on_email_confirmation()` ACL not measured.
 - Production Auth "Confirm email" is ON (founder-verified read-only 2026-09-17; no setting changed). B2-D1 decisions D-B2D-1/2/3 APPROVED. Unconfirmed users are refused by GoTrue at sign-in, so the 2 unconfirmed production users of T-B2-1 are provisioned on their first sign-in after confirming.
 - Migration history not recorded on either project.
+- B2-D1 deploy is now unblocked on the database side (B2-B is on production) but remains unapproved; any push deploys every unpushed commit.
 
 ## Phase history
 
@@ -125,4 +126,4 @@ Open, not closed by the batches above:
 |---|---|---|
 | Phase 1 — North Star Architecture | PASS (founder-accepted 2026-09-14) | This file |
 | Phase 2 — Repository and Architecture Purification | PASS — documented environment limitations accepted | Founder acceptance 2026-09-15; the limitations and follow-ups are in the section above. History: started 2026-09-14 on the founder's instruction; stopped as PARTIAL and resumed by the founder the same day, to be completed before Phase 3. P2-A … P2-G committed locally (16 commits after `3314baa`, never pushed); preflight follow-up P2-P committed 2026-09-15 (`f566757`); P2-H (documentation consistency) committed 2026-09-15 (`50346bb`). Phase 2 final gate run 2026-09-15 on `50346bb`: tests, guards, typecheck and lint pass; `/profile` found orphaned (FAIL finding FG-01), subsequently resolved and committed in `cd24c57` (linked from `/settings`). Final gate re-run 2026-09-15 on `cd24c57`: PARTIAL — tests, guards and typecheck pass; 44/44 kept pages reachable; lint 50 of 51 Phase 2 files clean (1 pre-existing error); duplicate authorities PARTIAL; production build BLOCKED (insufficient sustained memory); browser/E2E and visual QA BLOCKED / NOT RUN. Evidence reconciled in `a72be3f`. Evidence: `PURIFICATION_EVIDENCE.md`, `PURIFICATION_SCORECARD.md` |
-| Phase 3 — Security Fortress | IN PROGRESS | Started on the founder's instruction (preflight 2026-09-15). Batch 1, B2-A, B2-A2 and B2-C closed PASS; B2-B PASS on repository/TEST, production not approved; B2-D1 PARTIAL on repository/TEST (uncommitted); B2-D2 onwards not started. Details: "Phase 3 — progress" above |
+| Phase 3 — Security Fortress | IN PROGRESS | Started on the founder's instruction (preflight 2026-09-15). Batch 1, B2-A, B2-A2 and B2-C closed PASS; B2-B PASS and applied to production (2026-09-17); B2-D1 PARTIAL on repository/TEST (committed locally, not deployed); B2-D2 onwards not started. Details: "Phase 3 — progress" above |

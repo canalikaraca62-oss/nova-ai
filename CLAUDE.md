@@ -160,8 +160,8 @@ INSPECT → UNDERSTAND → PLAN → IMPLEMENT → TEST → ADVERSARIAL REVIEW
   - **Closed PASS:** Batch 1, B2-A, B2-A2 and B2-C.
   - **On production (founder-applied):** Batch 1 (as the founder reported),
     B2-A and B2-A2.
-  - **B2-B:** PASS on repository and TEST only; **not applied to
-    production, not approved**.
+  - **B2-B:** PASS on repository, TEST and **production** (founder-applied
+    2026-09-17, postcheck PASS).
   - **B2-D1** (application provisioning): PARTIAL (founder-accepted) on
     repository and TEST; route-level check PASS, browser E2E BLOCKED;
     uncommitted; not deployable before B2-B production.

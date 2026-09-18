@@ -314,9 +314,12 @@ void describe("Browser state and the production guard stay protected", () => {
      *
      * Phase 3 was started on the founder's instruction and is IN PROGRESS
      * (reconciled 2026-09-17). This used to pin NOT STARTED. It now pins
-     * the in-progress status and that B2-B is recorded as NOT applied to
-     * production: a batch is never recorded as on production without the
-     * founder's approval.
+     * the in-progress status. It used to pin B2-B as NOT applied to
+     * production; the founder applied it on 2026-09-17, so it now pins the
+     * applied record together with the postcheck facts that make the claim
+     * checkable (authenticated-only execution, empty search_path). A batch
+     * is never recorded as on production without the founder's approval,
+     * and an applied record may never lose its evidence.
      */
     const phase = read("docs", "engineering", "PHASE_STATE.md");
 
@@ -353,7 +356,9 @@ void describe("Browser state and the production guard stay protected", () => {
     assert.ok(!/\| Phase 3 \| NOT STARTED \|/.test(phase), "The stale Phase 3 NOT STARTED row is back.");
 
     const progress = /## Phase 3 — progress\n[\s\S]*?(?=\n## )/.exec(phase)?.[0] ?? "";
-    assert.match(progress, /\| B2-B[^\n]*\*\*NOT applied — not approved\*\*/, "B2-B must stay recorded as not applied to production.");
+    assert.match(progress, /\| B2-B[^\n]*\*\*Applied\*\* \(founder, 2026-09-17\)[^\n]*postcheck PASS/, "B2-B must stay recorded as applied to production with its postcheck.");
+    assert.match(progress, /\| B2-B[^\n]*authenticated-only[^\n]*/, "The B2-B production record must keep the privilege fact that makes it checkable.");
+    assert.ok(!/\| B2-B[^\n]*NOT applied/.test(progress), "The stale B2-B not-applied row is back.");
     assert.match(progress, /T-B2-1/, "The open tenancy finding T-B2-1 must stay documented.");
   });
 
@@ -368,10 +373,10 @@ void describe("Browser state and the production guard stay protected", () => {
 
     assert.match(claude, /\*\*PHASE 2 — Repository and Architecture Purification: PASS\*\* —\s+documented environment limitations accepted/);
     assert.match(claude, /\*\*PHASE 3 — Security Fortress: IN PROGRESS\.\*\*/);
-    assert.match(claude, /B2-B[^\n]*\n?[^\n]*\*\*not applied to\s+production, not approved\*\*/);
+    assert.match(claude, /B2-B[^\n]*\*\*production\*\*[^\n]*\n?[^\n]*2026-09-17, postcheck PASS/);
     assert.match(project, /\*\*Phase 2 — Repository and Architecture Purification: PASS\*\* —\s+documented environment limitations accepted/);
     assert.match(project, /\*\*Phase 3: IN PROGRESS\.\*\*/);
-    assert.match(project, /\*\*not applied to production, not approved\*\*/);
+    assert.match(project, /\*\*B2-B:\*\*[^\n]*\*\*production\*\*[^\n]*postcheck PASS/);
 
     for (const [name, text] of [["CLAUDE.md", claude], ["PROJECT_STATE.md", project]] as const) {
       assert.ok(!/PHASE 3: NOT STARTED|Phase 3: NOT STARTED/i.test(text), `${name} still describes Phase 3 as not started.`);
