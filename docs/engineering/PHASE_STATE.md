@@ -106,7 +106,7 @@ closes it.
 | B2-A2 — one profile provisioning authority (`20260918120000`) | Applied; real signup proofs 1–7 | Applied, verified; `handle_new_user` owner-only (D10 Option A) | PASS |
 | B2-B — atomic personal-account provisioning (`20260917130000`) | Applied, verified | **Applied** (founder, 2026-09-17); postcheck PASS: owner postgres, SECURITY DEFINER, empty search_path, ACL `{postgres=X/postgres,authenticated=X/postgres}`, authenticated-only, body equal after CRLF normalisation, tenancy baseline unchanged | PASS |
 | B2-C — profile backfill + production counts | Backfill applied | Counts done; backfill not needed | PASS — closed |
-| B2-D1 — application provisioning (login, `POST /api/account/provision`, `/api/workspaces`, provider) | Live RPC + concurrency PASS; route-level server check PASS 40/40; cleaned to baseline | Not deployed; needs B2-B production first | PARTIAL — founder-accepted (repository/TEST; route-level check PASS 40/40; browser E2E BLOCKED) |
+| B2-D1 — application provisioning (login, `POST /api/account/provision`, `/api/workspaces`, provider) | Live RPC + concurrency PASS; route-level server check PASS 40/40; cleaned to baseline | **Deployed 2026-09-18** — `git push origin main`, `fd73f2b..7b3e612`, 88 commits; build status and post-deploy verification NOT RECORDED here | PARTIAL — founder-accepted (repository/TEST; route-level check PASS 40/40; browser E2E BLOCKED) |
 | B2-D2, B2-E, B2-F, B2-G; Batches 3–10 | — | — | NOT STARTED |
 
 Open, not closed by the batches above:
@@ -118,7 +118,7 @@ Open, not closed by the batches above:
 - Production `start_trial_on_email_confirmation()` ACL not measured.
 - Production Auth "Confirm email" is ON (founder-verified read-only 2026-09-17; no setting changed). B2-D1 decisions D-B2D-1/2/3 APPROVED. Unconfirmed users are refused by GoTrue at sign-in, so the 2 unconfirmed production users of T-B2-1 are provisioned on their first sign-in after confirming.
 - Migration history not recorded on either project.
-- B2-D1 deploy is now unblocked on the database side (B2-B is on production) but remains unapproved; any push deploys every unpushed commit.
+- B2-D1 was deployed on 2026-09-18 (`7b3e6121aecf1f1ad3ced84c8523b2b55efddb94`, 88 commits). Its Vercel build status and the post-deploy production verification are NOT RECORDED in the repository: this session has no Vercel or production access, and no result was reported back to it.
 
 ## Phase history
 

@@ -1928,3 +1928,94 @@ it at all.
   provisioned on their next sign-in once B2-D1 is deployed.
 - The B2-D1 deploy is no longer blocked by the database. It is still
   **not approved**, and any push deploys every unpushed commit.
+
+## B2-D1 — Production deployment (founder-approved and founder-instructed, 2026-09-18)
+
+**Scope:** the deployment only. No production write, no provisioning call,
+no Auth change, no migration. The production verification of the result is
+**NOT RECORDED** below — see "Verification status".
+
+### Pre-deploy gate (this session, 2026-09-18)
+
+| Check | Result |
+|---|---|
+| HEAD / branch | `7b3e612` on `main` |
+| Staged / unstaged / HEAD vs working tree | 0 / 0 / 0 |
+| Untracked | only `syraven-audit.zip` (untracked, never opened, unchanged) |
+| Full suite at HEAD | **PASS** — 2,093 tests, 2,087 pass, 0 fail, 6 todo, exit 0 (gate 388 MB) |
+| Secret scan over `origin/main..HEAD` | 0 hits across 39,282 added lines |
+| Forbidden paths in the range | 0 (`.env*`, `.pem`, `.key`, `.zip`, storageState) |
+| Tracked `.env*` / `.zip` files at HEAD | 0 / 0 |
+| Case-colliding or non-ASCII filenames at HEAD | none (the one non-ASCII path is deleted by this range) |
+| API routes removed vs the deployed tree | **none**; 7 added, including `account/provision` |
+| New environment variables required | **none** — the same names the deployed tree already read |
+| B2-D1 database dependency | satisfied: `provision_personal_account()` applied to production 2026-09-17 |
+
+**Scope warning recorded before the push:** the deploy carried **88
+commits** (`fd73f2b..7b3e612`) — the whole of Phases 1, 2 and 3, not only
+B2-D1. Cherry-picking B2-D1 alone was assessed as not viable: it depends on
+the Phase 1/2 tree. The founder approved the deployment on that basis.
+
+### Preview deployment
+
+A temporary branch `preview/b2d1-7b3e612` was pushed first, at the same
+commit (`7b3e6121aecf1f1ad3ced84c8523b2b55efddb94`, confirmed by
+`git ls-remote`). Its Vercel build status and URL are **NOT RECORDED**:
+this session has no Vercel access and `gh` is not installed, and no result
+was reported back to it.
+
+### Production deployment
+
+| Item | Value |
+|---|---|
+| Command | `git push origin main` (run on the founder's explicit instruction) |
+| Output | `fd73f2b..7b3e612  main -> main` (fast-forward, no force) |
+| Pushed SHA | `7b3e6121aecf1f1ad3ced84c8523b2b55efddb94` |
+| Repository | `github.com/canalikaraca62-oss/nova-ai` |
+| Commits shipped | 88 (`fd73f2b..7b3e612`) |
+| Deployment mechanism | Vercel Git integration; `main` deploys production |
+| Vercel build status / URL | **NOT RECORDED** — not reported to this session |
+
+### Verification status (NOT RUN in this session)
+
+The founder reported a successful login/workspace smoke test and a
+read-only production verification. **Neither result reached this session**,
+so nothing is recorded here:
+
+- Vercel build status and preview URL: **NOT RECORDED**.
+- Smoke-test detail (which flow, which outcome): **NOT RECORDED**.
+- Production counts after the deployment, the `account.provisioned`
+  event, the correlation booleans and the tenancy-integrity fields:
+  **NOT RECEIVED**. This session has no production connection; the only
+  database MCP server is pinned to TEST.
+
+**Correlation method, prepared and still valid.** The B2-B postcheck
+baseline, taken before any B2-D1 code was live, is the "before" snapshot:
+
+| Baseline (2026-09-17, pre-deploy) | Value |
+|---|---|
+| users | 7 |
+| confirmed users | 5 |
+| organizations | 1 |
+| memberships | 1 |
+| workspaces | 1 |
+| audit rows | 89 |
+
+Provisioning writes an `account.provisioned` audit row only when it creates
+something, so one new row together with organizations, memberships and
+workspaces each rising by one correlates a sign-in with a provisioning
+event, without touching any identifier. A sign-in by the one user who
+already owned an organization writes nothing by design.
+
+The read-only statement for this is in the conversation record: counts and
+booleans only, no id, email, slug value or metadata content. When its
+output is provided, it is recorded here as its own subsection.
+
+### Status
+
+- Deployment: **done**, SHA above.
+- Post-deployment production verification: **NOT RUN / NOT RECORDED** in
+  this session.
+- T-B2-1: the users without an organization are provisioned on their next
+  sign-in once confirmed. Whether any has signed in since the deploy is
+  **not known here**.
