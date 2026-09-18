@@ -38,8 +38,9 @@ started.
 
 **Open findings carried forward:**
 
-- T-B2-1: 6 of 7 production users (3 of 3 on TEST) have no owner
-  membership, so creating a workspace fails closed. Investigated
+- T-B2-1: **5** of 7 production users have no owner membership (6 before
+  the B2-D1 deployment; one provisioned themselves by signing in on
+  2026-09-18). 3 of 3 on TEST. Creating a workspace fails closed until then. Investigated
   read-only (PASS). **Founder decision: login-time provisioning via
   B2-D.** No one-time provisioning; B2-B production not approved yet.
   Wiring implemented in B2-D1 (repository/TEST); not deployed.
@@ -1976,46 +1977,78 @@ was reported back to it.
 | Deployment mechanism | Vercel Git integration; `main` deploys production |
 | Vercel build status / URL | **NOT RECORDED** — not reported to this session |
 
-### Verification status (NOT RUN in this session)
+### Post-deploy production verification (founder-run read-only, founder-reported, 2026-09-18)
 
-The founder reported a successful login/workspace smoke test and a
-read-only production verification. **Neither result reached this session**,
-so nothing is recorded here:
+**PASS.** The read-only statement was run in the production SQL Editor and
+its result reported. No write, no RPC call, no provisioning was performed;
+the output carries no id, email, slug value or metadata content.
 
-- Vercel build status and preview URL: **NOT RECORDED**.
-- Smoke-test detail (which flow, which outcome): **NOT RECORDED**.
-- Production counts after the deployment, the `account.provisioned`
-  event, the correlation booleans and the tenancy-integrity fields:
-  **NOT RECEIVED**. This session has no production connection; the only
-  database MCP server is pinned to TEST.
+| Counts | Baseline (pre-deploy, B2-B postcheck) | After the smoke test |
+|---|---|---|
+| users | 7 | 7 |
+| confirmed users | 5 | 5 |
+| organizations | 1 | **2** |
+| memberships | 1 | **2** |
+| workspaces | 1 | **2** |
+| audit rows | 89 | **90** |
 
-**Correlation method, prepared and still valid.** The B2-B postcheck
-baseline, taken before any B2-D1 code was live, is the "before" snapshot:
-
-| Baseline (2026-09-17, pre-deploy) | Value |
+| Provisioning events | Value |
 |---|---|
-| users | 7 |
-| confirmed users | 5 |
-| organizations | 1 |
-| memberships | 1 |
-| workspaces | 1 |
-| audit rows | 89 |
+| total `account.provisioned` | **1** |
+| distinct users | **1** |
+| in the last 24 h | **1** |
+| minutes since the latest | **27** |
+| all written by the function (`metadata.source`) | **true** |
 
-Provisioning writes an `account.provisioned` audit row only when it creates
-something, so one new row together with organizations, memberships and
-workspaces each rising by one correlates a sign-in with a provisioning
-event, without touching any identifier. A sign-in by the one user who
-already owned an organization writes nothing by design.
+| Correlation | Value |
+|---|---|
+| the audit row's user owns the organisation it names | **true** |
+| that user holds an active owner membership there | **true** |
+| the workspace named by the row belongs to that organisation | **true** |
+| organisations carrying the B2-B slug format (`personal-` + 16 hex) | **1** |
 
-The read-only statement for this is in the conversation record: counts and
-booleans only, no id, email, slug value or metadata content. When its
-output is provided, it is recorded here as its own subsection.
+| Tenancy integrity | Value |
+|---|---|
+| users with several owned organisations | **0** |
+| organisations without an owner membership | **0** |
+| organisations for unconfirmed users | **0** |
+| organisations without a workspace | **0** |
+| duplicate provisioning rows per user | **0** |
+| users without a Batch 1-owned organisation | **5** (was 6) |
+| advisory locks held | **0** |
+
+**This correlates the successful production smoke test with exactly one
+new provisioning event.** Organisations, memberships, workspaces and audit
+rows each rose by exactly one against a baseline taken before any B2-D1
+code was live; there is exactly one `account.provisioned` row, for one
+user, written by the function, 27 minutes before the check; and
+`users_without_owned_org` fell from 6 to 5 — the same single user. The
+B2-B slug count of 1 confirms the organisation was created by
+`provision_personal_account()`, not by the old application path (the
+pre-existing organisation uses the route's 6-character suffix, and the
+T-B2-1 investigation recorded the 16-hex format as unused).
+
+**What this proves on production, with real data:** identity binding
+(the row's user is the organisation's owner and its active owner member),
+atomicity (organisation, membership, workspace and audit row all appear
+together), single authority (the audit metadata names the function), and
+no duplication under a real sign-in (one row, one organisation, no
+lingering advisory lock).
+
+**Unchanged and therefore not exercised here:** users and confirmed users
+stayed at 7 and 5, so no registration or confirmation path was involved.
+The remaining 5 users without an organisation are provisioned on their own
+next sign-in, once confirmed; no user was provisioned by hand.
+
+**Still NOT RECORDED:** the Vercel build status and the preview URL. The
+smoke test succeeding establishes that the deployment is live and serving
+this tree; the build log itself was not reported to this session.
 
 ### Status
 
 - Deployment: **done**, SHA above.
-- Post-deployment production verification: **NOT RUN / NOT RECORDED** in
-  this session.
-- T-B2-1: the users without an organization are provisioned on their next
-  sign-in once confirmed. Whether any has signed in since the deploy is
-  **not known here**.
+- Post-deployment production verification: **PASS** (founder-run read-only,
+  founder-reported) — see the section above.
+- T-B2-1: **6 → 5**. One user was provisioned by their own sign-in through
+  the deployed path; the remaining 5 are provisioned on their next sign-in
+  once confirmed. No user was provisioned by hand.

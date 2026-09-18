@@ -77,7 +77,7 @@ pushed.
 - **Closed PASS:** Batch 1 (tenant/membership fortress), B2-A (profile provisioning and trial on confirmation), B2-A2 (single profile authority) and B2-C (backfill and production counts).
 - **Applied on production by the founder:** Batch 1 (as the founder reported), B2-A and B2-A2.
 - **B2-B:** PASS on repository, TEST and **production** (founder-applied 2026-09-17; postcheck PASS). The B2-D1 deploy is no longer blocked by the database, but remains unapproved.
-- **B2-D1** (application provisioning): PARTIAL, founder-accepted, on repository/TEST (route-level check PASS 40/40; browser E2E BLOCKED). **Deployed to production 2026-09-18** (`7b3e612`, 88 commits pushed to `main`). Build status and post-deploy verification NOT RECORDED here.
+- **B2-D1** (application provisioning): PARTIAL, founder-accepted, on repository/TEST (route-level check PASS 40/40; browser E2E BLOCKED). **Deployed to production 2026-09-18** (`7b3e612`, 88 commits pushed to `main`); post-deploy read-only verification **PASS** — one `account.provisioned` event correlated with the smoke test, tenancy integrity all 0, T-B2-1 now 5 of 7. The Vercel build log is NOT RECORDED here.
 - **Not started:** B2-D2 onwards.
 - **Open:**
   - T-B2-1: 6 of 7 production users have no owner membership. Decision

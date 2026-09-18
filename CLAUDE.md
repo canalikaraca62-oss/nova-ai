@@ -164,8 +164,10 @@ INSPECT → UNDERSTAND → PLAN → IMPLEMENT → TEST → ADVERSARIAL REVIEW
     2026-09-17, postcheck PASS).
   - **B2-D1** (application provisioning): PARTIAL (founder-accepted) on
     repository and TEST; route-level check PASS, browser E2E BLOCKED.
-    **Deployed to production 2026-09-18** (`7b3e612`); the Vercel build
-    status and the post-deploy verification are NOT RECORDED here.
+    **Deployed to production 2026-09-18** (`7b3e612`); post-deploy
+    read-only verification PASS — one `account.provisioned` event
+    correlated with the smoke test, tenancy integrity all 0. The Vercel
+    build log is NOT RECORDED here.
   - **Not started:** B2-D2 onwards. Every batch and every TEST or
     production application needs its own explicit instruction.
   - **Current state:** `docs/engineering/SECURITY_EVIDENCE.md` ("Current
